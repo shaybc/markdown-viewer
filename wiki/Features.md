@@ -256,7 +256,11 @@ The layout adapts to screen width:
 
 ## Privacy & Security
 
-- **Zero data transmission**: All content is processed locally in the browser.
-- **No cookies or tracking**: The app does not use analytics, cookies, or tracking scripts.
-- **XSS prevention**: All rendered HTML is sanitized using **[DOMPurify](https://github.com/cure53/DOMPurify)** before insertion into the DOM.
-- **Content Security Policy**: The Docker image's Nginx configuration includes security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`).
+- **Local-only processing**: All content is processed locally in the browser.
+- **Local storage**: Autosave content and UI preferences are stored in `localStorage`.
+- **Share links**: Shared URLs encode content in the hash fragment, with no server upload.
+- **GitHub import**: Public GitHub imports use `api.github.com` and `raw.githubusercontent.com`.
+- **CDN dependencies**: Third-party libraries load from public CDNs by default (cdnjs, jsDelivr). Self-host to avoid external requests.
+- **No tracking**: The app does not include analytics, cookies, or tracking scripts.
+- **XSS prevention**: Rendered HTML is sanitized with **[DOMPurify](https://github.com/cure53/DOMPurify)** before insertion.
+- **Security headers**: The Docker image's Nginx configuration includes headers like `X-Frame-Options`, `X-Content-Type-Options`, and `Referrer-Policy`.
