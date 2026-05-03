@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const pickFolderButton = document.getElementById("pick-folder-button");
   const folderTreeRoot = document.getElementById("folder-tree-root");
   const fileInput = document.getElementById("file-input");
+  const folderInput = document.getElementById("folder-input");
   const exportMd = document.getElementById("export-md");
   const exportHtml = document.getElementById("export-html");
   const exportPdf = document.getElementById("export-pdf");
@@ -1017,7 +1018,7 @@ This is a fully client-side application. Your content never leaves your browser 
     button.innerHTML = `<i class="bi bi-file-earmark-text"></i>${node.name}`;
     button.addEventListener("click", async () => {
       try {
-        const file = await node.handle.getFile();
+        const file = node.file ? node.file : await node.handle.getFile();
         const content = await file.text();
         newTab(content, node.name.replace(/\.(md|markdown)$/i, ""));
       } catch (error) {
@@ -1029,28 +1030,61 @@ This is a fully client-side application. Your content never leaves your browser 
     return li;
   }
 
+  function buildTreeFromFileList(fileList) {
+    const root = [];
+    const ensureDir = (nodes, name) => {
+      let dir = nodes.find((n) => n.kind === "directory" && n.name === name);
+      if (!dir) {
+        dir = { kind: "directory", name, children: [] };
+        nodes.push(dir);
+      }
+      return dir;
+    };
+
+    Array.from(fileList).forEach((file) => {
+      if (!/\.(md|markdown)$/i.test(file.name)) return;
+      const relPath = (file.webkitRelativePath || file.name).split("/");
+      const fileName = relPath.pop();
+      let cursor = root;
+      relPath.forEach((segment) => {
+        cursor = ensureDir(cursor, segment).children;
+      });
+      cursor.push({ kind: "file", name: fileName, file });
+    });
+
+    const sortNodes = (nodes) => {
+      nodes.sort((a,b) => a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1));
+      nodes.forEach((n) => n.kind === "directory" && sortNodes(n.children));
+    };
+    sortNodes(root);
+    return root;
+  }
+
   async function openFolderTree() {
-    if (!window.showDirectoryPicker) {
-      alert("Folder tree is not supported in this browser.");
-      return;
-    }
-    try {
-      const dirHandle = await window.showDirectoryPicker();
-      const nodes = await listMarkdownTree(dirHandle);
-      folderTreeRoot.innerHTML = "";
-      if (!nodes.length) {
-        folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+    if (window.showDirectoryPicker) {
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        const nodes = await listMarkdownTree(dirHandle);
+        folderTreeRoot.innerHTML = "";
+        if (!nodes.length) {
+          folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+          return;
+        }
+        const ul = document.createElement("ul");
+        ul.className = "folder-tree-list";
+        nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+        folderTreeRoot.appendChild(ul);
         return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.warn("Directory picker unavailable, using fallback input.", error);
       }
-      const ul = document.createElement("ul");
-      ul.className = "folder-tree-list";
-      nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
-      folderTreeRoot.appendChild(ul);
-    } catch (error) {
-      if (error && error.name !== "AbortError") {
-        console.error("Folder selection failed:", error);
-        alert("Failed to open folder.");
-      }
+    }
+
+    if (folderInput) {
+      folderInput.click();
+    } else {
+      alert("Folder selection is not supported in this environment.");
     }
   }
 
@@ -1960,6 +1994,25 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     this.value = "";
   });
+
+
+
+  if (folderInput) {
+    folderInput.addEventListener("change", function(e) {
+      const files = e.target.files;
+      const nodes = buildTreeFromFileList(files || []);
+      folderTreeRoot.innerHTML = "";
+      if (!nodes.length) {
+        folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+      } else {
+        const ul = document.createElement("ul");
+        ul.className = "folder-tree-list";
+        nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+        folderTreeRoot.appendChild(ul);
+      }
+      this.value = "";
+    });
+  }
 
   exportMd.addEventListener("click", function () {
     try {

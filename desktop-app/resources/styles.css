@@ -1973,6 +1973,3 @@ a:focus {
 .folder-tree-file:hover { background: var(--button-hover); }
 .folder-tree-placeholder { color: #8b949e; margin: 6px 2px; }
 
-@media (max-width: 991.98px) {
-  .folder-tree-pane { display: none; }
-}
