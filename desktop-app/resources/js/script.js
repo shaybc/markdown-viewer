@@ -17,7 +17,14 @@ document.addEventListener("DOMContentLoaded", function () {
   const importFromGithubButton = document.getElementById("import-from-github");
   const importFromFolderButton = document.getElementById("import-from-folder");
   const pickFolderButton = document.getElementById("pick-folder-button");
-  const folderTreeRoot = document.getElementById("folder-tree-root");
+  let folderTreeRoot = document.getElementById("folder-tree-root");
+
+  console.info("[FolderTree] init", {
+    hasPane: !!document.getElementById("folder-tree-pane"),
+    hasRoot: !!folderTreeRoot,
+    hasImportOption: !!document.getElementById("import-from-folder"),
+    viewportWidth: window.innerWidth
+  });
   const fileInput = document.getElementById("file-input");
   const folderInput = document.getElementById("folder-input");
   const exportMd = document.getElementById("export-md");
@@ -36,6 +43,31 @@ document.addEventListener("DOMContentLoaded", function () {
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
   const viewModeButtons = document.querySelectorAll(".view-mode-btn");
+
+  function ensureFolderTreePane() {
+    let pane = document.getElementById("folder-tree-pane");
+    if (pane || !contentContainer) return;
+
+    pane = document.createElement("aside");
+    pane.className = "folder-tree-pane";
+    pane.id = "folder-tree-pane";
+    pane.innerHTML = `
+      <div class="folder-tree-header">
+        <span><i class="bi bi-folder2-open me-1"></i>Folder</span>
+        <button id="pick-folder-button" class="tool-button folder-tree-btn" title="Open folder">Open</button>
+      </div>
+      <div id="folder-tree-root" class="folder-tree-root">
+        <p class="folder-tree-placeholder">Open a folder to browse Markdown files.</p>
+      </div>
+    `;
+
+    contentContainer.insertBefore(pane, contentContainer.firstChild);
+    console.info("[FolderTree] pane dynamically inserted.");
+  }
+
+  ensureFolderTreePane();
+  folderTreeRoot = document.getElementById("folder-tree-root");
+
 
   // Mobile View Mode Elements - Story 1.4
   const mobileViewModeButtons = document.querySelectorAll(".mobile-view-mode-btn");
@@ -1984,6 +2016,23 @@ This is a fully client-side application. Your content never leaves your browser 
       setGitHubSelectedPaths(shouldSelectAll ? allPaths : []);
     });
   }
+
+  setTimeout(() => {
+    const pane = document.getElementById("folder-tree-pane");
+    if (!pane) {
+      console.warn("[FolderTree] pane element not found in DOM.");
+      return;
+    }
+    const rect = pane.getBoundingClientRect();
+    const style = window.getComputedStyle(pane);
+    console.info("[FolderTree] pane layout", {
+      rect: { width: rect.width, left: rect.left, right: rect.right },
+      display: style.display,
+      visibility: style.visibility,
+      flex: style.flex,
+      minWidth: style.minWidth
+    });
+  }, 0);
 
   fileInput.addEventListener("change", function (e) {
     const file = e.target.files[0];
