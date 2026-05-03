@@ -550,7 +550,8 @@ This is a fully client-side application. Your content never leaves your browser 
       content: content,
       scrollPos: 0,
       viewMode: viewMode,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      isTemporary: false
     };
   }
 
@@ -567,7 +568,7 @@ This is a fully client-side application. Your content never leaves your browser 
       item.setAttribute('draggable', 'true');
 
       const titleSpan = document.createElement('span');
-      titleSpan.className = 'tab-title';
+      titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
       titleSpan.textContent = tab.title || 'Untitled';
       titleSpan.title = tab.title || 'Untitled';
 
@@ -621,6 +622,10 @@ This is a fully client-side application. Your content never leaves your browser 
 
       item.addEventListener('click', function() {
         switchTab(tab.id);
+      });
+
+      item.addEventListener('dblclick', function() {
+        pinTemporaryTab(tab.id);
       });
 
       item.addEventListener('dragstart', function() {
@@ -688,7 +693,7 @@ This is a fully client-side application. Your content never leaves your browser 
       item.setAttribute('data-tab-id', tab.id);
 
       const titleSpan = document.createElement('span');
-      titleSpan.className = 'mobile-tab-title';
+      titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
       titleSpan.textContent = tab.title || 'Untitled';
       titleSpan.title = tab.title || 'Untitled';
 
@@ -787,6 +792,53 @@ This is a fully client-side application. Your content never leaves your browser 
       markdownEditor.scrollTop = tab.scrollPos || 0;
     });
     renderTabBar(tabs, activeTabId);
+  }
+
+
+
+  function pinTemporaryTab(tabId) {
+    const tab = tabs.find(function(t) { return t.id === tabId; });
+    if (!tab || !tab.isTemporary) return;
+    tab.isTemporary = false;
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+  }
+
+  function findTemporaryTab() {
+    return tabs.find(function(t) { return !!t.isTemporary; }) || null;
+  }
+
+  function openSidebarFileInTemporaryTab(content, title) {
+    saveCurrentTabState();
+    let tab = findTemporaryTab();
+
+    if (!tab) {
+      if (tabs.length >= 20) {
+        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+        return;
+      }
+      tab = createTab(content, title || 'Untitled', currentViewMode || 'split');
+      tab.isTemporary = true;
+      tabs.push(tab);
+    } else {
+      tab.title = title || 'Untitled';
+      tab.content = content || '';
+      tab.scrollPos = 0;
+      tab.viewMode = currentViewMode || tab.viewMode || 'split';
+      tab.isTemporary = true;
+    }
+
+    activeTabId = tab.id;
+    saveActiveTabId(activeTabId);
+    markdownEditor.value = tab.content;
+    restoreViewMode(tab.viewMode);
+    renderMarkdown();
+    requestAnimationFrame(function() {
+      markdownEditor.scrollTop = tab.scrollPos || 0;
+    });
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+    markdownEditor.focus();
   }
 
   function newTab(content, title) {
@@ -1050,7 +1102,7 @@ This is a fully client-side application. Your content never leaves your browser 
       try {
         const file = node.file ? node.file : await node.handle.getFile();
         const content = await file.text();
-        newTab(content, node.name.replace(/\.(md|markdown)$/i, ""));
+        openSidebarFileInTemporaryTab(content, node.name.replace(/\.(md|markdown)$/i, ""));
       } catch (error) {
         console.error("Failed to open Markdown file:", error);
         alert("Unable to open selected file.");

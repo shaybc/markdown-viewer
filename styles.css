@@ -1982,3 +1982,10 @@ a:focus {
 .content-container.view-split .folder-tree-pane {
   display: flex !important;
 }
+
+
+.tab-title.temporary,
+.mobile-tab-title.temporary {
+  font-style: italic;
+  opacity: 0.9;
+}
