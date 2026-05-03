@@ -1,4 +1,4 @@
-# Markdown Viewer
+# Markdown Viewer (Forked by SBC)
 
 <div align="center">
   <img src="assets/icon.jpg" alt="Markdown Viewer Logo" width="140" />
