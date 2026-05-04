@@ -276,6 +276,25 @@ body {
   gap: 8px;
 }
 
+.desktop-menu .action-menu {
+  min-width: 260px;
+  background-color: var(--header-bg);
+  border-color: var(--border-color);
+}
+
+.desktop-menu .action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-color);
+}
+
+.desktop-menu .action-menu-item:hover,
+.desktop-menu .action-menu-item:focus {
+  background-color: var(--button-hover);
+  color: var(--text-color);
+}
+
 .tool-button {
   background-color: var(--button-bg);
   border: 1px solid var(--border-color);
