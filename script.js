@@ -145,6 +145,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileExportPdf     = document.getElementById("mobile-export-pdf");
   const mobileCopyMarkdown  = document.getElementById("mobile-copy-markdown");
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
+  const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
+  const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
+  const graphViewModal = document.getElementById("graph-view-modal");
+  const graphViewClose = document.getElementById("graph-view-close");
+  const graphViewCanvas = document.getElementById("graph-view-canvas");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
   const githubImportModal = document.getElementById("github-import-modal");
@@ -555,6 +560,7 @@ This is a fully client-side application. Your content never leaves your browser 
   const UNTITLED_COUNTER_KEY = 'markdownViewerUntitledCounter';
   let tabs = [];
   let activeTabId = null;
+  let folderMarkdownFiles = [];
   let draggedTabId = null;
   let saveTabStateTimeout = null;
   let untitledCounter = 0;
@@ -1243,7 +1249,7 @@ This is a fully client-side application. Your content never leaves your browser 
       relPath.forEach((segment) => {
         cursor = ensureDir(cursor, segment).children;
       });
-      cursor.push({ kind: "file", name: fileName, file });
+      cursor.push({ kind: "file", name: fileName, file, path: (file.webkitRelativePath || file.name) });
     });
 
     const sortNodes = (nodes) => {
@@ -1259,6 +1265,7 @@ This is a fully client-side application. Your content never leaves your browser 
       try {
         const dirHandle = await window.showDirectoryPicker();
         const nodes = await listMarkdownTree(dirHandle);
+        folderMarkdownFiles = [];
         folderTreeRoot.innerHTML = "";
         if (!nodes.length) {
           folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
@@ -2270,6 +2277,7 @@ This is a fully client-side application. Your content never leaves your browser 
   if (folderInput) {
     folderInput.addEventListener("change", function(e) {
       const files = e.target.files;
+      folderMarkdownFiles = Array.from(files || []).filter((file) => /\.(md|markdown)$/i.test(file.name));
       const nodes = buildTreeFromFileList(files || []);
       folderTreeRoot.innerHTML = "";
       if (!nodes.length) {
@@ -2281,6 +2289,82 @@ This is a fully client-side application. Your content never leaves your browser 
         folderTreeRoot.appendChild(ul);
       }
       this.value = "";
+    });
+  }
+
+  function normalizeGraphNodeName(path) {
+    return (path || "").replace(/\\/g, "/").replace(/\.(md|markdown)$/i, "").toLowerCase();
+  }
+
+  function extractMarkdownLinks(markdown) {
+    const links = [];
+    const mdLinkRegex = /\[[^\]]*?\]\(([^)]+)\)/g;
+    const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+    let match;
+    while ((match = mdLinkRegex.exec(markdown || "")) !== null) links.push(match[1]);
+    while ((match = wikiLinkRegex.exec(markdown || "")) !== null) links.push(match[1]);
+    return links.map((link) => link.split("#")[0].trim()).filter(Boolean);
+  }
+
+  async function openGraphView() {
+    if (!graphViewModal || !graphViewCanvas) return;
+    graphViewModal.classList.remove("hidden");
+    graphViewModal.setAttribute("aria-hidden", "false");
+    await renderGraphView();
+  }
+
+  function closeGraphView() {
+    if (!graphViewModal) return;
+    graphViewModal.classList.add("hidden");
+    graphViewModal.setAttribute("aria-hidden", "true");
+  }
+
+  async function renderGraphView() {
+    if (!graphViewCanvas) return;
+    graphViewCanvas.innerHTML = "";
+    const files = folderMarkdownFiles || [];
+    if (!files.length) {
+      graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">Open a folder first to build the graph view.</p>';
+      return;
+    }
+    const nodes = [];
+    const links = [];
+    const nodeIndex = new Map();
+    for (const file of files) {
+      const path = file.webkitRelativePath || file.name;
+      const id = normalizeGraphNodeName(path);
+      nodeIndex.set(id, path);
+      nodes.push({ id, label: path });
+    }
+    for (const file of files) {
+      const srcPath = file.webkitRelativePath || file.name;
+      const source = normalizeGraphNodeName(srcPath);
+      const text = await file.text();
+      extractMarkdownLinks(text).forEach((ref) => {
+        const target = normalizeGraphNodeName(ref);
+        if (nodeIndex.has(target) && target !== source) links.push({ source, target });
+      });
+    }
+    const width = graphViewCanvas.clientWidth || 900;
+    const height = graphViewCanvas.clientHeight || 560;
+    const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
+    const simulation = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id((d) => d.id).distance(80))
+      .force("charge", d3.forceManyBody().strength(-240))
+      .force("center", d3.forceCenter(width / 2, height / 2));
+    const link = svg.append("g").selectAll("line").data(links).enter().append("line").attr("class", "graph-link");
+    const node = svg.append("g").selectAll("circle").data(nodes).enter().append("circle")
+      .attr("r", 8).attr("class", "graph-node")
+      .call(d3.drag()
+        .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+        .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+    node.append("title").text((d) => d.label);
+    const label = svg.append("g").selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
+    simulation.on("tick", () => {
+      link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
+      node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+      label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
     });
   }
 
@@ -2298,6 +2382,10 @@ This is a fully client-side application. Your content never leaves your browser 
       alert("Export failed: " + e.message);
     }
   });
+
+  desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
+  if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
+  if (graphViewClose) graphViewClose.addEventListener("click", closeGraphView);
 
   exportHtml.addEventListener("click", function () {
     try {
