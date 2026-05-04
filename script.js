@@ -2533,10 +2533,12 @@ This is a fully client-side application. Your content never leaves your browser 
       outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
     });
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
-    const nodeRadius = (nodeId) => {
+    const GRAPH_NODE_RADIUS_SCALE = 0.8;
+    const graphBaseNodeRadius = (nodeId) => {
       const outCount = outgoingDegree.get(nodeId) || 0;
-      return (6 + (outCount / maxOutgoing) * 12) * 0.8;
+      return 6 + (outCount / maxOutgoing) * 12;
     };
+    const nodeRadius = (nodeId) => graphBaseNodeRadius(nodeId) * GRAPH_NODE_RADIUS_SCALE;
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
     const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
