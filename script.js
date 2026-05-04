@@ -2318,7 +2318,40 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function normalizeGraphNodeName(path) {
-    return (path || "").replace(/\\/g, "/").replace(/\.(md|markdown)$/i, "").toLowerCase();
+    return (path || "")
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "")
+      .replace(/\.(md|markdown)$/i, "")
+      .replace(/\/+/g, "/")
+      .toLowerCase();
+  }
+
+  function resolveGraphTargetId(reference, sourcePath, nodeIndex) {
+    const ref = (reference || "").trim();
+    if (!ref) return null;
+    if (/^(https?:)?\/\//i.test(ref)) return null;
+
+    const cleanedRef = ref
+      .replace(/^\.\//, "")
+      .replace(/^\/+/, "")
+      .replace(/\\/g, "/");
+
+    const sourceDir = (sourcePath || "").split("/").slice(0, -1).join("/");
+    const relativeCandidate = normalizeGraphNodeName(sourceDir ? `${sourceDir}/${cleanedRef}` : cleanedRef);
+    if (nodeIndex.has(relativeCandidate)) return relativeCandidate;
+
+    const directCandidate = normalizeGraphNodeName(cleanedRef);
+    if (nodeIndex.has(directCandidate)) return directCandidate;
+
+    const basenameCandidate = normalizeGraphNodeName(cleanedRef.split("/").pop() || "");
+    if (!basenameCandidate) return null;
+
+    const suffixMatches = Array.from(nodeIndex.keys()).filter((id) =>
+      id === basenameCandidate || id.endsWith(`/${basenameCandidate}`)
+    );
+
+    if (suffixMatches.length === 1) return suffixMatches[0];
+    return null;
   }
 
   function extractMarkdownLinks(markdown) {
@@ -2354,6 +2387,7 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     const nodes = [];
     const links = [];
+    const seenEdges = new Set();
     const nodeIndex = new Map();
     for (const fileEntry of files) {
       const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
@@ -2366,8 +2400,12 @@ This is a fully client-side application. Your content never leaves your browser 
       const source = normalizeGraphNodeName(srcPath);
       const text = await fileEntry.file.text();
       extractMarkdownLinks(text).forEach((ref) => {
-        const target = normalizeGraphNodeName(ref);
-        if (nodeIndex.has(target) && target !== source) links.push({ source, target });
+        const target = resolveGraphTargetId(ref, srcPath, nodeIndex);
+        if (!target || target === source) return;
+        const edgeKey = `${source}->${target}`;
+        if (seenEdges.has(edgeKey)) return;
+        seenEdges.add(edgeKey);
+        links.push({ source, target });
       });
     }
     const width = graphViewCanvas.clientWidth || 900;
