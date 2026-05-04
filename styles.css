@@ -375,10 +375,15 @@ body {
 .graph-link {
   stroke: var(--border-color);
   stroke-opacity: 0.8;
+  stroke-width: 1.5px;
 }
 
 .graph-node {
   fill: var(--accent-color);
+}
+
+.graph-arrowhead {
+  fill: var(--border-color);
 }
 
 .graph-label {

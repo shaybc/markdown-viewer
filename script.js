@@ -2425,7 +2425,22 @@ This is a fully client-side application. Your content never leaves your browser 
       .force("link", d3.forceLink(links).id((d) => d.id).distance(80))
       .force("charge", d3.forceManyBody().strength(-240))
       .force("center", d3.forceCenter(width / 2, height / 2));
-    const link = graphLayer.append("g").selectAll("line").data(links).enter().append("line").attr("class", "graph-link");
+    const defs = svg.append("defs");
+    defs.append("marker")
+      .attr("id", "graph-arrowhead")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 16)
+      .attr("refY", 0)
+      .attr("markerWidth", 7)
+      .attr("markerHeight", 7)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("class", "graph-arrowhead")
+      .attr("d", "M0,-5L10,0L0,5");
+
+    const link = graphLayer.append("g").selectAll("line").data(links).enter().append("line")
+      .attr("class", "graph-link")
+      .attr("marker-end", "url(#graph-arrowhead)");
     const node = graphLayer.append("g").selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", 8).attr("class", "graph-node")
       .call(d3.drag()
