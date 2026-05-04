@@ -940,6 +940,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
     activeTabId = tab.id;
     saveActiveTabId(activeTabId);
+    setGraphViewMode(false);
     markdownEditor.value = tab.content;
     restoreViewMode(tab.viewMode);
     renderMarkdown();
