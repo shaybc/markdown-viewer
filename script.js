@@ -1169,6 +1169,29 @@ This is a fully client-side application. Your content never leaves your browser 
     return entries;
   }
 
+  async function collectMarkdownFilesFromTree(nodes, parentPath = "") {
+    const files = [];
+    for (const node of (nodes || [])) {
+      const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+      if (node.kind === "directory") {
+        const nestedFiles = await collectMarkdownFilesFromTree(node.children || [], currentPath);
+        files.push(...nestedFiles);
+      } else if (node.kind === "file") {
+        if (node.file) {
+          files.push({ path: currentPath, file: node.file });
+        } else if (node.handle) {
+          try {
+            const file = await node.handle.getFile();
+            files.push({ path: currentPath, file });
+          } catch (error) {
+            console.warn("Failed to read file handle for graph view:", currentPath, error);
+          }
+        }
+      }
+    }
+    return files;
+  }
+
   function renderFolderTreeNode(node) {
     const li = document.createElement("li");
     li.className = "folder-tree-item";
@@ -1265,7 +1288,7 @@ This is a fully client-side application. Your content never leaves your browser 
       try {
         const dirHandle = await window.showDirectoryPicker();
         const nodes = await listMarkdownTree(dirHandle);
-        folderMarkdownFiles = [];
+        folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
         folderTreeRoot.innerHTML = "";
         if (!nodes.length) {
           folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
@@ -2277,7 +2300,9 @@ This is a fully client-side application. Your content never leaves your browser 
   if (folderInput) {
     folderInput.addEventListener("change", function(e) {
       const files = e.target.files;
-      folderMarkdownFiles = Array.from(files || []).filter((file) => /\.(md|markdown)$/i.test(file.name));
+      folderMarkdownFiles = Array.from(files || [])
+        .filter((file) => /\.(md|markdown)$/i.test(file.name))
+        .map((file) => ({ path: file.webkitRelativePath || file.name, file }));
       const nodes = buildTreeFromFileList(files || []);
       folderTreeRoot.innerHTML = "";
       if (!nodes.length) {
@@ -2330,16 +2355,16 @@ This is a fully client-side application. Your content never leaves your browser 
     const nodes = [];
     const links = [];
     const nodeIndex = new Map();
-    for (const file of files) {
-      const path = file.webkitRelativePath || file.name;
+    for (const fileEntry of files) {
+      const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
       const id = normalizeGraphNodeName(path);
       nodeIndex.set(id, path);
       nodes.push({ id, label: path });
     }
-    for (const file of files) {
-      const srcPath = file.webkitRelativePath || file.name;
+    for (const fileEntry of files) {
+      const srcPath = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
       const source = normalizeGraphNodeName(srcPath);
-      const text = await file.text();
+      const text = await fileEntry.file.text();
       extractMarkdownLinks(text).forEach((ref) => {
         const target = normalizeGraphNodeName(ref);
         if (nodeIndex.has(target) && target !== source) links.push({ source, target });
