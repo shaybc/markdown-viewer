@@ -2539,6 +2539,24 @@ This is a fully client-side application. Your content never leaves your browser 
       return 6 + (outCount / maxOutgoing) * 12;
     };
     const nodeRadius = (nodeId) => graphBaseNodeRadius(nodeId) * GRAPH_NODE_RADIUS_SCALE;
+    const GRAPH_LINK_SOURCE_PADDING = 1;
+    const GRAPH_LINK_TARGET_PADDING = 2;
+    const getLinkEndpoint = (d) => {
+      const dx = d.target.x - d.source.x;
+      const dy = d.target.y - d.source.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const ux = dx / distance;
+      const uy = dy / distance;
+      const sourceOffset = nodeRadius(d.source.id) + GRAPH_LINK_SOURCE_PADDING;
+      const targetOffset = nodeRadius(d.target.id) + GRAPH_LINK_TARGET_PADDING;
+      return {
+        x1: d.source.x + ux * sourceOffset,
+        y1: d.source.y + uy * sourceOffset,
+        x2: d.target.x - ux * targetOffset,
+        y2: d.target.y - uy * targetOffset
+      };
+    };
+    const nodeRadius = (nodeId) => graphBaseNodeRadius(nodeId) * GRAPH_NODE_RADIUS_SCALE;
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
     const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
@@ -2565,7 +2583,7 @@ This is a fully client-side application. Your content never leaves your browser 
     defs.append("marker")
       .attr("id", "graph-arrowhead")
       .attr("viewBox", "0 -4 9 8")
-      .attr("refX", 13)
+      .attr("refX", 9)
       .attr("refY", 0)
       .attr("markerWidth", 5)
       .attr("markerHeight", 5)
@@ -2728,35 +2746,14 @@ This is a fully client-side application. Your content never leaves your browser 
       .on("mouseleave", clearNeighborhoodHighlight);
 
     simulation.on("tick", () => {
-      link
-        .attr("x1", (d) => {
-          const dx = d.target.x - d.source.x;
-          const dy = d.target.y - d.source.y;
-          const distance = Math.hypot(dx, dy) || 1;
-          const sourceOffset = nodeRadius(d.source.id);
-          return d.source.x + (dx / distance) * sourceOffset;
-        })
-        .attr("y1", (d) => {
-          const dx = d.target.x - d.source.x;
-          const dy = d.target.y - d.source.y;
-          const distance = Math.hypot(dx, dy) || 1;
-          const sourceOffset = nodeRadius(d.source.id);
-          return d.source.y + (dy / distance) * sourceOffset;
-        })
-        .attr("x2", (d) => {
-          const dx = d.target.x - d.source.x;
-          const dy = d.target.y - d.source.y;
-          const distance = Math.hypot(dx, dy) || 1;
-          const targetOffset = nodeRadius(d.target.id) + 4;
-          return d.target.x - (dx / distance) * targetOffset;
-        })
-        .attr("y2", (d) => {
-          const dx = d.target.x - d.source.x;
-          const dy = d.target.y - d.source.y;
-          const distance = Math.hypot(dx, dy) || 1;
-          const targetOffset = nodeRadius(d.target.id) + 4;
-          return d.target.y - (dy / distance) * targetOffset;
-        });
+      link.each(function(d) {
+        const endpoint = getLinkEndpoint(d);
+        d3.select(this)
+          .attr("x1", endpoint.x1)
+          .attr("y1", endpoint.y1)
+          .attr("x2", endpoint.x2)
+          .attr("y2", endpoint.y2);
+      });
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
     });
