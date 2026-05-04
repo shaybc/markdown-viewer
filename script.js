@@ -2375,6 +2375,12 @@ This is a fully client-side application. Your content never leaves your browser 
       .toLowerCase();
   }
 
+  function getGraphDisplayLabel(path) {
+    const normalized = (path || "").replace(/\\/g, "/").replace(/\/+/g, "/");
+    const fileName = normalized.split("/").pop() || normalized;
+    return fileName.replace(/\.(md|markdown)$/i, "") || fileName;
+  }
+
   function resolveGraphTargetId(reference, sourcePath, nodeIndex) {
     const ref = (reference || "").trim();
     if (!ref) return null;
@@ -2467,7 +2473,7 @@ This is a fully client-side application. Your content never leaves your browser 
       const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
       const id = normalizeGraphNodeName(path);
       nodeIndex.set(id, path);
-      nodes.push({ id, label: path });
+      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path });
     }
     for (const fileEntry of files) {
       const srcPath = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
@@ -2545,13 +2551,14 @@ This is a fully client-side application. Your content never leaves your browser 
     svg.call(zoomBehavior).on("dblclick.zoom", null);
 
     const simulation = d3.forceSimulation(nodes);
-    const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(80).strength(0.35);
-    const baseChargeForce = d3.forceManyBody().strength(-240);
+    const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(170).strength(0.4);
+    const baseChargeForce = d3.forceManyBody().strength(-650);
     const baseCenterForce = d3.forceCenter(width / 2, height / 2);
     simulation
       .force("link", baseLinkForce)
       .force("charge", baseChargeForce)
-      .force("center", baseCenterForce);
+      .force("center", baseCenterForce)
+      .force("collision", d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9));
     const defs = svg.append("defs");
     defs.append("marker")
       .attr("id", "graph-arrowhead")
@@ -2574,7 +2581,7 @@ This is a fully client-side application. Your content never leaves your browser 
         .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
         .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
-    node.append("title").text((d) => d.label);
+    node.append("title").text((d) => d.fullPath || d.label);
     const label = graphLayer.append("g").selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
 
     const contextMenu = document.createElement("div");
