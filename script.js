@@ -811,6 +811,8 @@ This is a fully client-side application. Your content never leaves your browser 
     const tab = tabs.find(function(t) { return t.id === tabId; });
     if (!tab || !tab.isTemporary) return;
     tab.isTemporary = false;
+    // Promote preview tab to a normal tab without marking it dirty.
+    tab.savedContent = tab.content;
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
   }
