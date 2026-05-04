@@ -2616,6 +2616,9 @@ This is a fully client-side application. Your content never leaves your browser 
 
     graphViewCanvas.addEventListener("contextmenu", (event) => {
       event.preventDefault();
+      contextTargetNode = null;
+      hidePointBtn.classList.add("hidden");
+      localGraphBtn.classList.add("hidden");
       const bounds = graphViewCanvas.getBoundingClientRect();
       contextMenu.style.left = `${Math.min(event.clientX - bounds.left, bounds.width - 200)}px`;
       contextMenu.style.top = `${Math.min(event.clientY - bounds.top, bounds.height - 120)}px`;
