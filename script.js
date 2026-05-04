@@ -2440,6 +2440,10 @@ This is a fully client-side application. Your content never leaves your browser 
     } else {
       contentContainer.classList.remove("graph-view-active");
       graphViewCanvas.classList.remove("tab-graph-canvas");
+      const graphViewContent = document.querySelector("#graph-view-modal .graph-view-content");
+      if (graphViewContent && graphViewCanvas.parentElement !== graphViewContent) {
+        graphViewContent.appendChild(graphViewCanvas);
+      }
     }
   }
 
