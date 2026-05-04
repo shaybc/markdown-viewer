@@ -2529,7 +2529,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
     const nodeRadius = (nodeId) => {
       const outCount = outgoingDegree.get(nodeId) || 0;
-      return (6 + (outCount / maxOutgoing) * 12) * 0.8;
+      return (6 + (outCount / maxOutgoing) * 12) * 0.5;
     };
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
