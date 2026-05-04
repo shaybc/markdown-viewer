@@ -447,6 +447,10 @@ body {
   border-radius: 4px;
 }
 
+.graph-context-menu-item.hidden {
+  display: none;
+}
+
 .graph-context-menu-item:hover {
   background: var(--hover-bg);
 }
