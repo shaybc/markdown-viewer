@@ -168,12 +168,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const renderer = new marked.Renderer();
   renderer.code = function (code, language) {
-    if (language === 'mermaid') {
+    const normalizedLanguage = (language || "").trim().split(/\s+/)[0].toLowerCase();
+
+    if (normalizedLanguage === 'mermaid') {
       const uniqueId = 'mermaid-diagram-' + Math.random().toString(36).substr(2, 9);
       return `<div class="mermaid-container"><div class="mermaid" id="${uniqueId}">${code}</div></div>`;
     }
     
-    const validLanguage = hljs.getLanguage(language) ? language : "plaintext";
+    const validLanguage = hljs.getLanguage(normalizedLanguage) ? normalizedLanguage : "plaintext";
     const highlightedCode = hljs.highlight(code, {
       language: validLanguage,
     }).value;
