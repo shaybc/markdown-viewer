@@ -2556,6 +2556,7 @@ This is a fully client-side application. Your content never leaves your browser 
         y2: d.target.y - uy * targetOffset
       };
     };
+    const nodeRadius = (nodeId) => graphBaseNodeRadius(nodeId) * GRAPH_NODE_RADIUS_SCALE;
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
     const svg = d3.select(graphViewCanvas).append("svg").attr("width", width).attr("height", height);
