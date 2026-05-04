@@ -366,7 +366,6 @@ body {
 .graph-view-canvas {
   flex: 1;
   min-height: 560px;
-  position: relative;
 }
 
 .graph-view-canvas svg {
@@ -374,13 +373,13 @@ body {
   height: 100%;
 }
 
-.app-body.graph-view-active .editor-pane,
-.app-body.graph-view-active .resize-divider,
-.app-body.graph-view-active #markdown-preview {
+.content-container.graph-view-active .editor-pane,
+.content-container.graph-view-active .resize-divider,
+.content-container.graph-view-active #markdown-preview {
   display: none;
 }
 
-.app-body.graph-view-active .preview-pane {
+.content-container.graph-view-active .preview-pane {
   flex: 1 1 auto;
 }
 

@@ -2425,17 +2425,17 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function setGraphViewMode(enabled) {
-    const appBody = document.querySelector(".app-body");
-    if (!appBody || !graphViewCanvas) return;
+    const contentContainer = document.querySelector(".content-container");
+    if (!contentContainer || !graphViewCanvas) return;
     if (enabled) {
-      appBody.classList.add("graph-view-active");
+      contentContainer.classList.add("graph-view-active");
       if (!graphViewCanvas.parentElement || !graphViewCanvas.closest(".preview-pane")) {
         const previewPane = document.querySelector(".preview-pane");
         if (previewPane) previewPane.appendChild(graphViewCanvas);
       }
       graphViewCanvas.classList.add("tab-graph-canvas");
     } else {
-      appBody.classList.remove("graph-view-active");
+      contentContainer.classList.remove("graph-view-active");
       graphViewCanvas.classList.remove("tab-graph-canvas");
     }
   }
