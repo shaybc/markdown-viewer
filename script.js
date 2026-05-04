@@ -1245,9 +1245,25 @@ This is a fully client-side application. Your content never leaves your browser 
     const reader = new FileReader();
     reader.onload = function(e) {
       newTab(e.target.result, file.name.replace(/\.md$/i, ''));
-      dropzone.style.display = "none";
+      hideSidebarDropzone();
     };
     reader.readAsText(file);
+  }
+
+  function hideSidebarDropzone() {
+    if (dropzone) {
+      dropzone.style.display = "none";
+    }
+    if (sidebarDropzonePanel) {
+      sidebarDropzonePanel.style.display = "none";
+      sidebarDropzonePanel.style.flex = "0 0 0px";
+      sidebarDropzonePanel.style.padding = "0";
+      sidebarDropzonePanel.style.minHeight = "0";
+    }
+    if (sidebarDropzoneResizer) {
+      sidebarDropzoneResizer.style.display = "none";
+      sidebarDropzoneResizer.style.flex = "0 0 0px";
+    }
   }
 
   async function saveActiveTabToSource() {
@@ -3183,7 +3199,7 @@ This is a fully client-side application. Your content never leaves your browser 
   });
   closeDropzoneBtn.addEventListener("click", function(e) {
     e.stopPropagation(); 
-    dropzone.style.display = "none";
+    hideSidebarDropzone();
   });
 
   function handleDrop(e) {
