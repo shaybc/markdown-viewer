@@ -85,18 +85,6 @@ function onWindowClose() {
   Neutralino.app.exit();
 }
 
-let desktopLogFilePathPromise = null;
-
-async function resolveDesktopLogPath() {
-  if (!window.Neutralino?.os?.getPath) return "startup-debug.log";
-  if (!desktopLogFilePathPromise) {
-    desktopLogFilePathPromise = Neutralino.os.getPath("documents")
-      .then((documentsPath) => `${documentsPath}/markdown-viewer-startup-debug.log`)
-      .catch(() => "startup-debug.log");
-  }
-  return desktopLogFilePathPromise;
-}
-
 function desktopBootLog(step, details = {}) {
   const timestamp = new Date().toISOString();
   const message = `[DesktopBoot][${timestamp}] ${step}`;
