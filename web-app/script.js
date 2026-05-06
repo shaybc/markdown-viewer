@@ -61,6 +61,200 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+
+  const RECENT_FILES_KEY = "markdownViewerRecentFiles";
+  const RECENT_FOLDERS_KEY = "markdownViewerRecentFolders";
+  const MAX_RECENT_ITEMS = 10;
+  const recentFileHandles = new Map();
+  const recentFolderHandles = new Map();
+
+  function readRecentItems(storageKey) {
+    try {
+      const items = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      return Array.isArray(items) ? items : [];
+    } catch (error) {
+      console.warn("Failed to read recent items:", error);
+      return [];
+    }
+  }
+
+  function writeRecentItems(storageKey, items) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(items.slice(0, MAX_RECENT_ITEMS)));
+    } catch (error) {
+      console.warn("Failed to save recent items:", error);
+    }
+  }
+
+  function getRecentItemKey(item) {
+    return String(item && (item.path || item.handleName || item.name || item.label) || "").toLowerCase();
+  }
+
+  function createRecentEntry(entry) {
+    const path = entry && entry.path ? String(entry.path) : null;
+    const handleName = entry && entry.handle && entry.handle.name ? entry.handle.name : null;
+    const name = entry && entry.name ? String(entry.name) : (path ? getFileName(path) : handleName);
+    const label = entry && entry.label ? String(entry.label) : (name || path || handleName || "Untitled");
+    return {
+      name: name || label,
+      label,
+      path,
+      handleName,
+      updatedAt: Date.now()
+    };
+  }
+
+  function rememberRecentItem(storageKey, entry, handleStore) {
+    const recentEntry = createRecentEntry(entry);
+    const key = getRecentItemKey(recentEntry);
+    if (!key) return;
+
+    if (entry && entry.handle) {
+      handleStore.set(key, entry.handle);
+    }
+
+    const items = readRecentItems(storageKey).filter((item) => getRecentItemKey(item) !== key);
+    items.unshift(recentEntry);
+    writeRecentItems(storageKey, items);
+    renderRecentMenus();
+  }
+
+  function rememberRecentFile(entry) {
+    rememberRecentItem(RECENT_FILES_KEY, entry, recentFileHandles);
+  }
+
+  function rememberRecentFolder(entry) {
+    rememberRecentItem(RECENT_FOLDERS_KEY, entry, recentFolderHandles);
+  }
+
+  function getRecentSubmenuMarkup(kind, iconClass, title) {
+    return `
+      <div class="dropdown-submenu action-menu-submenu recent-${kind}-submenu">
+        <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+          <i class="bi ${iconClass} me-2"></i> ${title}
+        </button>
+        <div class="dropdown-menu action-submenu recent-${kind}-menu" aria-label="${title}"></div>
+      </div>`;
+  }
+
+  function ensureRecentMenuContainers() {
+    document.querySelectorAll(".action-menu").forEach((menu) => {
+      const openFolderButton = menu.querySelector("#import-from-folder");
+      if (!openFolderButton || menu.querySelector(".recent-files-submenu")) return;
+
+      openFolderButton.insertAdjacentHTML("afterend", getRecentSubmenuMarkup("folders", "bi-clock-history", "Recent folders"));
+      openFolderButton.insertAdjacentHTML("afterend", getRecentSubmenuMarkup("files", "bi-clock-history", "Recent files"));
+    });
+    renderRecentMenus();
+  }
+
+  function renderRecentMenu(menu, items, emptyText, itemType) {
+    menu.innerHTML = "";
+
+    if (!items.length) {
+      const emptyItem = document.createElement("button");
+      emptyItem.type = "button";
+      emptyItem.className = "dropdown-item action-menu-item recent-empty-item";
+      emptyItem.disabled = true;
+      emptyItem.textContent = emptyText;
+      menu.appendChild(emptyItem);
+      return;
+    }
+
+    items.slice(0, MAX_RECENT_ITEMS).forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "dropdown-item action-menu-item recent-menu-item";
+      button.dataset.recentType = itemType;
+      button.dataset.recentKey = getRecentItemKey(item);
+      button.title = item.path || item.label || item.name;
+      button.innerHTML = `<span class="recent-menu-label">${escapeHtml(item.label || item.name || item.path || "Untitled")}</span>`;
+      menu.appendChild(button);
+    });
+  }
+
+  function renderRecentMenus() {
+    const recentFiles = readRecentItems(RECENT_FILES_KEY);
+    const recentFolders = readRecentItems(RECENT_FOLDERS_KEY);
+
+    document.querySelectorAll(".recent-files-menu").forEach((menu) => {
+      renderRecentMenu(menu, recentFiles, "No recent files", "file");
+    });
+
+    document.querySelectorAll(".recent-folders-menu").forEach((menu) => {
+      renderRecentMenu(menu, recentFolders, "No recent folders", "folder");
+    });
+  }
+
+  async function openRecentFile(key) {
+    const item = readRecentItems(RECENT_FILES_KEY).find((recentItem) => getRecentItemKey(recentItem) === key);
+    if (!item) return;
+
+    const handle = recentFileHandles.get(key) || null;
+    if (!item.path && !handle) {
+      alert("This recent file was opened by the browser and cannot be reopened automatically after the original picker session. Please choose it again with Open file ...");
+      return;
+    }
+
+    try {
+      await openMarkdownSourceFile({
+        name: item.name || item.label || (item.path ? getFileName(item.path) : null),
+        path: item.path || null,
+        handle
+      });
+    } catch (error) {
+      console.error("Failed to open recent file:", error);
+      alert("Unable to open the recent file.");
+    }
+  }
+
+  async function openRecentFolder(key) {
+    const item = readRecentItems(RECENT_FOLDERS_KEY).find((recentItem) => getRecentItemKey(recentItem) === key);
+    if (!item) return;
+
+    const handle = recentFolderHandles.get(key) || null;
+    if (typeof NL_VERSION !== "undefined" && item.path) {
+      try {
+        await openFolderTreeFromNeutralinoPath(item.path);
+      } catch (error) {
+        console.error("Failed to open recent folder:", error);
+        alert("Unable to open the recent folder.");
+      }
+      return;
+    }
+
+    if (handle) {
+      try {
+        activeFolderName = handle.name || item.name || "Graph View";
+        activeFolderHandle = handle;
+        activeFolderPath = null;
+        const nodes = await listMarkdownTree(handle);
+        folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
+        renderFolderTree(nodes);
+        rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle });
+      } catch (error) {
+        console.error("Failed to open recent folder:", error);
+        alert("Unable to open the recent folder.");
+      }
+      return;
+    }
+
+    alert("This recent folder was opened by the browser and cannot be reopened automatically after the original picker session. Please choose it again with Open folder ...");
+  }
+
+  document.addEventListener("click", function(event) {
+    const recentButton = event.target.closest(".recent-menu-item");
+    if (!recentButton) return;
+
+    event.preventDefault();
+
+    if (recentButton.dataset.recentType === "folder") {
+      openRecentFolder(recentButton.dataset.recentKey);
+    } else {
+      openRecentFile(recentButton.dataset.recentKey);
+    }
+  });
+
   function ensureFolderTreePane() {
     let pane = document.getElementById("folder-tree-pane");
     if (pane || !contentContainer) return;
@@ -147,6 +341,7 @@ document.addEventListener("DOMContentLoaded", function () {
   folderTreeRoot = document.getElementById("folder-tree-root");
   const folderTreePane = document.getElementById("folder-tree-pane");
   document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
+  ensureRecentMenuContainers();
   const sidebarDropzonePanel = document.querySelector(".sidebar-dropzone-panel");
   const sidebarDropzoneResizer = document.getElementById("sidebar-dropzone-resizer");
   const toggleDropzonePanelButtons = document.querySelectorAll(".toggle-dropzone-panel");
@@ -1665,6 +1860,7 @@ This is a fully client-side application. Your content never leaves your browser 
       const nodes = await listMarkdownTree(activeFolderHandle);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
+      rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
       return true;
     }
 
@@ -1698,6 +1894,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const nodes = await listMarkdownTreeNeutralino(selectedPath);
     folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
     renderFolderTree(nodes);
+    rememberRecentFolder({ name: activeFolderName, label: activeFolderName, path: selectedPath });
   }
 
   function getMarkdownTitleFromFileName(fileName) {
@@ -1733,6 +1930,12 @@ This is a fully client-side application. Your content never leaves your browser 
       name,
       handle,
       path
+    });
+    rememberRecentFile({
+      name,
+      label: name,
+      path,
+      handle
     });
     return tab;
   }
@@ -1950,6 +2153,7 @@ This is a fully client-side application. Your content never leaves your browser 
       const nodes = await listMarkdownTree(dirHandle);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
+      rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle: dirHandle });
       return true;
     }
 
@@ -1961,6 +2165,7 @@ This is a fully client-side application. Your content never leaves your browser 
       const nodes = await listMarkdownTreeFromEntry(directoryEntry);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
+      rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
       return true;
     }
 
@@ -2064,6 +2269,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           if (options && options.temporary === false) {
             pinTemporaryTab(existingTab.id);
           }
+          rememberRecentFile(getSidebarFileSource());
           return;
         }
 
@@ -2075,6 +2281,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         } else {
           openSidebarFileInTemporaryTab(content, title, sourceFile);
         }
+        rememberRecentFile(sourceFile);
       } catch (error) {
         console.error("Failed to open Markdown file:", error);
         alert("Unable to open selected file.");
@@ -2174,6 +2381,7 @@ async function openFolderTree() {
       const nodes = await listMarkdownTree(dirHandle);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
+      rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle: dirHandle });
       return;
     } catch (error) {
       if (error && error.name === "AbortError") return;
@@ -3409,6 +3617,7 @@ async function openFolderTree() {
         .map((file) => ({ path: file.webkitRelativePath || file.name, file }));
       const nodes = buildTreeFromFileList(files || []);
       renderFolderTree(nodes);
+      rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
       this.value = "";
     });
   }

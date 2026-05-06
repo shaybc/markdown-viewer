@@ -110,6 +110,32 @@ function onWindowClose() {
   Neutralino.app.exit();
 }
 
+
+function rememberInitialRecentFile(filePath) {
+  if (!filePath) return;
+
+  try {
+    const name = filePath.split(/[\\/]/).pop() || filePath;
+    const storageKey = "markdownViewerRecentFiles";
+    const recentItems = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    const nextItem = {
+      name,
+      label: name,
+      path: filePath,
+      handleName: null,
+      updatedAt: Date.now()
+    };
+    const nextItems = [
+      nextItem,
+      ...recentItems.filter((item) => String(item && (item.path || item.handleName || item.name || item.label) || "").toLowerCase() !== filePath.toLowerCase())
+    ].slice(0, 10);
+    localStorage.setItem(storageKey, JSON.stringify(nextItems));
+  } catch (error) {
+    console.warn("Could not remember initial file:", error);
+  }
+}
+
+
 // Initialize Neutralino
 Neutralino.init();
 
@@ -135,6 +161,7 @@ Neutralino.events.on("ready", () => {
 
   try {
     const content = await Neutralino.filesystem.readFile(filePath);
+    rememberInitialRecentFile(filePath);
 
     function applyContent() {
       const editor = document.getElementById('markdown-editor');

@@ -542,6 +542,19 @@ body {
   transform: rotate(-90deg);
 }
 
+
+.recent-menu-item .recent-menu-label {
+  display: block;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-empty-item {
+  opacity: 0.65;
+}
+
 /* Responsive design for mobile */
 @media (max-width: 1080px) {
   .content-container {
