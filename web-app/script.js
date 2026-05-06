@@ -104,9 +104,16 @@ document.addEventListener("DOMContentLoaded", function () {
           <button id="share-button" class="dropdown-item action-menu-item" title="Share via URL">
             <i class="bi bi-share me-2"></i> Share
           </button>
-          <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
-            <i class="bi bi-moon me-2"></i> Theme
-          </button>
+          <div class="dropdown-submenu action-menu-submenu">
+            <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+              <i class="bi bi-eye me-2"></i> View
+            </button>
+            <div class="dropdown-menu action-submenu" aria-label="View options">
+              <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
+                <i class="bi bi-moon me-2"></i> Theme
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       <div id="folder-tree-root" class="folder-tree-root">
