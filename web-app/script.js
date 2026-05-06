@@ -1303,6 +1303,30 @@ This is a fully client-side application. Your content never leaves your browser 
     return tabHasUnsavedChanges(tab, markdownEditor.value);
   }
 
+  function getUnsavedMarkdownTabs() {
+    return tabs.filter(function(tab) {
+      if (!tab || tab.type === "graph") return false;
+      const currentContent = tab.id === activeTabId ? markdownEditor.value : tab.content;
+      return tabHasUnsavedChanges(tab, currentContent);
+    });
+  }
+
+  function confirmDiscardUnsavedChangesBeforeExit() {
+    const unsavedTabs = getUnsavedMarkdownTabs();
+    if (!unsavedTabs.length) return true;
+
+    const pluralSuffix = unsavedTabs.length === 1 ? "" : "s";
+    return window.confirm(
+      `You have unsaved changes in ${unsavedTabs.length} open tab${pluralSuffix}. ` +
+      "Exit without saving? Your changes will be lost."
+    );
+  }
+
+  window.markdownViewerHasUnsavedChanges = function() {
+    return getUnsavedMarkdownTabs().length > 0;
+  };
+  window.markdownViewerConfirmDiscardUnsavedBeforeExit = confirmDiscardUnsavedChangesBeforeExit;
+
   function updateSaveCurrentFileButtons() {
     const tab = getActiveMarkdownTab();
     const hasUnsavedChanges = activeTabHasUnsavedChanges();

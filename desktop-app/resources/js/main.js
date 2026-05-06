@@ -31,6 +31,20 @@ function openTutorial() {
   Neutralino.os.open("https://www.youtube.com/c/CodeZri");
 }
 
+function confirmDesktopExitWithoutSavingIfNeeded() {
+  if (typeof window.markdownViewerConfirmDiscardUnsavedBeforeExit === "function") {
+    return window.markdownViewerConfirmDiscardUnsavedBeforeExit();
+  }
+
+  return true;
+}
+
+function exitDesktopApp() {
+  if (confirmDesktopExitWithoutSavingIfNeeded()) {
+    Neutralino.app.exit();
+  }
+}
+
 function addDesktopExitMenuButton() {
   const desktopActionMenu = document.querySelector(
     "#tab-bar .tree-action-menu .action-menu",
@@ -51,7 +65,7 @@ function addDesktopExitMenuButton() {
   exitButton.title = "Close MD-Viewer";
   exitButton.innerHTML =
     '<i class="bi bi-box-arrow-right me-2"></i> Exit MD-Viewer';
-  exitButton.addEventListener("click", () => Neutralino.app.exit());
+  exitButton.addEventListener("click", exitDesktopApp);
 
   desktopActionMenu.append(separator, exitButton);
 }
@@ -98,7 +112,7 @@ function onTrayMenuItemClicked(event) {
       break;
     case "QUIT":
       // Exit the application
-      Neutralino.app.exit();
+      exitDesktopApp();
       break;
   }
 }
@@ -107,7 +121,7 @@ function onTrayMenuItemClicked(event) {
     Function to handle the window close event by gracefully exiting the Neutralino application.
 */
 function onWindowClose() {
-  Neutralino.app.exit();
+  exitDesktopApp();
 }
 
 
