@@ -3238,13 +3238,12 @@ async function openFolderTree() {
       links.length = 0;
       links.push(...filteredLinks);
     }
-    const adjacency = new Map();
+    const outgoingAdjacency = new Map();
     const outgoingDegree = new Map();
-    nodes.forEach((n) => adjacency.set(n.id, new Set([n.id])));
+    nodes.forEach((n) => outgoingAdjacency.set(n.id, new Set([n.id])));
     nodes.forEach((n) => outgoingDegree.set(n.id, 0));
     links.forEach((l) => {
-      adjacency.get(l.source)?.add(l.target);
-      adjacency.get(l.target)?.add(l.source);
+      outgoingAdjacency.get(l.source)?.add(l.target);
       outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
     });
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
@@ -3453,15 +3452,16 @@ async function openFolderTree() {
     });
 
     function highlightNeighborhood(focusNode) {
-      const connected = adjacency.get(focusNode.id) || new Set([focusNode.id]);
-      node.classed("dimmed", (n) => !connected.has(n.id));
-      label.classed("dimmed", (n) => !connected.has(n.id));
+      const outgoingTargets = outgoingAdjacency.get(focusNode.id) || new Set([focusNode.id]);
+      const isOutgoingFromFocus = (l) => l.source.id === focusNode.id;
+      node.classed("dimmed", (n) => !outgoingTargets.has(n.id));
+      label.classed("dimmed", (n) => !outgoingTargets.has(n.id));
       link
-        .classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id))
-        .classed("highlighted-direct", (l) => l.source.id === focusNode.id || l.target.id === focusNode.id);
+        .classed("dimmed", (l) => !isOutgoingFromFocus(l))
+        .classed("highlighted-direct", isOutgoingFromFocus);
       arrowhead
-        .classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id))
-        .classed("highlighted-direct", (l) => l.source.id === focusNode.id || l.target.id === focusNode.id);
+        .classed("dimmed", (l) => !isOutgoingFromFocus(l))
+        .classed("highlighted-direct", isOutgoingFromFocus);
     }
 
     function clearNeighborhoodHighlight() {
