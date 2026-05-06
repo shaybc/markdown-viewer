@@ -1617,19 +1617,19 @@ This is a fully client-side application. Your content never leaves your browser 
       }
     }
 
-    const directoryEntry = getDirectoryEntryFromDrop(dataTransfer);
-    if (directoryEntry) {
-      activeFolderName = directoryEntry.name || "Graph View";
-      const nodes = await listMarkdownTreeFromEntry(directoryEntry);
+    const dirHandle = await getDirectoryHandleFromDrop(dataTransfer);
+    if (dirHandle) {
+      activeFolderName = dirHandle.name || "Graph View";
+      const nodes = await listMarkdownTree(dirHandle);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       return true;
     }
 
-    const dirHandle = await getDirectoryHandleFromDrop(dataTransfer);
-    if (dirHandle) {
-      activeFolderName = dirHandle.name || "Graph View";
-      const nodes = await listMarkdownTree(dirHandle);
+    const directoryEntry = getDirectoryEntryFromDrop(dataTransfer);
+    if (directoryEntry) {
+      activeFolderName = directoryEntry.name || "Graph View";
+      const nodes = await listMarkdownTreeFromEntry(directoryEntry);
       folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
       renderFolderTree(nodes);
       return true;
@@ -4219,10 +4219,10 @@ async function openFolderTree() {
     const dt = e.dataTransfer;
 
     try {
-      if (await openDroppedFolder(dt)) {
+      if (await openDroppedMarkdownFile(dt)) {
         return;
       }
-      if (await openDroppedMarkdownFile(dt)) {
+      if (await openDroppedFolder(dt)) {
         return;
       }
     } catch (error) {
