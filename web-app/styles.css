@@ -410,6 +410,7 @@ body {
 .graph-arrowhead {
   fill: #ffffff;
   opacity: 0.95;
+  pointer-events: none;
 }
 
 .graph-label {
@@ -424,7 +425,8 @@ body {
   opacity: 0.2;
 }
 
-.graph-link.dimmed {
+.graph-link.dimmed,
+.graph-arrowhead.dimmed {
   opacity: 0.08;
 }
 

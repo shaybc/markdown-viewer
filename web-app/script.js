@@ -3293,30 +3293,26 @@ async function openFolderTree() {
       .force("charge", baseChargeForce)
       .force("center", baseCenterForce)
       .force("collision", d3.forceCollide().radius((d) => nodeRadius(d.id) + 30).strength(0.9));
-    const defs = svg.append("defs");
-    defs.append("marker")
-      .attr("id", "graph-arrowhead")
-      .attr("viewBox", "0 -4 9 8")
-      .attr("refX", 9)
-      .attr("refY", 0)
-      .attr("markerWidth", 5)
-      .attr("markerHeight", 5)
-      .attr("orient", "auto")
-      .append("path")
-      .attr("class", "graph-arrowhead")
-      .attr("d", "M0,-4L9,0L0,4");
+    // Keep the former marker dimensions: 9x8 viewBox scaled into a 5x5 marker viewport.
+    const arrowheadLength = 5;
+    const arrowheadHalfHeight = 20 / 9;
+    const lineLayer = graphLayer.append("g").attr("class", "graph-line-layer");
+    const arrowheadLayer = graphLayer.append("g").attr("class", "graph-arrowhead-layer");
+    const nodeLayer = graphLayer.append("g").attr("class", "graph-node-layer");
+    const labelLayer = graphLayer.append("g").attr("class", "graph-label-layer");
 
-    const link = graphLayer.append("g").selectAll("line").data(links).enter().append("line")
-      .attr("class", "graph-link")
-      .attr("marker-end", "url(#graph-arrowhead)");
-    const node = graphLayer.append("g").selectAll("circle").data(nodes).enter().append("circle")
+    const link = lineLayer.selectAll("line").data(links).enter().append("line")
+      .attr("class", "graph-link");
+    const arrowhead = arrowheadLayer.selectAll("path").data(links).enter().append("path")
+      .attr("class", "graph-arrowhead");
+    const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", (d) => nodeRadius(d.id)).attr("class", "graph-node")
       .call(d3.drag()
         .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
         .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
     node.append("title").text((d) => d.fullPath || d.label);
-    const label = graphLayer.append("g").selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
+    const label = labelLayer.selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
 
     const contextMenu = document.createElement("div");
     contextMenu.className = "graph-context-menu hidden";
@@ -3463,12 +3459,16 @@ async function openFolderTree() {
       link
         .classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id))
         .classed("highlighted-direct", (l) => l.source.id === focusNode.id || l.target.id === focusNode.id);
+      arrowhead
+        .classed("dimmed", (l) => !(l.source.id === focusNode.id || l.target.id === focusNode.id))
+        .classed("highlighted-direct", (l) => l.source.id === focusNode.id || l.target.id === focusNode.id);
     }
 
     function clearNeighborhoodHighlight() {
       node.classed("dimmed", false);
       label.classed("dimmed", false);
       link.classed("dimmed", false).classed("highlighted-direct", false);
+      arrowhead.classed("dimmed", false).classed("highlighted-direct", false);
     }
 
     node
@@ -3478,11 +3478,25 @@ async function openFolderTree() {
     simulation.on("tick", () => {
       link.each(function(d) {
         const endpoint = getLinkEndpoint(d);
+        d.endpoint = endpoint;
         d3.select(this)
           .attr("x1", endpoint.x1)
           .attr("y1", endpoint.y1)
           .attr("x2", endpoint.x2)
           .attr("y2", endpoint.y2);
+      });
+      arrowhead.attr("d", (d) => {
+        const endpoint = d.endpoint || getLinkEndpoint(d);
+        const dx = endpoint.x2 - endpoint.x1;
+        const dy = endpoint.y2 - endpoint.y1;
+        const distance = Math.hypot(dx, dy) || 1;
+        const ux = dx / distance;
+        const uy = dy / distance;
+        const baseX = endpoint.x2 - ux * arrowheadLength;
+        const baseY = endpoint.y2 - uy * arrowheadLength;
+        const px = -uy * arrowheadHalfHeight;
+        const py = ux * arrowheadHalfHeight;
+        return `M${baseX + px},${baseY + py}L${endpoint.x2},${endpoint.y2}L${baseX - px},${baseY - py}`;
       });
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
