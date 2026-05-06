@@ -1240,6 +1240,51 @@ This is a fully client-side application. Your content never leaves your browser 
     return files;
   }
 
+async function listMarkdownTreeNeutralino(dirPath) {
+  const entries = [];
+  try {
+    const items = await Neutralino.filesystem.readDirectory(dirPath);
+    for (const item of items) {
+      if (item.entry === "." || item.entry === "..") continue;
+      const fullPath = `${dirPath}/${item.entry}`;
+      if (item.type === "DIRECTORY") {
+        const children = await listMarkdownTreeNeutralino(fullPath);
+        if (children.length) {
+          entries.push({ kind: "directory", name: item.entry, children, fullPath });
+        }
+      } else if (item.type === "FILE" && /\.(md|markdown)$/i.test(item.entry)) {
+        entries.push({ kind: "file", name: item.entry, fullPath });
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to read directory:", dirPath, error);
+  }
+  entries.sort((a, b) =>
+    a.kind === b.kind ? a.name.localeCompare(b.name) : (a.kind === "directory" ? -1 : 1)
+  );
+  return entries;
+}
+
+async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
+  const files = [];
+  for (const node of (nodes || [])) {
+    const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+    if (node.kind === "directory") {
+      const nestedFiles = await collectMarkdownFilesFromTreeNeutralino(node.children || [], currentPath);
+      files.push(...nestedFiles);
+    } else if (node.kind === "file") {
+      try {
+        const content = await Neutralino.filesystem.readFile(node.fullPath);
+        const file = new File([content], node.name, { type: "text/markdown" });
+        files.push({ path: currentPath, file });
+      } catch (error) {
+        console.warn("Failed to read file:", currentPath, error);
+      }
+    }
+  }
+  return files;
+}
+
   function renderFolderTreeNode(node) {
     const li = document.createElement("li");
     li.className = "folder-tree-item";
@@ -1262,25 +1307,32 @@ This is a fully client-side application. Your content never leaves your browser 
     button.type = "button";
     button.className = "folder-tree-file";
     button.innerHTML = `<i class="bi bi-file-earmark-text"></i>${node.name}`;
-    button.addEventListener("click", async () => {
-      try {
-        const file = node.file ? node.file : await node.handle.getFile();
-        const existingTab = findTabForSidebarFile(node);
-        if (existingTab) {
-          switchTab(existingTab.id);
-          return;
-        }
-        const content = await file.text();
-        openSidebarFileInTemporaryTab(
-          content,
-          node.name.replace(/\.(md|markdown)$/i, ""),
-          { name: node.name, handle: node.handle || null }
-        );
-      } catch (error) {
-        console.error("Failed to open Markdown file:", error);
-        alert("Unable to open selected file.");
-      }
-    });
+	button.addEventListener("click", async () => {
+	  try {
+		let content;
+		if (typeof NL_VERSION !== "undefined" && node.fullPath) {
+		  // Desktop: read file via Neutralino filesystem
+		  content = await Neutralino.filesystem.readFile(node.fullPath);
+		} else {
+		  // Browser: read file via File System Access API
+		  const file = node.file ? node.file : await node.handle.getFile();
+		  content = await file.text();
+		}
+		const existingTab = findTabForSidebarFile(node);
+		if (existingTab) {
+		  switchTab(existingTab.id);
+		  return;
+		}
+		openSidebarFileInTemporaryTab(
+		  content,
+		  node.name.replace(/\.(md|markdown)$/i, ""),
+		  { name: node.name, handle: node.handle || null }
+		);
+	  } catch (error) {
+		console.error("Failed to open Markdown file:", error);
+		alert("Unable to open selected file.");
+	  }
+	});
     li.appendChild(button);
     return li;
   }
@@ -1330,36 +1382,63 @@ This is a fully client-side application. Your content never leaves your browser 
     sortNodes(root);
     return root;
   }
-
-  async function openFolderTree() {
-    if (window.showDirectoryPicker) {
-      try {
-        const dirHandle = await window.showDirectoryPicker();
-        activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
-        const nodes = await listMarkdownTree(dirHandle);
-        folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
-        folderTreeRoot.innerHTML = "";
-        if (!nodes.length) {
-          folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
-          return;
-        }
-        const ul = document.createElement("ul");
-        ul.className = "folder-tree-list";
-        nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
-        folderTreeRoot.appendChild(ul);
+async function openFolderTree() {
+  // Desktop app: use Neutralino native folder picker (no permission dialog)
+  if (typeof NL_VERSION !== "undefined") {
+    try {
+    console.log("Neutralino version:", NL_VERSION);
+    console.log("Neutralino.os:", Neutralino.os);
+      const selectedPath = await Neutralino.os.showFolderDialog("Select a folder");
+    console.log("Selected path:", selectedPath);
+      if (!selectedPath) return;
+      activeFolderName = selectedPath.split(/[\\/]/).pop() || "Graph View";
+      const nodes = await listMarkdownTreeNeutralino(selectedPath);
+      folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
+      folderTreeRoot.innerHTML = "";
+      if (!nodes.length) {
+        folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
         return;
-      } catch (error) {
-        if (error && error.name === "AbortError") return;
-        console.warn("Directory picker unavailable, using fallback input.", error);
       }
+      const ul = document.createElement("ul");
+      ul.className = "folder-tree-list";
+      nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+      folderTreeRoot.appendChild(ul);
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      console.error("Neutralino folder picker error:", error);
     }
+    return;
+  }
 
-    if (folderInput) {
-      folderInput.click();
-    } else {
-      alert("Folder selection is not supported in this environment.");
+  // Browser: use File System Access API (shows permission dialog)
+  if (window.showDirectoryPicker) {
+    try {
+      const dirHandle = await window.showDirectoryPicker();
+      activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
+      const nodes = await listMarkdownTree(dirHandle);
+      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
+      folderTreeRoot.innerHTML = "";
+      if (!nodes.length) {
+        folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown files found in this folder.</p>';
+        return;
+      }
+      const ul = document.createElement("ul");
+      ul.className = "folder-tree-list";
+      nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+      folderTreeRoot.appendChild(ul);
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      console.warn("Directory picker unavailable, using fallback input.", error);
     }
   }
+
+  if (folderInput) {
+    folderInput.click();
+  } else {
+    alert("Folder selection is not supported in this environment.");
+  }
+}
 
   function importMarkdownFile(file) {
     const reader = new FileReader();
@@ -2533,9 +2612,28 @@ This is a fully client-side application. Your content never leaves your browser 
       outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
     });
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
-    const nodeRadius = (nodeId) => {
+    const GRAPH_NODE_RADIUS_SCALE = 0.8;
+    const graphBaseNodeRadius = (nodeId) => {
       const outCount = outgoingDegree.get(nodeId) || 0;
-      return (6 + (outCount / maxOutgoing) * 12);
+      return 6 + (outCount / maxOutgoing) * 12;
+    };
+    const nodeRadius = (nodeId) => graphBaseNodeRadius(nodeId) * GRAPH_NODE_RADIUS_SCALE;
+    const GRAPH_LINK_SOURCE_PADDING = 1;
+    const GRAPH_LINK_TARGET_PADDING = 0;
+    const getLinkEndpoint = (d) => {
+      const dx = d.target.x - d.source.x;
+      const dy = d.target.y - d.source.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const ux = dx / distance;
+      const uy = dy / distance;
+      const sourceOffset = nodeRadius(d.source.id) + GRAPH_LINK_SOURCE_PADDING;
+      const targetOffset = nodeRadius(d.target.id) + GRAPH_LINK_TARGET_PADDING;
+      return {
+        x1: d.source.x + ux * sourceOffset,
+        y1: d.source.y + uy * sourceOffset,
+        x2: d.target.x - ux * targetOffset,
+        y2: d.target.y - uy * targetOffset
+      };
     };
     const width = graphViewCanvas.clientWidth || 900;
     const height = graphViewCanvas.clientHeight || 560;
@@ -2563,7 +2661,7 @@ This is a fully client-side application. Your content never leaves your browser 
     defs.append("marker")
       .attr("id", "graph-arrowhead")
       .attr("viewBox", "0 -4 9 8")
-      .attr("refX", 13)
+      .attr("refX", 9)
       .attr("refY", 0)
       .attr("markerWidth", 5)
       .attr("markerHeight", 5)
@@ -2726,7 +2824,14 @@ This is a fully client-side application. Your content never leaves your browser 
       .on("mouseleave", clearNeighborhoodHighlight);
 
     simulation.on("tick", () => {
-      link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y);
+      link.each(function(d) {
+        const endpoint = getLinkEndpoint(d);
+        d3.select(this)
+          .attr("x1", endpoint.x1)
+          .attr("y1", endpoint.y1)
+          .attr("x2", endpoint.x2)
+          .attr("y2", endpoint.y2);
+      });
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
     });

@@ -13,7 +13,7 @@
     "enabled": true,
     "writeToLogFile": true
   },
-  "nativeAllowList": ["app.*", "os.*", "filesystem.readFile", "debug.log"],
+  "nativeAllowList": ["app.*", "os.*", "filesystem.readFile", "filesystem.readDirectory", "debug.log"],
   "globalVariables": {},
   "modes": {
     "window": {
@@ -25,13 +25,13 @@
       "center": true,
       "fullScreen": false,
       "alwaysOnTop": false,
-      "icon": "/resources/assets/icon.jpg",
+      "icon": "/resources/assets/icon.ico",
       "enableInspector": false,
       "borderless": false,
       "maximize": false,
       "hidden": false,
       "resizable": true,
-      "exitProcessOnClose": false
+      "exitProcessOnClose": true
     },
     "browser": {
       "globalVariables": {},

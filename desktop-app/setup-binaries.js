@@ -18,6 +18,43 @@ const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
+
+/** ── WebView2 check (Windows only) ── */
+if (process.platform === "win32") {
+  const regKeys = [
+    // Evergreen runtime (per-machine and per-user)
+    "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+    "HKCU\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+    // Fixed version runtime
+    "HKLM\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+  ];
+
+  const hasWebView2 = regKeys.some((key) => {
+    try {
+      execSync(`reg query "${key}" /v pv`, { stdio: "pipe" });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  if (!hasWebView2) {
+    console.error(`
+✗ Microsoft Edge WebView2 Runtime is not installed.
+  Neutralinojs requires it to render the application window.
+
+  Install it from:
+  https://go.microsoft.com/fwlink/p/?LinkId=2124703
+
+  Download MicrosoftEdgeWebview2Setup.exe, run it, then retry npm run dev.
+`);
+    process.exit(1);
+  }
+
+  console.log("✓ WebView2 Runtime detected");
+}
+
+
 const CONFIG_FILE = path.resolve(__dirname, "neutralino.config.json");
 const BIN_DIR = path.resolve(__dirname, "bin");
 const VERSION_MARKER = path.join(BIN_DIR, ".version");

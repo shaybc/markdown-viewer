@@ -22,19 +22,22 @@ const RESOURCES_DIR = path.resolve(__dirname, "resources");
 
 /**
  * Recursively copy a directory, creating target dirs as needed.
+ * assets/ → resources/assets/ (excluding icon.jpg — maintained separately for desktop)
  */
-function copyDirSync(src, dest) {
+function copyDirSync(src, dest, exclude = []) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    if (exclude.includes(entry.name)) continue;  // ← skip excluded files
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
-      copyDirSync(srcPath, destPath);
+      copyDirSync(srcPath, destPath, exclude);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
   }
 }
+
 
 /** script.js → resources/js/script.js */
 const jsDest = path.join(RESOURCES_DIR, "js");
@@ -53,7 +56,7 @@ fs.copyFileSync(
 console.log("✓ Copied styles.css → resources/styles.css");
 
 /** assets/ → resources/assets/ */
-copyDirSync(path.join(ROOT_DIR, "assets"), path.join(RESOURCES_DIR, "assets"));
+copyDirSync(path.join(ROOT_DIR, "assets"), path.join(RESOURCES_DIR, "assets"), ["icon.jpg"]);
 console.log("✓ Copied assets/ → resources/assets/");
 
 /** @section Generate index.html with Neutralinojs injections */

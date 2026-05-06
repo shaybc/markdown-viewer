@@ -93,10 +93,12 @@ Neutralino.events.on("trayMenuItemClicked", onTrayMenuItemClicked);
 Neutralino.events.on("windowClose", onWindowClose);
 
 // Conditional initialization: Set up system tray if not running on macOS
-if (NL_OS != "Darwin") {
-  // TODO: Fix https://github.com/neutralinojs/neutralinojs/issues/615
-  setTray();
-}
+Neutralino.events.on("ready", () => {
+	if (NL_OS != "Darwin") {
+	  // TODO: Fix https://github.com/neutralinojs/neutralinojs/issues/615
+	  setTimeout(() => setTray(), 500);
+	}
+});
 
 // Open file passed as command-line argument (e.g. when double-clicking a .md file)
 (async function loadInitialFile() {
