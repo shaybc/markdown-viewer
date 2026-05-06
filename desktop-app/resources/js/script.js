@@ -2487,6 +2487,8 @@ async function openFolderTree() {
   if (folderInput) {
     folderInput.addEventListener("change", function(e) {
       const files = e.target.files;
+      const firstRelativePath = Array.from(files || []).find((file) => file.webkitRelativePath)?.webkitRelativePath || "";
+      activeFolderName = firstRelativePath.split("/")[0] || "Graph View";
       folderMarkdownFiles = Array.from(files || [])
         .filter((file) => /\.(md|markdown)$/i.test(file.name))
         .map((file) => ({ path: file.webkitRelativePath || file.name, file }));
@@ -2568,11 +2570,7 @@ async function openFolderTree() {
     }
 
     const folderName = activeFolderName || "Graph View";
-    const graphSnapshot = await createGraphSnapshot(folderMarkdownFiles, folderName);
-    const graphTab = createGraphTab(folderName, {
-      graphViewConfig: null,
-      graphSnapshot
-    });
+    const graphTab = createGraphTab(folderName, { graphViewConfig: null });
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);
@@ -2607,9 +2605,13 @@ async function openFolderTree() {
 
     let graphSnapshot = activeTab.graphSnapshot || null;
     if (!graphSnapshot && folderMarkdownFiles.length) {
-      graphSnapshot = await createGraphSnapshot(folderMarkdownFiles, activeTab.folderName || activeTab.title);
+      const snapshotFiles = folderMarkdownFiles.slice();
+      graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">Building graph view…</p>';
+      graphSnapshot = await createGraphSnapshot(snapshotFiles, activeTab.folderName || activeTab.title);
       activeTab.graphSnapshot = graphSnapshot;
       saveTabsToStorage(tabs);
+      if (activeTabId !== activeTab.id) return;
+      graphViewCanvas.innerHTML = "";
     }
 
     if (!graphSnapshot || !graphSnapshot.nodes?.length) {
