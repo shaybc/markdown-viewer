@@ -525,6 +525,15 @@ body {
   flex: 1 1 auto;
 }
 
+.graph-context-menu-item-danger,
+.graph-context-menu-item-danger i {
+  color: var(--color-danger-fg, #d73a49);
+}
+
+.graph-context-menu-item-danger:hover {
+  color: var(--color-danger-fg, #d73a49);
+}
+
 .graph-context-menu-submenu-arrow {
   flex: 0 0 auto;
   margin-left: 1rem;

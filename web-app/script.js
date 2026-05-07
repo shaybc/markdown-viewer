@@ -3068,8 +3068,23 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "bi bi-trash3",
       "Delete this file from disk after confirmation."
     );
+    deleteFileBtn.classList.add("graph-context-menu-item-danger");
+    const deleteFileTopSeparator = document.createElement("div");
+    deleteFileTopSeparator.className = "graph-context-menu-separator";
+    const deleteFileBottomSeparator = document.createElement("div");
+    deleteFileBottomSeparator.className = "graph-context-menu-separator";
 
-    [title, separator, openFileBtn, openDefaultAppBtn, revealFileBtn, copySubmenu, deleteFileBtn].forEach((item) => {
+    [
+      title,
+      separator,
+      openFileBtn,
+      openDefaultAppBtn,
+      revealFileBtn,
+      copySubmenu,
+      deleteFileTopSeparator,
+      deleteFileBtn,
+      deleteFileBottomSeparator
+    ].forEach((item) => {
       menu.appendChild(item);
     });
     document.body.appendChild(menu);
@@ -5181,7 +5196,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "bi bi-trash3",
       "Delete this Markdown file after confirmation and remove its point from the graph."
     );
-    deleteFileBtn.classList.add("hidden");
+    deleteFileBtn.classList.add("hidden", "graph-context-menu-item-danger");
+    const contextMenuDeleteSeparator = document.createElement("div");
+    contextMenuDeleteSeparator.className = "graph-context-menu-separator hidden";
 
     const copySubmenu = document.createElement("div");
     copySubmenu.className = "graph-context-menu-submenu hidden";
@@ -5237,6 +5254,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
+    contextMenu.appendChild(contextMenuDeleteSeparator);
     contextMenu.appendChild(deleteFileBtn);
     contextMenu.appendChild(contextMenuActionSeparator);
     contextMenu.appendChild(magneticToggleBtn);
@@ -5415,6 +5433,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       hidePointBtn,
       localGraphBtn,
       fullLocalGraphBtn,
+      contextMenuDeleteSeparator,
       deleteFileBtn
     ];
 
