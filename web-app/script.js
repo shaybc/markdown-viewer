@@ -1266,8 +1266,8 @@ document.addEventListener("DOMContentLoaded", function () {
   function scrollMarkdownPreviewToHash(hash) {
     if (!hash) return;
     requestAnimationFrame(() => {
-      const decodedHash = safeDecodeLinkPath(hash);
-      const target = document.getElementById(decodedHash)
+      const decodedHash = safeDecodeLinkPath(String(hash).replace(/^#/, ""));
+      const target = markdownPreview.querySelector(`#${CSS.escape(decodedHash)}`)
         || markdownPreview.querySelector(`[name="${CSS.escape(decodedHash)}"]`);
       if (target && typeof target.scrollIntoView === "function") {
         target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1334,6 +1334,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const markdownTarget = anchor.dataset.markdownLinkTarget || "";
     const rawHref = markdownTarget || anchor.getAttribute("href") || "";
     if (!rawHref) return;
+
+    if (!markdownTarget && rawHref.startsWith("#") && rawHref.length > 1) {
+      event.preventDefault();
+      event.stopPropagation();
+      scrollMarkdownPreviewToHash(rawHref);
+      return;
+    }
 
     let linkTarget = rawHref;
     if (!markdownTarget && isSameOriginMarkdownUrl(rawHref)) {
