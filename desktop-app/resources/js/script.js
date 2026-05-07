@@ -2792,6 +2792,8 @@ async function openFolderTree() {
     const magneticToggleBtn = document.createElement("button");
     magneticToggleBtn.type = "button";
     magneticToggleBtn.className = "graph-context-menu-item";
+    const contextMenuSeparator = document.createElement("div");
+    contextMenuSeparator.className = "graph-context-menu-separator hidden";
     const hidePointBtn = document.createElement("button");
     hidePointBtn.type = "button";
     hidePointBtn.className = "graph-context-menu-item hidden";
@@ -2801,9 +2803,10 @@ async function openFolderTree() {
     localGraphBtn.className = "graph-context-menu-item hidden";
     localGraphBtn.textContent = "Show local graph";
     contextMenu.appendChild(contextMenuTitle);
-    contextMenu.appendChild(magneticToggleBtn);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
+    contextMenu.appendChild(contextMenuSeparator);
+    contextMenu.appendChild(magneticToggleBtn);
     graphViewCanvas.appendChild(contextMenu);
 
     let contextTargetNode = null;
@@ -2833,6 +2836,7 @@ async function openFolderTree() {
       contextTargetNode = null;
       contextMenuTitle.classList.add("hidden");
       contextMenuTitle.textContent = "";
+      contextMenuSeparator.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
     };
@@ -2842,6 +2846,7 @@ async function openFolderTree() {
       contextTargetNode = null;
       contextMenuTitle.classList.add("hidden");
       contextMenuTitle.textContent = "";
+      contextMenuSeparator.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
       const bounds = graphViewCanvas.getBoundingClientRect();
@@ -2856,6 +2861,7 @@ async function openFolderTree() {
       contextTargetNode = d;
       contextMenuTitle.textContent = getGraphContextMenuTitle(d);
       contextMenuTitle.classList.remove("hidden");
+      contextMenuSeparator.classList.remove("hidden");
       hidePointBtn.classList.remove("hidden");
       localGraphBtn.classList.remove("hidden");
       const bounds = graphViewCanvas.getBoundingClientRect();
