@@ -2302,18 +2302,17 @@ This is a fully client-side application. Your content never leaves your browser 
     renderTabBar(tabs, activeTabId);
   }
 
-  function renameTab(tabId) {
-    const tab = tabs.find(function(t) { return t.id === tabId; });
-    if (!tab) return;
+  function renameUnsourcedTabTitle(tab) {
     const modal = document.getElementById('rename-modal');
     const input = document.getElementById('rename-modal-input');
     const confirmBtn = document.getElementById('rename-modal-confirm');
     const cancelBtn = document.getElementById('rename-modal-cancel');
     const title = document.getElementById('rename-modal-title');
-    if (!modal || !input) return;
-    if (title) title.textContent = 'Rename file';
-    input.placeholder = 'File name';
+    if (!modal || !input || !confirmBtn || !cancelBtn) return;
+    if (title) title.textContent = 'Rename tab';
+    input.placeholder = 'Tab name';
     input.value = tab.title;
+    confirmBtn.textContent = 'Rename';
     modal.style.display = 'flex';
     input.focus();
     input.select();
@@ -2348,6 +2347,30 @@ This is a fully client-side application. Your content never leaves your browser 
     confirmBtn.addEventListener('click', doRename);
     cancelBtn.addEventListener('click', doCancel);
     input.addEventListener('keydown', onKey);
+  }
+
+  async function renameTab(tabId) {
+    const tab = tabs.find(function(t) { return t.id === tabId; });
+    if (!tab) return;
+
+    const sourceName = tab.sourceFileName || (tab.sourceFilePath ? getFileName(tab.sourceFilePath) : tab.sourceFileHandle?.name);
+    if (!sourceName || (!tab.sourceFileHandle && !tab.sourceFilePath)) {
+      renameUnsourcedTabTitle(tab);
+      return;
+    }
+
+    try {
+      await renameSidebarNodeOnDisk({
+        kind: "file",
+        name: sourceName,
+        handle: tab.sourceFileHandle || null,
+        fullPath: isNeutralinoRuntime() ? tab.sourceFilePath : null,
+        path: tab.sourceFilePath || null
+      }, "file");
+    } catch (error) {
+      console.error("Failed to rename tab source file:", error);
+      alert("Unable to rename this file.");
+    }
   }
 
   function duplicateTab(tabId) {
