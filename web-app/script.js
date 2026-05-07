@@ -698,6 +698,9 @@ document.addEventListener("DOMContentLoaded", function () {
           <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
             <i class="bi bi-save me-2"></i> Save Changes
           </button>
+          <button class="dropdown-item action-menu-item save-all-files-button" type="button" title="Save all unsaved changes" disabled>
+            <i class="bi bi-save2 me-2"></i> Save All
+          </button>
           <div class="dropdown-submenu action-menu-submenu">
             <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
               <i class="bi bi-eye me-2"></i> View
@@ -2065,6 +2068,67 @@ This is a fully client-side application. Your content never leaves your browser 
       button.title = title;
       button.setAttribute("aria-label", title);
     });
+
+    const unsavedCount = getUnsavedTabs().length;
+    const saveAllTitle = unsavedCount
+      ? `Save all unsaved changes in ${unsavedCount} tab${unsavedCount === 1 ? "" : "s"}`
+      : "No changes to save";
+    document.querySelectorAll(".save-all-files-button").forEach(function(button) {
+      button.disabled = unsavedCount === 0;
+      button.title = saveAllTitle;
+      button.setAttribute("aria-label", saveAllTitle);
+    });
+  }
+
+  async function saveChangedTab(tab) {
+    if (!tab) return false;
+    if (tab.type === "graph") {
+      if (!tabHasUnsavedChanges(tab)) return true;
+      return (await saveGraphTabToSource(tab)) || (await saveGraphTabWithSaveDialog(tab));
+    }
+
+    const content = getMarkdownTabContentForSave(tab);
+    if (!tabHasUnsavedChanges(tab, content)) return true;
+    return (await saveMarkdownTabToSource(tab)) || (await saveMarkdownTabWithSaveDialog(tab));
+  }
+
+  async function saveAllChangedTabs() {
+    saveCurrentTabState();
+    const changedTabs = getUnsavedTabs();
+    if (!changedTabs.length) {
+      updateSaveCurrentFileButtons();
+      return;
+    }
+
+    const failedTabs = [];
+    let wasCanceled = false;
+
+    for (const tab of changedTabs) {
+      try {
+        const saved = await saveChangedTab(tab);
+        if (!saved) {
+          wasCanceled = true;
+          break;
+        }
+      } catch (error) {
+        if (error && error.name === "AbortError") {
+          wasCanceled = true;
+          break;
+        }
+        console.error("Failed to save changed tab:", error);
+        failedTabs.push(getTabDisplayName(tab));
+      }
+    }
+
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+    updateSaveCurrentFileButtons();
+
+    if (failedTabs.length) {
+      alert("Unable to save: " + failedTabs.join(", "));
+    } else if (wasCanceled && getUnsavedTabs().length) {
+      console.info("Save All canceled before all changed tabs were saved.");
+    }
   }
 
   async function saveCurrentFileIfChanged() {
@@ -4614,11 +4678,44 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     updateSaveCurrentFileButtons();
   }
 
-  async function saveActiveTabWithSaveDialog() {
-    const tab = getActiveMarkdownTab();
-    if (!tab) return false;
+  function getMarkdownTabContentForSave(tab) {
+    if (!tab) return '';
+    return normalizeEditorContent(tab.id === activeTabId ? markdownEditor.value : tab.content);
+  }
 
-    const content = markdownEditor.value;
+  async function saveMarkdownTabToSource(tab) {
+    if (!tab || tab.type === "graph" || (!tab.sourceFileHandle && !tab.sourceFilePath)) return false;
+
+    try {
+      const content = getMarkdownTabContentForSave(tab);
+      if (tab.sourceFileHandle && typeof tab.sourceFileHandle.createWritable === "function") {
+        const writable = await tab.sourceFileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        updateTabAfterSave(tab, content, {
+          name: tab.sourceFileHandle.name || tab.sourceFileName,
+          handle: tab.sourceFileHandle
+        });
+      } else if (typeof NL_VERSION !== "undefined" && tab.sourceFilePath) {
+        await Neutralino.filesystem.writeFile(tab.sourceFilePath, content);
+        updateTabAfterSave(tab, content, {
+          name: getFileName(tab.sourceFilePath),
+          path: tab.sourceFilePath
+        });
+      } else {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to save file to original location:", error);
+      return false;
+    }
+  }
+
+  async function saveMarkdownTabWithSaveDialog(tab) {
+    if (!tab || tab.type === "graph") return false;
+
+    const content = getMarkdownTabContentForSave(tab);
     const suggestedName = getSuggestedMarkdownFileName(tab);
 
     if (typeof NL_VERSION !== "undefined") {
@@ -4682,29 +4779,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return true;
   }
 
+  async function saveActiveTabWithSaveDialog() {
+    const tab = getActiveMarkdownTab();
+    return saveMarkdownTabWithSaveDialog(tab);
+  }
+
   async function saveActiveTabToSource() {
     const tab = tabs.find(function(t) { return t.id === activeTabId; });
-    if (!tab || (!tab.sourceFileHandle && !tab.sourceFilePath)) return false;
-    try {
-      if (tab.sourceFileHandle) {
-        const writable = await tab.sourceFileHandle.createWritable();
-        await writable.write(markdownEditor.value);
-        await writable.close();
-      } else if (typeof NL_VERSION !== "undefined" && tab.sourceFilePath) {
-        await Neutralino.filesystem.writeFile(tab.sourceFilePath, markdownEditor.value);
-      } else {
-        return false;
-      }
-      tab.content = markdownEditor.value;
-      tab.savedContent = markdownEditor.value;
-      saveTabsToStorage(tabs);
-      renderTabBar(tabs, activeTabId);
-      updateSaveCurrentFileButtons();
-      return true;
-    } catch (error) {
-      console.error("Failed to save file to original location:", error);
-      return false;
-    }
+    return saveMarkdownTabToSource(tab);
   }
 
   function isMarkdownPath(path) {
@@ -5842,8 +5924,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     updateSaveCurrentFileButtons();
   }
 
-  async function saveActiveGraphToSource() {
-    const graphTab = getActiveGraphTab();
+  async function saveGraphTabToSource(graphTab) {
     if (!graphTab || (!graphTab.sourceFileHandle && !graphTab.sourceFilePath)) return false;
 
     try {
@@ -5869,8 +5950,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
   }
 
-  async function saveActiveGraphWithSaveDialog() {
-    const graphTab = getActiveGraphTab();
+  async function saveActiveGraphToSource() {
+    return saveGraphTabToSource(getActiveGraphTab());
+  }
+
+  async function saveGraphTabWithSaveDialog(graphTab) {
     if (!graphTab) {
       return false;
     }
@@ -5926,6 +6010,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       alert("Failed to save graph: " + error.message);
       return false;
     }
+  }
+
+  async function saveActiveGraphWithSaveDialog() {
+    return saveGraphTabWithSaveDialog(getActiveGraphTab());
   }
 
   async function openSavedGraphDocument(source) {
@@ -7041,6 +7129,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   document.querySelectorAll(".save-current-file-button").forEach(function(button) {
     button.addEventListener("click", saveCurrentFileIfChanged);
+  });
+
+  document.querySelectorAll(".save-all-files-button").forEach(function(button) {
+    button.addEventListener("click", saveAllChangedTabs);
   });
 
   exportMd.addEventListener("click", async function () {
