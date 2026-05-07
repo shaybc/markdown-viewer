@@ -4816,8 +4816,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const magneticToggleBtn = document.createElement("button");
     magneticToggleBtn.type = "button";
     magneticToggleBtn.className = "graph-context-menu-item";
-    const contextMenuSeparator = document.createElement("div");
-    contextMenuSeparator.className = "graph-context-menu-separator hidden";
+    const contextMenuTitleSeparator = document.createElement("div");
+    contextMenuTitleSeparator.className = "graph-context-menu-separator hidden";
+    const contextMenuActionSeparator = document.createElement("div");
+    contextMenuActionSeparator.className = "graph-context-menu-separator hidden";
     const openFileBtn = document.createElement("button");
     openFileBtn.type = "button";
     openFileBtn.className = "graph-context-menu-item hidden";
@@ -4835,12 +4837,12 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     fullLocalGraphBtn.className = "graph-context-menu-item hidden";
     fullLocalGraphBtn.textContent = "Show full local graph";
     contextMenu.appendChild(contextMenuTitle);
-    contextMenu.appendChild(contextMenuSeparator);
+    contextMenu.appendChild(contextMenuTitleSeparator);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
-    contextMenu.appendChild(contextMenuSeparator);
+    contextMenu.appendChild(contextMenuActionSeparator);
     contextMenu.appendChild(magneticToggleBtn);
     graphRenderWrapper.appendChild(contextMenu);
 
@@ -4876,7 +4878,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       contextTargetNode = null;
       contextMenuTitle.classList.add("hidden");
       contextMenuTitle.textContent = "";
-      contextMenuSeparator.classList.add("hidden");
+      contextMenuTitleSeparator.classList.add("hidden");
+      contextMenuActionSeparator.classList.add("hidden");
       openFileBtn.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
@@ -4888,7 +4891,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       contextTargetNode = null;
       contextMenuTitle.classList.add("hidden");
       contextMenuTitle.textContent = "";
-      contextMenuSeparator.classList.add("hidden");
+      contextMenuTitleSeparator.classList.add("hidden");
+      contextMenuActionSeparator.classList.add("hidden");
       openFileBtn.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
@@ -4905,7 +4909,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       contextTargetNode = d;
       contextMenuTitle.textContent = getGraphContextMenuTitle(d);
       contextMenuTitle.classList.remove("hidden");
-      contextMenuSeparator.classList.remove("hidden");
+      contextMenuTitleSeparator.classList.remove("hidden");
+      contextMenuActionSeparator.classList.remove("hidden");
       openFileBtn.classList.remove("hidden");
       hidePointBtn.classList.remove("hidden");
       localGraphBtn.classList.remove("hidden");
