@@ -19,6 +19,7 @@
   --editor-line-number-color: #6e7781;
   --editor-active-line-number-color: #24292f;
   --editor-current-line-bg: rgba(208, 215, 222, 0.45);
+  --editor-selection-match-bg: rgba(105, 189, 119, 0.55);
   --editor-gutter-bg: var(--editor-bg);
 }
 
@@ -43,6 +44,7 @@
   --editor-line-number-color: #7d8590;
   --editor-active-line-number-color: #ffffff;
   --editor-current-line-bg: rgba(139, 148, 158, 0.2);
+  --editor-selection-match-bg: rgba(105, 189, 119, 0.6);
   --editor-gutter-bg: var(--editor-bg);
 }
 
@@ -283,6 +285,31 @@ body {
 
 .editor-current-line.visible {
   display: block;
+}
+
+.editor-selection-highlights {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  color: transparent;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 10px 10px 10px 18px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
+  transition: background-color 0.3s ease;
+}
+
+.editor-selection-highlights-inner {
+  min-height: 100%;
+}
+
+.editor-selection-match {
+  background-color: var(--editor-selection-match-bg);
+  border-radius: 2px;
 }
 
 #markdown-editor {
