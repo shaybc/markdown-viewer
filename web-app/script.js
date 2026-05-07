@@ -1108,6 +1108,7 @@ This is a fully client-side application. Your content never leaves your browser 
   let isFolderOpen = false;
   let draggedTabId = null;
   let saveTabStateTimeout = null;
+  let graphLayoutSaveTimeout = null;
   let untitledCounter = 0;
   const graphRenderCache = new Map();
   const GRAPH_DOCUMENT_SCHEMA_VERSION = 1;
@@ -1133,9 +1134,9 @@ This is a fully client-side application. Your content never leaves your browser 
     const snapshot = cloneGraphPersistenceValue(source.snapshot || source.graphSnapshot || null);
     const hasViewConfig = Object.prototype.hasOwnProperty.call(source, "viewConfig");
     const viewConfig = cloneGraphPersistenceValue(hasViewConfig ? source.viewConfig : (source.graphViewConfig || null));
-    const layoutSource = source.layout !== undefined ? source.layout : (
-      source.layoutData !== undefined ? source.layoutData : (
-        source.graphLayout !== undefined ? source.graphLayout : source.graphLayoutData
+    const layoutSource = source.graphLayout !== undefined ? source.graphLayout : (
+      source.graphLayoutData !== undefined ? source.graphLayoutData : (
+        source.layout !== undefined ? source.layout : source.layoutData
       )
     );
     const createdAt = normalizeGraphTimestamp(source.createdAt || snapshot?.createdAt, Date.now());
@@ -1149,7 +1150,7 @@ This is a fully client-side application. Your content never leaves your browser 
     };
 
     if (layoutSource !== undefined && layoutSource !== null) {
-      normalized.layout = cloneGraphPersistenceValue(layoutSource);
+      normalized.graphLayout = cloneGraphPersistenceValue(layoutSource);
     }
 
     return normalized;
@@ -1164,7 +1165,7 @@ This is a fully client-side application. Your content never leaves your browser 
       updatedAt: Date.now(),
       snapshot: tab?.graphSnapshot !== undefined ? tab.graphSnapshot : existingDocument.snapshot,
       viewConfig: tab?.graphViewConfig !== undefined ? tab.graphViewConfig : existingDocument.viewConfig,
-      layout: tab?.graphLayout !== undefined ? tab.graphLayout : existingDocument.layout
+      graphLayout: tab?.graphLayout !== undefined ? tab.graphLayout : (existingDocument.graphLayout !== undefined ? existingDocument.graphLayout : existingDocument.layout)
     });
   }
 
@@ -1177,8 +1178,8 @@ This is a fully client-side application. Your content never leaves your browser 
       graphDocument: normalizedDocument
     };
 
-    if (Object.prototype.hasOwnProperty.call(normalizedDocument, "layout")) {
-      graphData.graphLayout = normalizedDocument.layout;
+    if (Object.prototype.hasOwnProperty.call(normalizedDocument, "graphLayout")) {
+      graphData.graphLayout = normalizedDocument.graphLayout;
     }
 
     return graphData;
@@ -1191,7 +1192,7 @@ This is a fully client-side application. Your content never leaves your browser 
     tab.graphSnapshot = graphDocument.snapshot;
     tab.graphViewConfig = graphDocument.viewConfig;
     tab.graphDocument = graphDocument;
-    if (Object.prototype.hasOwnProperty.call(graphDocument, "layout")) tab.graphLayout = graphDocument.layout;
+    if (Object.prototype.hasOwnProperty.call(graphDocument, "graphLayout")) tab.graphLayout = graphDocument.graphLayout;
     return tab;
   }
 
@@ -1202,7 +1203,7 @@ This is a fully client-side application. Your content never leaves your browser 
   function getSuggestedGraphFileName(tab) {
     const rawName = (tab?.folderName || tab?.title || "graph-view").trim() || "graph-view";
     const safeName = rawName.replace(/[\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() || "graph-view";
-    return /\.mdgraph\.json$/i.test(safeName) ? safeName : `${safeName}.mdgraph.json`;
+    return /\.mdviewer-graph\.json$/i.test(safeName) ? safeName : `${safeName}.mdviewer-graph.json`;
   }
 
   function updateGraphActionButtons() {
@@ -1312,6 +1313,82 @@ This is a fully client-side application. Your content never leaves your browser 
     });
   }
 
+  function toFiniteNumber(value) {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+  }
+
+  function getSavedGraphNodeLayout(graphLayout, nodeId) {
+    if (!graphLayout || !nodeId) return null;
+    if (graphLayout.nodes && typeof graphLayout.nodes === "object") return graphLayout.nodes[nodeId] || null;
+    if (Array.isArray(graphLayout.nodePositions)) {
+      return graphLayout.nodePositions.find((entry) => entry && entry.id === nodeId) || null;
+    }
+    return null;
+  }
+
+  function applySavedGraphLayout(nodes, graphLayout) {
+    (nodes || []).forEach((node) => {
+      const savedNode = getSavedGraphNodeLayout(graphLayout, node.id);
+      if (!savedNode) return;
+      const x = toFiniteNumber(savedNode.x);
+      const y = toFiniteNumber(savedNode.y);
+      const fx = toFiniteNumber(savedNode.fx);
+      const fy = toFiniteNumber(savedNode.fy);
+      if (x !== null) node.x = x;
+      if (y !== null) node.y = y;
+      if (fx !== null) node.fx = fx;
+      if (fy !== null) node.fy = fy;
+    });
+  }
+
+  function getSavedGraphZoomTransform(graphLayout) {
+    const zoom = graphLayout?.zoom || graphLayout?.transform || null;
+    if (!zoom) return null;
+    const x = toFiniteNumber(zoom.x);
+    const y = toFiniteNumber(zoom.y);
+    const k = toFiniteNumber(zoom.k ?? zoom.scale);
+    if (x === null || y === null || k === null || k <= 0) return null;
+    return { x, y, k };
+  }
+
+  function captureGraphLayout(tab, nodes, zoomTransform, options) {
+    if (!tab || tab.type !== "graph") return null;
+    const storePinnedPositions = !!options?.storePinnedPositions;
+    const existingLayout = tab.graphLayout && typeof tab.graphLayout === "object" ? tab.graphLayout : {};
+    const existingNodes = existingLayout.nodes && typeof existingLayout.nodes === "object" ? existingLayout.nodes : {};
+    const nextNodes = { ...existingNodes };
+
+    (nodes || []).forEach((node) => {
+      if (!node?.id) return;
+      const x = toFiniteNumber(node.x);
+      const y = toFiniteNumber(node.y);
+      const fx = toFiniteNumber(node.fx);
+      const fy = toFiniteNumber(node.fy);
+      const entry = {};
+      if (x !== null) entry.x = x;
+      if (y !== null) entry.y = y;
+      if (storePinnedPositions && fx !== null) entry.fx = fx;
+      if (storePinnedPositions && fy !== null) entry.fy = fy;
+      if (Object.keys(entry).length) nextNodes[node.id] = entry;
+    });
+
+    const zoom = zoomTransform ? { x: zoomTransform.x, y: zoomTransform.y, k: zoomTransform.k } : getSavedGraphZoomTransform(existingLayout);
+    const nextLayout = {
+      ...existingLayout,
+      nodes: nextNodes,
+      updatedAt: Date.now()
+    };
+    if (zoom) nextLayout.zoom = zoom;
+
+    tab.graphLayout = nextLayout;
+    if (tab.graphDocument && typeof tab.graphDocument === "object") {
+      tab.graphDocument.graphLayout = nextLayout;
+      tab.graphDocument.updatedAt = Date.now();
+    }
+    return nextLayout;
+  }
+
   function hideInactiveGraphRenders(activeGraphTabId) {
     graphRenderCache.forEach((entry, tabId) => {
       if (!entry || !entry.wrapper) return;
@@ -1344,6 +1421,14 @@ This is a fully client-side application. Your content never leaves your browser 
     } catch (e) {
       console.warn('Failed to save tabs to localStorage:', e);
     }
+  }
+
+  function scheduleGraphLayoutStorageSave() {
+    clearTimeout(graphLayoutSaveTimeout);
+    graphLayoutSaveTimeout = setTimeout(() => {
+      graphLayoutSaveTimeout = null;
+      saveTabsToStorage(tabs);
+    }, 750);
   }
 
   function loadActiveTabId() {
@@ -1409,7 +1494,7 @@ This is a fully client-side application. Your content never leaves your browser 
       folderName: folderName || options.folderName || "Graph View",
       snapshot: options.graphSnapshot !== undefined ? options.graphSnapshot : options.graphDocument?.snapshot,
       viewConfig: options.graphViewConfig !== undefined ? options.graphViewConfig : options.graphDocument?.viewConfig,
-      layout: options.graphLayout !== undefined ? options.graphLayout : options.graphDocument?.layout
+      graphLayout: options.graphLayout !== undefined ? options.graphLayout : (options.graphDocument?.graphLayout !== undefined ? options.graphDocument.graphLayout : options.graphDocument?.layout)
     });
     const graphData = deserializeGraphDocument(graphDocument);
     const tab = createTab("", graphData.folderName, "preview");
@@ -2157,7 +2242,12 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.savedContent = normalizeEditorContent(tab.savedContent);
       if (!tab.type) tab.type = 'markdown';
       if (tab.type === 'graph') {
-        const graphData = deserializeGraphDocument(tab.graphDocument || tab);
+        const graphData = deserializeGraphDocument({
+          ...(tab.graphDocument || tab),
+          graphLayout: tab.graphLayout !== undefined
+            ? tab.graphLayout
+            : (tab.graphDocument?.graphLayout !== undefined ? tab.graphDocument.graphLayout : tab.graphDocument?.layout)
+        });
         tab.folderName = graphData.folderName;
         tab.graphSnapshot = graphData.graphSnapshot;
         tab.graphViewConfig = graphData.graphViewConfig;
@@ -4190,11 +4280,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         const selectedPath = await Neutralino.os.showSaveDialog("Save Graph", {
           defaultPath,
           filters: [
-            { name: "Markdown Viewer graph files", extensions: ["mdgraph.json", "json"] }
+            { name: "Markdown Viewer graph files", extensions: ["mdviewer-graph.json", "mdgraph.json", "json"] }
           ]
         });
         if (!selectedPath) return false;
-        const finalPath = /\.(mdgraph\.json|json)$/i.test(selectedPath) ? selectedPath : `${selectedPath}.mdgraph.json`;
+        const finalPath = /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(selectedPath) ? selectedPath : `${selectedPath}.mdviewer-graph.json`;
         await Neutralino.filesystem.writeFile(finalPath, content);
         return true;
       }
@@ -4205,7 +4295,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           types: [
             {
               description: "Markdown Viewer graph files",
-              accept: { "application/json": [".mdgraph.json", ".json"] }
+              accept: { "application/json": [".mdviewer-graph.json", ".mdgraph.json", ".json"] }
             }
           ]
         });
@@ -4255,7 +4345,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     }
 
     const graphData = deserializeGraphDocument(graphDocument);
-    const fallbackName = name.replace(/\.mdgraph\.json$/i, "").replace(/\.json$/i, "") || "Saved Graph";
+    const fallbackName = name.replace(/\.mdviewer-graph\.json$/i, "").replace(/\.mdgraph\.json$/i, "").replace(/\.json$/i, "") || "Saved Graph";
     const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument });
     tabs.push(graphTab);
     saveTabsToStorage(tabs);
@@ -4266,7 +4356,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   function openSavedGraphWithFallbackInput() {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".mdgraph.json,.json,application/json";
+    input.accept = ".mdviewer-graph.json,.mdgraph.json,.json,application/json";
     input.addEventListener("change", async () => {
       const file = input.files && input.files[0];
       if (!file) return;
@@ -4285,7 +4375,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       if (typeof NL_VERSION !== "undefined") {
         const selected = await Neutralino.os.showOpenDialog("Open Saved Graph", {
           filters: [
-            { name: "Markdown Viewer graph files", extensions: ["mdgraph.json", "json"] }
+            { name: "Markdown Viewer graph files", extensions: ["mdviewer-graph.json", "mdgraph.json", "json"] }
           ]
         });
         const selectedPath = Array.isArray(selected) ? selected[0] : selected;
@@ -4300,7 +4390,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
             types: [
               {
                 description: "Markdown Viewer graph files",
-                accept: { "application/json": [".mdgraph.json", ".json"] }
+                accept: { "application/json": [".mdviewer-graph.json", ".mdgraph.json", ".json"] }
               }
             ]
           });
@@ -4458,6 +4548,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
       filterGraphToNodeIds(fullLocalNodeIds);
     }
+
+    applySavedGraphLayout(nodes, activeTab.graphLayout);
+
     const outgoingAdjacency = new Map();
     const outgoingDegree = new Map();
     nodes.forEach((n) => outgoingAdjacency.set(n.id, new Set([n.id])));
@@ -4495,13 +4588,24 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const svg = d3.select(graphRenderWrapper).append("svg").attr("width", width).attr("height", height);
     const graphLayer = svg.append("g").attr("class", "graph-layer");
 
+    let currentZoomTransform = d3.zoomIdentity;
     const zoomBehavior = d3.zoom()
       .scaleExtent([0.2, 4])
       .on("zoom", (event) => {
-        graphLayer.attr("transform", event.transform);
+        currentZoomTransform = event.transform;
+        graphLayer.attr("transform", currentZoomTransform);
+        captureGraphLayout(activeTab, nodes, currentZoomTransform);
+        scheduleGraphLayoutStorageSave();
       });
 
     svg.call(zoomBehavior).on("dblclick.zoom", null);
+    const savedZoomTransform = getSavedGraphZoomTransform(activeTab.graphLayout);
+    if (savedZoomTransform) {
+      currentZoomTransform = d3.zoomIdentity
+        .translate(savedZoomTransform.x, savedZoomTransform.y)
+        .scale(savedZoomTransform.k);
+      svg.call(zoomBehavior.transform, currentZoomTransform);
+    }
 
     const simulation = d3.forceSimulation(nodes);
     const baseLinkForce = d3.forceLink(links).id((d) => d.id).distance(170).strength(0.4);
@@ -4527,9 +4631,25 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", (d) => nodeRadius(d.id)).attr("class", "graph-node")
       .call(d3.drag()
-        .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-        .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
-        .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+        .on("start", (event, d) => {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+        })
+        .on("drag", (event, d) => {
+          d.fx = event.x;
+          d.fy = event.y;
+          captureGraphLayout(activeTab, nodes, currentZoomTransform);
+        })
+        .on("end", (event, d) => {
+          if (!event.active) simulation.alphaTarget(0);
+          d.x = event.x;
+          d.y = event.y;
+          d.fx = null;
+          d.fy = null;
+          captureGraphLayout(activeTab, nodes, currentZoomTransform);
+          saveTabsToStorage(tabs);
+        }));
     node.append("title").text((d) => d.fullPath || d.label);
     const label = labelLayer.selectAll("text").data(nodes).enter().append("text").text((d) => d.label).attr("class", "graph-label");
 
@@ -4674,7 +4794,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           focusNodeId,
           allowedNodeIds: Array.from(new Set([...(parentConfig.allowedNodeIds || []), ...nodes.map((n) => n.id)])),
           hiddenNodeIds: [...(parentConfig.hiddenNodeIds || [])]
-        }
+        },
+        graphLayout: activeGraphTab?.graphLayout || null
       });
       tabs.push(localGraphTab);
       saveTabsToStorage(tabs);
@@ -4739,6 +4860,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       });
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
       label.attr("x", (d) => d.x + 10).attr("y", (d) => d.y + 4);
+      captureGraphLayout(activeTab, nodes, currentZoomTransform);
+      scheduleGraphLayoutStorageSave();
     });
 
     graphRenderCache.set(activeTab.id, {
