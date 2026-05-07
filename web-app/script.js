@@ -1505,11 +1505,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function getTabTooltipText(tab) {
     if (!tab) return 'Untitled';
-    if (tab.type === "graph") {
-      return `${tab.folderName || tab.title || 'Graph View'} (Graph View)`;
-    }
-
-    return tab.sourceFilePath || tab.sourceFileName || tab.title || 'Untitled';
+    return tab.sourceFilePath || tab.sourceFileName || tab.title || tab.folderName || 'Untitled';
   }
 
   function updateTabScrollControls() {
@@ -1869,7 +1865,9 @@ This is a fully client-side application. Your content never leaves your browser 
 
   async function saveCurrentFileIfChanged() {
     if (getActiveGraphTab()) {
-      await saveActiveGraphWithSaveDialog();
+      if (!(await saveActiveGraphToSource())) {
+        await saveActiveGraphWithSaveDialog();
+      }
       updateSaveCurrentFileButtons();
       return;
     }
@@ -4262,6 +4260,59 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
 
+  function getActiveGraphSaveContent(graphTab) {
+    const cachedRender = graphRenderCache.get(graphTab.id);
+    if (cachedRender?.nodes) {
+      captureGraphLayout(graphTab, cachedRender.nodes, cachedRender.getZoomTransform?.());
+    }
+    syncGraphTabDocument(graphTab);
+    const graphDocument = serializeGraphTab(graphTab);
+    return JSON.stringify(graphDocument, null, 2);
+  }
+
+  function updateGraphTabAfterSave(tab, metadata) {
+    if (!tab) return;
+    if (metadata) {
+      if (metadata.name) {
+        tab.sourceFileName = metadata.name;
+        tab.title = metadata.name;
+      }
+      if (metadata.handle) tab.sourceFileHandle = metadata.handle;
+      if (metadata.path) tab.sourceFilePath = metadata.path;
+    }
+    syncGraphTabDocument(tab);
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+    updateSaveCurrentFileButtons();
+  }
+
+  async function saveActiveGraphToSource() {
+    const graphTab = getActiveGraphTab();
+    if (!graphTab || (!graphTab.sourceFileHandle && !graphTab.sourceFilePath)) return false;
+
+    try {
+      const content = getActiveGraphSaveContent(graphTab);
+      if (graphTab.sourceFileHandle && typeof graphTab.sourceFileHandle.createWritable === "function") {
+        const writable = await graphTab.sourceFileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        updateGraphTabAfterSave(graphTab, { name: graphTab.sourceFileHandle.name || graphTab.sourceFileName });
+      } else if (typeof NL_VERSION !== "undefined" && graphTab.sourceFilePath) {
+        await Neutralino.filesystem.writeFile(graphTab.sourceFilePath, content);
+        updateGraphTabAfterSave(graphTab, {
+          name: getFileName(graphTab.sourceFilePath),
+          path: graphTab.sourceFilePath
+        });
+      } else {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to save graph to original location:", error);
+      return false;
+    }
+  }
+
   async function saveActiveGraphWithSaveDialog() {
     const graphTab = getActiveGraphTab();
     if (!graphTab) {
@@ -4269,13 +4320,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       return false;
     }
 
-    const cachedRender = graphRenderCache.get(graphTab.id);
-    if (cachedRender?.nodes) {
-      captureGraphLayout(graphTab, cachedRender.nodes, cachedRender.getZoomTransform?.());
-    }
-    syncGraphTabDocument(graphTab);
-    const graphDocument = serializeGraphTab(graphTab);
-    const content = JSON.stringify(graphDocument, null, 2);
+    const content = getActiveGraphSaveContent(graphTab);
     const suggestedName = getSuggestedGraphFileName(graphTab);
 
     try {
@@ -4290,6 +4335,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         if (!selectedPath) return false;
         const finalPath = /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(selectedPath) ? selectedPath : `${selectedPath}.mdviewer-graph.json`;
         await Neutralino.filesystem.writeFile(finalPath, content);
+        updateGraphTabAfterSave(graphTab, {
+          name: getFileName(finalPath),
+          path: finalPath
+        });
         return true;
       }
 
@@ -4306,10 +4355,15 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         const writable = await handle.createWritable();
         await writable.write(content);
         await writable.close();
+        updateGraphTabAfterSave(graphTab, {
+          name: handle.name,
+          handle
+        });
         return true;
       }
 
       saveAs(new Blob([content], { type: "application/json;charset=utf-8" }), suggestedName);
+      updateGraphTabAfterSave(graphTab, { name: suggestedName });
       return true;
     } catch (error) {
       if (error && error.name === "AbortError") return false;
@@ -4351,6 +4405,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const graphData = deserializeGraphDocument(graphDocument);
     const fallbackName = name.replace(/\.mdviewer-graph\.json$/i, "").replace(/\.mdgraph\.json$/i, "").replace(/\.json$/i, "") || "Saved Graph";
     const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument });
+    graphTab.sourceFileName = name;
+    graphTab.title = name;
+    if (source.handle) graphTab.sourceFileHandle = source.handle;
+    if (source.path) graphTab.sourceFilePath = source.path;
     tabs.push(graphTab);
     saveTabsToStorage(tabs);
     switchTab(graphTab.id);
