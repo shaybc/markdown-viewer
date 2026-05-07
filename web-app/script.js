@@ -4338,6 +4338,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return fileName.replace(/\.(md|markdown)$/i, "") || fileName;
   }
 
+  function getGraphContextMenuTitle(node) {
+    const source = node?.fullPath || node?.label || node?.id || "";
+    const normalized = String(source).replace(/\\/g, "/").replace(/\/+/g, "/");
+    const fileName = normalized.split("/").pop() || normalized || "Untitled";
+    return fileName.replace(/\.[^/.]+$/, "") || fileName;
+  }
+
   function resolveGraphTargetId(reference, sourcePath, nodeIndex) {
     const ref = (reference || "").trim();
     if (!ref) return null;
@@ -4804,9 +4811,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const contextMenu = document.createElement("div");
     contextMenu.className = "graph-context-menu hidden";
+    const contextMenuTitle = document.createElement("div");
+    contextMenuTitle.className = "graph-context-menu-title hidden";
     const magneticToggleBtn = document.createElement("button");
     magneticToggleBtn.type = "button";
     magneticToggleBtn.className = "graph-context-menu-item";
+    const contextMenuSeparator = document.createElement("div");
+    contextMenuSeparator.className = "graph-context-menu-separator hidden";
     const openFileBtn = document.createElement("button");
     openFileBtn.type = "button";
     openFileBtn.className = "graph-context-menu-item hidden";
@@ -4823,11 +4834,13 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     fullLocalGraphBtn.type = "button";
     fullLocalGraphBtn.className = "graph-context-menu-item hidden";
     fullLocalGraphBtn.textContent = "Show full local graph";
-    contextMenu.appendChild(magneticToggleBtn);
+    contextMenu.appendChild(contextMenuTitle);
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(hidePointBtn);
     contextMenu.appendChild(localGraphBtn);
     contextMenu.appendChild(fullLocalGraphBtn);
+    contextMenu.appendChild(contextMenuSeparator);
+    contextMenu.appendChild(magneticToggleBtn);
     graphRenderWrapper.appendChild(contextMenu);
 
     let contextTargetNode = null;
@@ -4860,6 +4873,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const hideContextMenu = () => {
       contextMenu.classList.add("hidden");
       contextTargetNode = null;
+      contextMenuTitle.classList.add("hidden");
+      contextMenuTitle.textContent = "";
+      contextMenuSeparator.classList.add("hidden");
       openFileBtn.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
@@ -4869,6 +4885,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     graphRenderWrapper.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       contextTargetNode = null;
+      contextMenuTitle.classList.add("hidden");
+      contextMenuTitle.textContent = "";
+      contextMenuSeparator.classList.add("hidden");
       openFileBtn.classList.add("hidden");
       hidePointBtn.classList.add("hidden");
       localGraphBtn.classList.add("hidden");
@@ -4883,6 +4902,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       event.preventDefault();
       event.stopPropagation();
       contextTargetNode = d;
+      contextMenuTitle.textContent = getGraphContextMenuTitle(d);
+      contextMenuTitle.classList.remove("hidden");
+      contextMenuSeparator.classList.remove("hidden");
       openFileBtn.classList.remove("hidden");
       hidePointBtn.classList.remove("hidden");
       localGraphBtn.classList.remove("hidden");
