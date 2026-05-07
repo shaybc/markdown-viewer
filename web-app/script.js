@@ -683,6 +683,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
+  const saveGraphButtons = document.querySelectorAll(".save-graph-button");
+  const openSavedGraphButtons = document.querySelectorAll(".open-saved-graph-button");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
@@ -1191,6 +1193,33 @@ This is a fully client-side application. Your content never leaves your browser 
     tab.graphDocument = graphDocument;
     if (Object.prototype.hasOwnProperty.call(graphDocument, "layout")) tab.graphLayout = graphDocument.layout;
     return tab;
+  }
+
+  function getActiveGraphTab() {
+    return tabs.find((tab) => tab.id === activeTabId && tab.type === "graph") || null;
+  }
+
+  function getSuggestedGraphFileName(tab) {
+    const rawName = (tab?.folderName || tab?.title || "graph-view").trim() || "graph-view";
+    const safeName = rawName.replace(/[\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() || "graph-view";
+    return /\.mdgraph\.json$/i.test(safeName) ? safeName : `${safeName}.mdgraph.json`;
+  }
+
+  function updateGraphActionButtons() {
+    const hasActiveGraph = !!getActiveGraphTab();
+    const saveTitle = hasActiveGraph ? "Save Graph..." : "Open a graph tab before saving a graph";
+
+    saveGraphButtons.forEach((button) => {
+      button.disabled = !hasActiveGraph;
+      button.title = saveTitle;
+      button.setAttribute("aria-label", saveTitle);
+    });
+
+    openSavedGraphButtons.forEach((button) => {
+      button.disabled = false;
+      button.title = "Open Saved Graph...";
+      button.setAttribute("aria-label", "Open Saved Graph...");
+    });
   }
 
   function getGraphFileSignature(files) {
@@ -1756,6 +1785,7 @@ This is a fully client-side application. Your content never leaves your browser 
       button.title = title;
       button.setAttribute("aria-label", title);
     });
+    updateGraphActionButtons();
   }
 
   function saveCurrentFileIfChanged() {
@@ -4141,6 +4171,160 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     saveTabsToStorage(tabs);
   }
 
+
+  async function saveActiveGraphWithSaveDialog() {
+    const graphTab = getActiveGraphTab();
+    if (!graphTab) {
+      updateGraphActionButtons();
+      return false;
+    }
+
+    syncGraphTabDocument(graphTab);
+    const graphDocument = serializeGraphTab(graphTab);
+    const content = JSON.stringify(graphDocument, null, 2);
+    const suggestedName = getSuggestedGraphFileName(graphTab);
+
+    try {
+      if (typeof NL_VERSION !== "undefined") {
+        const defaultPath = activeFolderPath ? joinPath(activeFolderPath, suggestedName) : suggestedName;
+        const selectedPath = await Neutralino.os.showSaveDialog("Save Graph", {
+          defaultPath,
+          filters: [
+            { name: "Markdown Viewer graph files", extensions: ["mdgraph.json", "json"] }
+          ]
+        });
+        if (!selectedPath) return false;
+        const finalPath = /\.(mdgraph\.json|json)$/i.test(selectedPath) ? selectedPath : `${selectedPath}.mdgraph.json`;
+        await Neutralino.filesystem.writeFile(finalPath, content);
+        return true;
+      }
+
+      if (typeof window.showSaveFilePicker === "function" && !isFirefoxBrowser()) {
+        const handle = await window.showSaveFilePicker({
+          suggestedName,
+          types: [
+            {
+              description: "Markdown Viewer graph files",
+              accept: { "application/json": [".mdgraph.json", ".json"] }
+            }
+          ]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        return true;
+      }
+
+      saveAs(new Blob([content], { type: "application/json;charset=utf-8" }), suggestedName);
+      return true;
+    } catch (error) {
+      if (error && error.name === "AbortError") return false;
+      console.error("Failed to save graph:", error);
+      alert("Failed to save graph: " + error.message);
+      return false;
+    }
+  }
+
+  async function openSavedGraphDocument(source) {
+    if (!source) return null;
+    if (tabs.length >= 20) {
+      alert('Maximum of 20 tabs reached. Please close an existing tab to open a saved graph.');
+      return null;
+    }
+    let content = source.content;
+    let name = source.name || "Saved Graph";
+
+    if (content === undefined) {
+      if (typeof NL_VERSION !== "undefined" && source.path) {
+        content = await Neutralino.filesystem.readFile(source.path);
+        name = getFileName(source.path) || name;
+      } else {
+        let file = source.file || null;
+        if (!file && source.handle) file = await source.handle.getFile();
+        if (!file) throw new Error("No readable graph file was provided.");
+        content = await file.text();
+        name = file.name || name;
+      }
+    }
+
+    let graphDocument;
+    try {
+      graphDocument = JSON.parse(content);
+    } catch (error) {
+      throw new Error("The selected graph file is not valid JSON.");
+    }
+
+    const graphData = deserializeGraphDocument(graphDocument);
+    const fallbackName = name.replace(/\.mdgraph\.json$/i, "").replace(/\.json$/i, "") || "Saved Graph";
+    const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument });
+    tabs.push(graphTab);
+    saveTabsToStorage(tabs);
+    switchTab(graphTab.id);
+    return graphTab;
+  }
+
+  function openSavedGraphWithFallbackInput() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".mdgraph.json,.json,application/json";
+    input.addEventListener("change", async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      try {
+        await openSavedGraphDocument({ file });
+      } catch (error) {
+        console.error("Failed to open saved graph:", error);
+        alert("Failed to open saved graph: " + error.message);
+      }
+    }, { once: true });
+    input.click();
+  }
+
+  async function openSavedGraphFromPicker() {
+    try {
+      if (typeof NL_VERSION !== "undefined") {
+        const selected = await Neutralino.os.showOpenDialog("Open Saved Graph", {
+          filters: [
+            { name: "Markdown Viewer graph files", extensions: ["mdgraph.json", "json"] }
+          ]
+        });
+        const selectedPath = Array.isArray(selected) ? selected[0] : selected;
+        if (!selectedPath) return null;
+        return openSavedGraphDocument({ path: selectedPath });
+      }
+
+      if (typeof window.showOpenFilePicker === "function") {
+        try {
+          const handles = await window.showOpenFilePicker({
+            multiple: false,
+            types: [
+              {
+                description: "Markdown Viewer graph files",
+                accept: { "application/json": [".mdgraph.json", ".json"] }
+              }
+            ]
+          });
+          const handle = handles && handles[0];
+          if (!handle) return null;
+          return openSavedGraphDocument({ handle, name: handle.name });
+        } catch (error) {
+          if (error && error.name === "AbortError") return null;
+          console.warn("Graph file picker unavailable, using fallback input.", error);
+          openSavedGraphWithFallbackInput();
+          return null;
+        }
+      }
+
+      openSavedGraphWithFallbackInput();
+      return null;
+    } catch (error) {
+      if (error && error.name === "AbortError") return null;
+      console.error("Failed to open saved graph:", error);
+      alert("Failed to open saved graph: " + error.message);
+      return null;
+    }
+  }
+
   function setGraphViewMode(enabled) {
     const contentContainer = document.querySelector(".content-container");
     if (!contentContainer || !graphViewCanvas) return;
@@ -4586,6 +4770,9 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
   if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
+  saveGraphButtons.forEach((button) => button.addEventListener("click", saveActiveGraphWithSaveDialog));
+  openSavedGraphButtons.forEach((button) => button.addEventListener("click", openSavedGraphFromPicker));
+  updateGraphActionButtons();
 
   exportHtml.addEventListener("click", function () {
     try {
