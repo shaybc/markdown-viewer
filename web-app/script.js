@@ -2495,6 +2495,21 @@ This is a fully client-side application. Your content never leaves your browser 
     return false;
   }
 
+  async function refreshOpenFolderTreeAfterFileDelete(filePath) {
+    if (!isFolderOpen || !filePath) return false;
+
+    if (activeFolderPath && !isPathInsideFolder(filePath, activeFolderPath)) {
+      return false;
+    }
+
+    try {
+      return await reloadOpenFolderTree();
+    } catch (error) {
+      console.warn("Failed to refresh folder tree after deleting file:", error);
+      return false;
+    }
+  }
+
   function isPathInsideFolder(filePath, folderPath) {
     if (!filePath || !folderPath) return false;
     const normalize = (path) => String(path).replace(/\\/g, "/").replace(/\/+$/, "");
@@ -5284,6 +5299,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
         await Neutralino.filesystem.remove(filePath);
         simulation.stop();
         removeGraphPointFromSnapshot(nodeId);
+        await refreshOpenFolderTreeAfterFileDelete(filePath);
         graphRenderWrapper.remove();
         renderGraphView();
       } catch (error) {
