@@ -49,15 +49,24 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getFolderPickerFallbackMessage() {
-    return "Firefox does not support browser write access to selected folders. It will open its upload-style folder picker instead, so files can be read but saving writes a downloaded copy.";
+    return "Browsers open folders with a read-only folder picker. Files stay on this device, but saving writes a downloaded copy unless you use the desktop app.";
+  }
+
+  function shouldUseNativeDirectoryPicker(event) {
+    if (typeof NL_VERSION !== "undefined") return true;
+    // Chrome/Edge show an unavoidable "view and copy files" permission prompt for
+    // showDirectoryPicker(). Prefer the standard folder input in browsers so opening a
+    // folder feels like a normal local selection. Power users can hold Alt while
+    // clicking Open folder to opt into File System Access handles for in-place saves.
+    return !!(event && event.altKey && supportsNativeDirectoryPicker());
   }
 
   function updateFolderImportHint() {
-    if (supportsNativeDirectoryPicker() || typeof NL_VERSION !== "undefined") return;
+    if (typeof NL_VERSION !== "undefined") return;
 
     document.querySelectorAll("#import-from-folder").forEach(function(button) {
-      button.title = getFolderPickerFallbackMessage();
-      button.setAttribute("aria-label", "Open folder using upload-style picker");
+      button.title = `${getFolderPickerFallbackMessage()} Hold Alt while clicking to request Chrome/Edge folder-write access.`;
+      button.setAttribute("aria-label", "Open folder using browser read-only folder picker");
     });
   }
 
@@ -1642,7 +1651,7 @@ This is a fully client-side application. Your content never leaves your browser 
   function updateSaveCurrentFileButtons() {
     const tab = getActiveMarkdownTab();
     const hasUnsavedChanges = activeTabHasUnsavedChanges();
-    const hasWritableSource = !!(tab && (tab.sourceFileHandle || tab.sourceFilePath));
+    const hasWritableSource = !!(tab && (tab.sourceFileHandle || (isNeutralinoRuntime() && tab.sourceFilePath)));
     const title = hasUnsavedChanges
       ? (hasWritableSource ? "Save changes to current file" : "Save changes as Markdown")
       : "No changes to save";
@@ -2694,7 +2703,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     sortNodes(root);
     return root;
   }
-async function openFolderTree() {
+  async function openFolderTree(event) {
   // Desktop app: use Neutralino native folder picker (no permission dialog)
   if (typeof NL_VERSION !== "undefined") {
     try {
@@ -2707,8 +2716,10 @@ async function openFolderTree() {
     return;
   }
 
-  // Browser: use File System Access API (shows permission dialog)
-  if (supportsNativeDirectoryPicker()) {
+  // Browser: use the read-only input by default to avoid Chrome/Edge's
+  // unavoidable "view and copy files" permission prompt. Holding Alt opts into
+  // File System Access handles for users who want in-place saves.
+  if (shouldUseNativeDirectoryPicker(event)) {
     try {
       const dirHandle = await window.showDirectoryPicker();
       activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
@@ -2721,14 +2732,13 @@ async function openFolderTree() {
       return;
     } catch (error) {
       if (error && error.name === "AbortError") return;
-      console.warn("Directory picker unavailable, using fallback input.", error);
+      console.warn("Directory picker unavailable, using browser folder input.", error);
     }
   }
 
   if (folderInput) {
     if (!shownFolderInputFallbackNotice) {
       console.info(getFolderPickerFallbackMessage());
-      alert(getFolderPickerFallbackMessage());
       shownFolderInputFallbackNotice = true;
     }
     folderInput.click();
@@ -3864,12 +3874,12 @@ async function openFolderTree() {
     });
   }
 
-  if (importFromFolderButton) {
-    importFromFolderButton.addEventListener("click", function (e) {
+  document.querySelectorAll("#import-from-folder").forEach(function(button) {
+    button.addEventListener("click", function (e) {
       e.preventDefault();
-      openFolderTree();
+      openFolderTree(e);
     });
-  }
+  });
 
   document.querySelectorAll(".close-folder-button").forEach((button) => {
     button.addEventListener("click", function(e) {
