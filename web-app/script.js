@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const markdownEditor = document.getElementById("markdown-editor");
   const editorLineNumbers = document.getElementById("editor-line-numbers");
   const editorCurrentLine = document.getElementById("editor-current-line");
+  const editorSelectionHighlights = document.getElementById("editor-selection-highlights");
   const markdownPreview = document.getElementById("markdown-preview");
   const themeToggle = document.getElementById("theme-toggle");
   const importFromFileButtons = document.querySelectorAll("#import-from-file");
@@ -182,6 +183,44 @@ document.addEventListener("DOMContentLoaded", function () {
       editorLineNumberResizeFrame = null;
       updateEditorLineNumbers();
     });
+  }
+
+  function updateEditorSelectionHighlights() {
+    if (!editorSelectionHighlights) return;
+
+    const text = markdownEditor.value;
+    const selectionStart = Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+    const selectionEnd = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+    const selectedText = text.slice(selectionStart, selectionEnd);
+
+    if (!selectedText || selectedText.trim() === "") {
+      editorSelectionHighlights.innerHTML = "";
+      return;
+    }
+
+    let markup = "";
+    let searchFrom = 0;
+    let matchIndex = text.indexOf(selectedText, searchFrom);
+
+    while (matchIndex !== -1) {
+      markup += escapeHtml(text.slice(searchFrom, matchIndex));
+      markup += `<span class="editor-selection-match">${escapeHtml(selectedText)}</span>`;
+      searchFrom = matchIndex + selectedText.length;
+      matchIndex = text.indexOf(selectedText, searchFrom);
+    }
+
+    markup += escapeHtml(text.slice(searchFrom));
+    editorSelectionHighlights.innerHTML = `<div class="editor-selection-highlights-inner">${markup}</div>`;
+    syncEditorSelectionHighlightsScroll();
+  }
+
+  function syncEditorSelectionHighlightsScroll() {
+    if (!editorSelectionHighlights) return;
+
+    const inner = editorSelectionHighlights.querySelector(".editor-selection-highlights-inner");
+    if (!inner) return;
+
+    inner.style.transform = `translate(${-markdownEditor.scrollLeft}px, ${-markdownEditor.scrollTop}px)`;
   }
 
   function syncEditorCurrentLineScroll() {
@@ -6008,6 +6047,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   markdownEditor.addEventListener("input", function() {
     updateEditorLineNumbers();
+    updateEditorSelectionHighlights();
     updateStatusLine();
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
     if (activeTab) {
@@ -6041,29 +6081,39 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       // Trigger input event to update preview
       this.dispatchEvent(new Event('input'));
       updateEditorLineNumbers();
+      updateEditorSelectionHighlights();
     }
   });
   
   ["click", "keyup", "select"].forEach(function(eventName) {
     markdownEditor.addEventListener(eventName, function() {
       updateEditorLineNumbers();
+      updateEditorSelectionHighlights();
       updateStatusLine();
     });
   });
   markdownEditor.addEventListener("focus", function() {
     updateEditorLineNumbers();
+    updateEditorSelectionHighlights();
     updateStatusLine();
   });
   markdownEditor.addEventListener("blur", function() {
-    window.setTimeout(updateStatusLine, 0);
+    window.setTimeout(function() {
+      updateEditorSelectionHighlights();
+      updateStatusLine();
+    }, 0);
   });
   document.addEventListener("selectionchange", function() {
     if (document.activeElement === markdownEditor) {
       updateEditorLineNumbers();
+      updateEditorSelectionHighlights();
       updateStatusLine();
     }
   });
-  markdownEditor.addEventListener("scroll", syncEditorLineNumberScroll);
+  markdownEditor.addEventListener("scroll", function() {
+    syncEditorLineNumberScroll();
+    syncEditorSelectionHighlightsScroll();
+  });
 
   if (typeof ResizeObserver !== "undefined") {
     const editorLineNumberResizeObserver = new ResizeObserver(scheduleEditorLineNumbersUpdate);
