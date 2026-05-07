@@ -53,6 +53,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorCursorColumnElement = document.getElementById("editor-cursor-column");
   const editorPositionLabelElement = document.getElementById("editor-position-label");
   const editorPositionValueElement = document.getElementById("editor-position-value");
+  let previewHoveredLinkUrl = "";
 
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
@@ -745,6 +746,8 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   markdownPreview.addEventListener("click", handlePreviewLinkClick);
+  markdownPreview.addEventListener("mouseover", handlePreviewLinkMouseOver);
+  markdownPreview.addEventListener("mouseout", handlePreviewLinkMouseOut);
 
   function ensureFolderTreePane() {
     let pane = document.getElementById("folder-tree-pane");
@@ -1400,6 +1403,35 @@ document.addEventListener("DOMContentLoaded", function () {
       anchor.setAttribute("role", "button");
       anchor.title = anchor.title || `Open Markdown file: ${splitLinkTarget(markdownTarget).path}`;
     });
+  }
+
+  function getPreviewLinkStatusUrl(anchor) {
+    if (!anchor) return "";
+
+    const markdownTarget = anchor.dataset.markdownLinkTarget || "";
+    if (markdownTarget) return markdownTarget;
+
+    const rawHref = anchor.getAttribute("href") || "";
+    if (!rawHref) return "";
+
+    return anchor.href || rawHref;
+  }
+
+  function handlePreviewLinkMouseOver(event) {
+    const anchor = event.target.closest("a[href], a[data-markdown-link-target]");
+    if (!anchor || !markdownPreview.contains(anchor)) return;
+
+    previewHoveredLinkUrl = getPreviewLinkStatusUrl(anchor);
+    updateStatusLine();
+  }
+
+  function handlePreviewLinkMouseOut(event) {
+    const anchor = event.target.closest("a[href], a[data-markdown-link-target]");
+    if (!anchor || !markdownPreview.contains(anchor)) return;
+    if (event.relatedTarget && anchor.contains(event.relatedTarget)) return;
+
+    previewHoveredLinkUrl = "";
+    updateStatusLine();
   }
 
   function handlePreviewLinkClick(event) {
@@ -2601,9 +2633,9 @@ This is a fully client-side application. Your content never leaves your browser 
       : (typeof activeGraphTab?.visiblePointCount === "number" ? activeGraphTab.visiblePointCount : 0);
 
     if (statusTipElement) {
-      statusTipElement.textContent = activeGraphTab
+      statusTipElement.textContent = previewHoveredLinkUrl || (activeGraphTab
         ? "Tip: hold ctrl / shift to see out / back links"
-        : "Tip: drag in Markdown files, use split preview, or open a folder to build a graph.";
+        : "Tip: drag in Markdown files, use split preview, or open a folder to build a graph.");
     }
 
     if (graphPointsStatusElement && graphPointsCountElement) {
