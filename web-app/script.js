@@ -3212,6 +3212,7 @@ This is a fully client-side application. Your content never leaves your browser 
     activeFolderPath = null;
     isFolderOpen = false;
     if (folderTreeRoot) {
+      folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
       folderTreeRoot.innerHTML = getClosedFolderPlaceholder();
     }
     updateCloseFolderButtons();
@@ -3219,6 +3220,8 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function renderFolderTree(nodes) {
     isFolderOpen = true;
+    folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
+    folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
     folderTreeRoot.innerHTML = "";
     if (!nodes.length) {
       folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
@@ -4669,13 +4672,32 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return sidebarFileContextMenu;
   }
 
+  function isOpenFolderRootContextNode(node) {
+    return !!(node && node.isOpenFolderRootContext === true);
+  }
+
+  function getOpenFolderRootContextNode() {
+    return {
+      kind: "directory",
+      name: activeFolderName || "Folder",
+      path: "",
+      fullPath: activeFolderPath || "",
+      handle: activeFolderHandle || null,
+      isOpenFolderRootContext: true
+    };
+  }
+
   function getSidebarFolderClipboardPath(node) {
     if (!node) return "";
+    if (isOpenFolderRootContextNode(node)) {
+      return activeFolderPath || activeFolderName || "";
+    }
     return node.fullPath || node.path || node.name || "";
   }
 
   function getSidebarFolderFilesystemPath(node) {
     if (!node || !isNeutralinoRuntime()) return null;
+    if (isOpenFolderRootContextNode(node)) return activeFolderPath || null;
     if (node.fullPath) return node.fullPath;
     if (activeFolderPath && node.path) return joinPath(activeFolderPath, node.path);
     return null;
@@ -4697,6 +4719,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   async function openSidebarFolderGraphView(node) {
     if (!node || node.kind !== "directory") return;
+    if (isOpenFolderRootContextNode(node)) {
+      await openGraphView();
+      return;
+    }
     if (tabs.length >= 20) {
       alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
       return;
@@ -4753,34 +4779,36 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "bi bi-diagram-3",
       "Open a graph view containing only Markdown files in this folder and its sub-folders."
     );
-    const newFolderBtn = createFileContextMenuButton(
-      "New Folder ...",
-      "bi bi-folder-plus",
-      "Create a new folder under this folder."
-    );
     const revealFolderBtn = createFileContextMenuButton(
-      "Reveal in file explorer",
+      "Reveal in File Explorer",
       "bi bi-folder2-open",
       "Open this folder in the system file explorer."
-    );
-    const renameFolderBtn = createFileContextMenuButton(
-      "Rename",
-      "bi bi-pencil",
-      "Rename this folder on disk and refresh the folder tree."
     );
     const copyPathBtn = createFileContextMenuButton(
       "Copy path",
       "bi bi-clipboard",
       "Copy this folder path to the clipboard."
     );
+    const newFolderBtn = createFileContextMenuButton(
+      "New folder ...",
+      "bi bi-folder-plus",
+      "Create a new folder under this folder."
+    );
+    const renameFolderBtn = createFileContextMenuButton(
+      "Rename",
+      "bi bi-pencil",
+      "Rename this folder on disk and refresh the folder tree."
+    );
     const deleteFolderBtn = createFileContextMenuButton(
       "Delete folder",
       "bi bi-trash3",
       "Delete this folder and its contents from disk after confirmation."
     );
+    renameFolderBtn.dataset.sidebarFolderAction = "rename";
+    deleteFolderBtn.dataset.sidebarFolderAction = "delete";
     deleteFolderBtn.classList.add("graph-context-menu-item-danger");
 
-    [title, separator, showGraphBtn, newFolderBtn, revealFolderBtn, renameFolderBtn, copyPathBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
+    [title, separator, showGraphBtn, revealFolderBtn, copyPathBtn, newFolderBtn, renameFolderBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
     document.body.appendChild(menu);
 
     showGraphBtn.addEventListener("click", async (event) => {
@@ -4886,10 +4914,21 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     hideSidebarFileContextMenu();
     sidebarContextTarget = node;
     const menu = ensureSidebarFolderContextMenu();
+    const isRootContext = isOpenFolderRootContextNode(node);
     const title = menu.querySelector(".graph-context-menu-title");
-    if (title) title.textContent = node.name || "Folder";
+    if (title) title.textContent = isRootContext ? (activeFolderName || "Folder") : (node.name || "Folder");
+    menu.querySelectorAll('[data-sidebar-folder-action="rename"], [data-sidebar-folder-action="delete"]').forEach((item) => {
+      item.classList.toggle("hidden", isRootContext);
+    });
     menu.classList.remove("hidden");
     positionSidebarFolderContextMenu(event);
+  }
+
+  function handleFolderTreeRootContextMenu(event) {
+    if (!isFolderOpen || !folderTreeRoot) return;
+    const targetElement = event.target instanceof Element ? event.target : event.target?.parentElement;
+    if (targetElement?.closest(".folder-tree-label, .folder-tree-file")) return;
+    showSidebarFolderContextMenu(event, getOpenFolderRootContextNode());
   }
 
   function renderFolderTreeNode(node, parentPath = "") {
