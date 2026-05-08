@@ -3821,7 +3821,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   function validateSidebarRenameName(name, kind) {
     const value = String(name || "").trim();
-    if (!value) return "Enter a name before renaming.";
+    if (!value) return `Enter a name before ${kind === "new-file" ? "creating the file" : "renaming"}.`;
     if (/[\\/]/.test(value)) return "Enter a name only, without folder separators.";
     if (/^\.+$/.test(value)) return "Enter a name that is not only dots.";
     if (kind === "file" && !isSidebarDocumentPath(value)) {
@@ -3867,6 +3867,61 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
           return;
         }
         cleanup(newName);
+      }
+
+      function onCancel() {
+        cleanup(null);
+      }
+
+      function onKey(event) {
+        if (event.key === 'Enter') onConfirm();
+        else if (event.key === 'Escape') onCancel();
+      }
+
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+      input.addEventListener('keydown', onKey);
+    });
+  }
+
+  function promptSidebarNewFileName(parentNode) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('rename-modal');
+      const title = document.getElementById('rename-modal-title');
+      const input = document.getElementById('rename-modal-input');
+      const confirmBtn = document.getElementById('rename-modal-confirm');
+      const cancelBtn = document.getElementById('rename-modal-cancel');
+      if (!modal || !input || !confirmBtn || !cancelBtn) {
+        resolve(null);
+        return;
+      }
+
+      if (title) title.textContent = `New file in ${parentNode?.name || "folder"}`;
+      input.value = "Untitled.md";
+      input.placeholder = "File name (for example, notes.md)";
+      confirmBtn.textContent = "Create";
+      modal.style.display = 'flex';
+      input.focus();
+      input.select();
+
+      function cleanup(result) {
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+        input.removeEventListener('keydown', onKey);
+        modal.style.display = 'none';
+        confirmBtn.textContent = "Rename";
+        resolve(result);
+      }
+
+      function onConfirm() {
+        const fileName = input.value.trim();
+        const validationMessage = validateSidebarRenameName(fileName, "new-file");
+        if (validationMessage) {
+          alert(validationMessage);
+          input.focus();
+          return;
+        }
+        cleanup(fileName);
       }
 
       function onCancel() {
@@ -4312,6 +4367,72 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       updateSaveCurrentFileButtons();
       if (getActiveGraphTab()) renderGraphView();
     }
+  }
+
+  async function sidebarFileExists(parentNode, fileName) {
+    if (!parentNode || !fileName) return false;
+
+    if (isNeutralinoRuntime()) {
+      const parentPath = getSidebarFolderFilesystemPath(parentNode);
+      if (!parentPath || !Neutralino.filesystem?.readDirectory) return false;
+      const entries = await Neutralino.filesystem.readDirectory(parentPath);
+      return entries.some((entry) => entry.entry.toLowerCase() === fileName.toLowerCase());
+    }
+
+    if (parentNode.handle && typeof parentNode.handle.getFileHandle === "function") {
+      try {
+        await parentNode.handle.getFileHandle(fileName, { create: false });
+        return true;
+      } catch (error) {
+        if (error && (error.name === "NotFoundError" || error.code === 8)) return false;
+        throw error;
+      }
+    }
+
+    return (parentNode.children || []).some((child) => child.kind === "file" && child.name.toLowerCase() === fileName.toLowerCase());
+  }
+
+  async function createSidebarFileOnDisk(node) {
+    if (!node || node.kind !== "directory") return;
+    const fileName = await promptSidebarNewFileName(node);
+    if (!fileName) return;
+
+    if (await sidebarFileExists(node, fileName)) {
+      alert("A file with this name already exists here.");
+      return;
+    }
+
+    let sourceFile = null;
+    if (isNeutralinoRuntime()) {
+      const parentPath = getSidebarFolderFilesystemPath(node);
+      if (!parentPath || !Neutralino.filesystem?.writeFile) {
+        alert("Creating files is available only in the desktop app for folders opened from disk.");
+        return;
+      }
+      const filePath = joinPath(parentPath, fileName);
+      await Neutralino.filesystem.writeFile(filePath, "");
+      sourceFile = { name: fileName, path: filePath };
+    } else if (node.handle && typeof node.handle.getFileHandle === "function") {
+      const fileHandle = await node.handle.getFileHandle(fileName, { create: true });
+      if (!fileHandle || typeof fileHandle.createWritable !== "function") {
+        alert("Creating files from the folder tree requires write access to the opened folder.");
+        return;
+      }
+      const writable = await fileHandle.createWritable();
+      await writable.write("");
+      await writable.close();
+      sourceFile = {
+        name: fileName,
+        handle: fileHandle,
+        path: node.path ? `${node.path}/${fileName}` : fileName
+      };
+    } else {
+      alert("Creating files from the folder tree is available in the desktop app or in browsers when the folder was opened with write access.");
+      return;
+    }
+
+    await reloadOpenFolderTree();
+    openSidebarFileInPermanentTab("", getMarkdownTitleFromFileName(fileName), sourceFile);
   }
 
   async function createSidebarFolderOnDisk(node) {
@@ -4789,6 +4910,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       "bi bi-clipboard",
       "Copy this folder path to the clipboard."
     );
+    const newFileBtn = createFileContextMenuButton(
+      "New file ...",
+      "bi bi-file-earmark-plus",
+      "Create a new empty text file under this folder."
+    );
     const newFolderBtn = createFileContextMenuButton(
       "New folder ...",
       "bi bi-folder-plus",
@@ -4808,7 +4934,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     deleteFolderBtn.dataset.sidebarFolderAction = "delete";
     deleteFolderBtn.classList.add("graph-context-menu-item-danger");
 
-    [title, separator, showGraphBtn, revealFolderBtn, copyPathBtn, newFolderBtn, renameFolderBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
+    [title, separator, showGraphBtn, revealFolderBtn, copyPathBtn, newFileBtn, newFolderBtn, renameFolderBtn, deleteFolderBtn].forEach((item) => menu.appendChild(item));
     document.body.appendChild(menu);
 
     showGraphBtn.addEventListener("click", async (event) => {
@@ -4820,6 +4946,18 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       } catch (error) {
         console.error("Failed to open sidebar folder graph view:", error);
         alert("Unable to open a graph view for this folder.");
+      }
+    });
+
+    newFileBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await createSidebarFileOnDisk(target);
+      } catch (error) {
+        console.error("Failed to create sidebar file:", error);
+        alert("Unable to create a new file here.");
       }
     });
 
