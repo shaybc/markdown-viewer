@@ -3475,6 +3475,7 @@ This is a fully client-side application. Your content never leaves your browser 
     showTags: true,
     hiddenTagIds: [],
     selectedTagIds: [],
+    groups: [],
     searchQuery: "",
     showArrows: true,
     textFadeThreshold: 0.35,
@@ -3507,6 +3508,49 @@ This is a fully client-side application. Your content never leaves your browser 
     return Math.min(max, Math.max(min, numericValue));
   }
 
+  function createGraphGroupId(seed) {
+    const rawSeed = String(seed || "graph-group");
+    let hash = 2166136261;
+    for (let i = 0; i < rawSeed.length; i += 1) {
+      hash ^= rawSeed.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `graph-group-${(hash >>> 0).toString(36)}`;
+  }
+
+  function normalizeGraphGroupColor(value, fallback) {
+    const fallbackColor = String(fallback || "#7c3aed").trim() || "#7c3aed";
+    const rawValue = String(value || "").trim();
+    if (!rawValue) return fallbackColor;
+    if (/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(rawValue)) return rawValue;
+    if (typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("color", rawValue)) return rawValue;
+    return fallbackColor;
+  }
+
+  function normalizeGraphGroups(groups) {
+    const seenIds = new Set();
+    return (Array.isArray(groups) ? groups : [])
+      .map((group) => {
+        const source = group && typeof group === "object" ? group : {};
+        const query = String(source.query || "").trim();
+        const color = normalizeGraphGroupColor(source.color, "#7c3aed");
+        const baseId = String(source.id || "").trim() || createGraphGroupId(`${query}:${color}`);
+        let id = baseId;
+        let suffix = 2;
+        while (seenIds.has(id)) {
+          id = `${baseId}-${suffix}`;
+          suffix += 1;
+        }
+        seenIds.add(id);
+        return {
+          id,
+          query,
+          color,
+          enabled: source.enabled !== false
+        };
+      });
+  }
+
   function normalizeGraphViewConfig(config) {
     const source = config && typeof config === "object" ? config : {};
     return {
@@ -3515,6 +3559,7 @@ This is a fully client-side application. Your content never leaves your browser 
       showTags: source.showTags !== false,
       hiddenTagIds: normalizeGraphTagNodeIds(source.hiddenTagIds),
       selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds),
+      groups: normalizeGraphGroups(source.groups),
       searchQuery: String(source.searchQuery || "").trim().toLowerCase(),
       showArrows: source.showArrows !== false,
       textFadeThreshold: clampGraphNumber(source.textFadeThreshold, DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold, 0, 1),
