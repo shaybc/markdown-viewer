@@ -335,6 +335,25 @@
                         <button class="folder-tree-tool-button open-graph-view" type="button" title="Open Graph View" aria-label="Open Graph View">
                             <i class="bi bi-diagram-3" aria-hidden="true"></i>
                         </button>
+                        <div class="tag-management-menu dropdown">
+                            <button class="folder-tree-tool-button tag-management-menu-button dropdown-toggle" type="button" id="tagManagementMenu" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Manage tags" aria-label="Manage tags">
+                                <i class="bi bi-tags" aria-hidden="true"></i>
+                            </button>
+                            <div class="dropdown-menu action-menu tag-management-panel" aria-labelledby="tagManagementMenu">
+                                <div class="tag-management-heading">Tags</div>
+                                <div class="tag-management-actions">
+                                    <button class="dropdown-item action-menu-item" id="create-tag-button" type="button">
+                                        <i class="bi bi-tag" aria-hidden="true"></i><span>Create tag</span>
+                                    </button>
+                                    <button class="dropdown-item action-menu-item" id="delete-tag-button" type="button">
+                                        <i class="bi bi-trash3" aria-hidden="true"></i><span>Delete tag</span>
+                                    </button>
+                                </div>
+                                <label class="visually-hidden" for="tag-management-search">Search tags</label>
+                                <input id="tag-management-search" class="tag-management-search" type="search" placeholder="Search tags..." autocomplete="off">
+                                <div id="tag-management-list" class="tag-management-list" role="listbox" aria-label="Known tags"></div>
+                            </div>
+                        </div>
                         <button class="folder-tree-tool-button toggle-unsupported-files" type="button" title="Show unsupported file types in the folder view" aria-label="Show unsupported file types in the folder view" aria-pressed="false">
                             <i class="bi bi-file-earmark-x" aria-hidden="true"></i>
                         </button>
