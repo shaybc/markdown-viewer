@@ -282,6 +282,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function getTagAutocompleteEntries() {
     return Array.from(new Set([
       ...getGraphSnapshotAutocompleteTags(),
+      ...Array.from(folderTagCounts.keys()),
       ...getKnownTags()
     ]))
       .filter(Boolean)
@@ -1699,30 +1700,81 @@ document.addEventListener("DOMContentLoaded", function () {
     saveGlobalState({ knownTags: normalizeFileTagList(tags).sort((a, b) => a.localeCompare(b)) });
   }
 
+  function addTagsToCountMap(counts, tags) {
+    normalizeFileTagList(tags).forEach((tag) => {
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+    });
+  }
+
   function getActiveGraphSnapshotTagCounts() {
     const counts = new Map();
     const activeGraphTab = getActiveGraphTab();
     (activeGraphTab?.graphSnapshot?.files || []).forEach((snapshotFile) => {
       const tags = snapshotFile.tags?.length ? snapshotFile.tags : getFileTagsFromContent(snapshotFile.content || "");
-      tags.forEach((tag) => {
-        const normalizedTag = normalizeTagName(tag);
-        if (!normalizedTag) return;
-        counts.set(normalizedTag, (counts.get(normalizedTag) || 0) + 1);
-      });
+      addTagsToCountMap(counts, tags);
     });
     return counts;
   }
 
+  function getReferencedTagCounts() {
+    const graphCounts = getActiveGraphSnapshotTagCounts();
+    if (graphCounts.size) return graphCounts;
+    return new Map(folderTagCounts || []);
+  }
+
   function getAllKnownAndReferencedTags() {
     const tagSet = new Set(getKnownTags());
-    getActiveGraphSnapshotTagCounts().forEach((_count, tag) => tagSet.add(tag));
+    getReferencedTagCounts().forEach((_count, tag) => tagSet.add(tag));
     return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+  }
+
+  async function readFolderMarkdownFileContent(fileEntry) {
+    if (!fileEntry) return "";
+    if (typeof fileEntry.content === "string") return fileEntry.content;
+    if (fileEntry.file?.text) return fileEntry.file.text();
+    if (fileEntry.handle?.getFile) {
+      const file = await fileEntry.handle.getFile();
+      return file.text();
+    }
+    if (typeof NL_VERSION !== "undefined" && fileEntry.fullPath) {
+      return Neutralino.filesystem.readFile(fileEntry.fullPath);
+    }
+    return "";
+  }
+
+  async function refreshFolderTagCounts() {
+    const refreshId = ++folderTagCountsRefreshId;
+    const counts = new Map();
+    const files = (folderMarkdownFiles || []).slice();
+
+    for (const fileEntry of files) {
+      try {
+        const content = await readFolderMarkdownFileContent(fileEntry);
+        if (refreshId !== folderTagCountsRefreshId) return;
+        fileEntry.content = content || "";
+        fileEntry.tags = getFileTagsFromContent(fileEntry.content);
+        addTagsToCountMap(counts, fileEntry.tags);
+      } catch (error) {
+        console.warn("Failed to read folder file tags:", fileEntry.path || fileEntry.fullPath || fileEntry.name, error);
+      }
+    }
+
+    if (refreshId !== folderTagCountsRefreshId) return;
+    folderTagCounts = counts;
+    renderTagManagementList();
+    renderLinkAutocomplete();
+  }
+
+  function clearFolderTagCounts() {
+    folderTagCountsRefreshId += 1;
+    folderTagCounts = new Map();
+    renderTagManagementList();
   }
 
   function renderTagManagementList() {
     if (!tagManagementList) return;
     const query = String(tagManagementSearch?.value || "").trim().toLowerCase();
-    const counts = getActiveGraphSnapshotTagCounts();
+    const counts = getReferencedTagCounts();
     const tags = getAllKnownAndReferencedTags().filter((tag) => !query || tag.includes(query));
     tagManagementList.innerHTML = "";
 
@@ -1837,6 +1889,7 @@ document.addEventListener("DOMContentLoaded", function () {
       markGraphTabAsChanged(activeGraphTab);
     }
 
+    await refreshFolderTagCounts();
     saveKnownTags(getKnownTags().filter((tag) => tag !== normalizedTag));
     saveTabsToStorage(tabs);
     renderTabBar(tabs, activeTabId);
@@ -3045,6 +3098,8 @@ This is a fully client-side application. Your content never leaves your browser 
   let tabs = [];
   let activeTabId = null;
   let folderMarkdownFiles = [];
+  let folderTagCounts = new Map();
+  let folderTagCountsRefreshId = 0;
   let activeFolderName = "Graph View";
   let activeFolderHandle = null;
   let activeFolderPath = null;
@@ -4742,6 +4797,7 @@ This is a fully client-side application. Your content never leaves your browser 
   function closeFolderTree() {
     hideLinkAutocomplete();
     folderMarkdownFiles = [];
+    clearFolderTagCounts();
     currentFolderTreeNodes = [];
     folderTreeFilterText = "";
     activeFolderName = "Graph View";
@@ -4792,6 +4848,7 @@ This is a fully client-side application. Your content never leaves your browser 
     updateFolderTreeToolbarState();
     syncFolderTreeSelectionToActiveTab({ scroll: false });
     renderLinkAutocomplete();
+    refreshFolderTagCounts();
   }
 
   async function reloadOpenFolderTree() {
@@ -10074,6 +10131,7 @@ ${body}`;
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
       updateSaveCurrentFileButtons();
+      await refreshFolderTagCounts();
       simulation.stop();
       graphRenderWrapper.remove();
       renderGraphView();
