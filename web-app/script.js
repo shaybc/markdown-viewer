@@ -10,6 +10,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // View Mode State - Story 1.1
   let currentViewMode = 'split'; // 'editor', 'split', or 'preview'
   let autoSelectFileEnabled = true;
+  let currentFolderTreeNodes = [];
+  let folderTreeFilterText = "";
+  let isFolderOpen = false;
 
   const markdownEditor = document.getElementById("markdown-editor");
   const editorLineNumbers = document.getElementById("editor-line-numbers");
@@ -21,6 +24,9 @@ document.addEventListener("DOMContentLoaded", function () {
   const newDocumentButtons = document.querySelectorAll(".new-document-button");
   const importFromGithubButton = document.getElementById("import-from-github");
   const importFromFolderButton = document.getElementById("import-from-folder");
+  const folderTreeFilterInput = document.getElementById("folder-tree-filter-input");
+  const folderTreeFilterToggleButtons = document.querySelectorAll(".toggle-folder-tree-filter");
+  const folderTreeExpandToggleButtons = document.querySelectorAll(".toggle-folder-tree-expanded");
   let folderTreeRoot = document.getElementById("folder-tree-root");
 
   console.error("[FolderTree] init", {
@@ -831,12 +837,45 @@ document.addEventListener("DOMContentLoaded", function () {
   const toggleSidebarButtons = document.querySelectorAll(".toggle-sidebar");
   const toggleAutoSelectFileButtons = document.querySelectorAll(".toggle-auto-select-file");
   updateFolderImportHint();
-  updateAutoSelectFileButtons();
+  updateFolderTreeToolbarState();
   toggleAutoSelectFileButtons.forEach(function(button) {
     button.addEventListener("click", function() {
+      if (button.classList.contains("folder-tree-tool-button") && !isFolderOpen) return;
       setAutoSelectFileEnabled(!autoSelectFileEnabled);
     });
   });
+
+  folderTreeExpandToggleButtons.forEach(function(button) {
+    button.addEventListener("click", function() {
+      if (!isFolderOpen) return;
+      setAllFolderTreeDetails(hasCollapsedFolderTreeDetails());
+    });
+  });
+
+  folderTreeFilterToggleButtons.forEach(function(button) {
+    button.addEventListener("click", function() {
+      if (!isFolderOpen || !folderTreeFilterInput) return;
+      const shouldShow = folderTreeFilterInput.hidden;
+      folderTreeFilterInput.hidden = !shouldShow;
+      updateFolderTreeFilterControls();
+      if (shouldShow) {
+        folderTreeFilterInput.focus();
+        folderTreeFilterInput.select();
+        return;
+      }
+      folderTreeFilterText = "";
+      folderTreeFilterInput.value = "";
+      renderFilteredFolderTree();
+    });
+  });
+
+  if (folderTreeFilterInput) {
+    folderTreeFilterInput.addEventListener("input", function() {
+      folderTreeFilterText = folderTreeFilterInput.value;
+      renderFilteredFolderTree();
+      updateFolderTreeFilterControls();
+    });
+  }
 
 
   // Mobile View Mode Elements - Story 1.4
@@ -929,10 +968,106 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         button.textContent = label;
       }
-      button.title = title;
+      button.title = isFolderOpen ? title : "Open a folder to enable Auto select file";
       button.setAttribute("aria-label", title);
       button.setAttribute("aria-pressed", String(autoSelectFileEnabled));
+      if (button.classList.contains("folder-tree-tool-button")) {
+        button.disabled = !isFolderOpen;
+        button.setAttribute("aria-disabled", isFolderOpen ? "false" : "true");
+      }
     });
+  }
+
+  function hasCollapsedFolderTreeDetails() {
+    return !!folderTreeRoot && Array.from(folderTreeRoot.querySelectorAll("details")).some(function(details) {
+      return !details.open;
+    });
+  }
+
+  function updateFolderTreeExpandToggleButtons() {
+    const hasFolder = !!isFolderOpen;
+    const shouldExpand = hasCollapsedFolderTreeDetails();
+    const title = !hasFolder
+      ? "Open a folder to expand or collapse folders"
+      : shouldExpand
+        ? "Expand all folders"
+        : "Collapse all folders";
+    const iconClass = shouldExpand ? "bi bi-arrows-expand" : "bi bi-arrows-collapse";
+
+    folderTreeExpandToggleButtons.forEach(function(button) {
+      const icon = button.querySelector("i");
+      if (icon) icon.className = iconClass;
+      button.disabled = !hasFolder;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+    });
+  }
+
+  function setAllFolderTreeDetails(open) {
+    if (!folderTreeRoot) return;
+    folderTreeRoot.querySelectorAll("details").forEach(function(details) {
+      resetFolderTreeAnimation(details, getFolderTreeChildrenContainer(details));
+      details.open = open;
+    });
+    updateFolderTreeExpandToggleButtons();
+  }
+
+  function getFilteredFolderTreeNodes(nodes, filterText) {
+    const normalizedFilter = String(filterText || "").trim().toLowerCase();
+    if (!normalizedFilter) return nodes;
+
+    return (nodes || []).reduce(function(matches, node) {
+      const nameMatches = String(node.name || "").toLowerCase().includes(normalizedFilter);
+
+      if (node.kind === "directory") {
+        const filteredChildren = getFilteredFolderTreeNodes(node.children || [], normalizedFilter);
+        if (nameMatches || filteredChildren.length) {
+          matches.push({ ...node, children: filteredChildren });
+        }
+        return matches;
+      }
+
+      if (nameMatches) {
+        matches.push(node);
+      }
+      return matches;
+    }, []);
+  }
+
+  function renderFilteredFolderTree() {
+    if (!folderTreeRoot || !isFolderOpen) return;
+    const nodes = getFilteredFolderTreeNodes(currentFolderTreeNodes, folderTreeFilterText);
+    renderFolderTree(nodes, { preserveNodes: true });
+    if (folderTreeFilterText) {
+      setAllFolderTreeDetails(true);
+    }
+  }
+
+  function updateFolderTreeFilterControls() {
+    const hasFolder = !!isFolderOpen;
+    const isVisible = !!(folderTreeFilterInput && !folderTreeFilterInput.hidden);
+    folderTreeFilterToggleButtons.forEach(function(button) {
+      button.disabled = !hasFolder;
+      button.title = hasFolder ? "Filter files and folders" : "Open a folder to filter files and folders";
+      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+      button.setAttribute("aria-expanded", String(hasFolder && isVisible));
+      button.setAttribute("aria-pressed", String(hasFolder && (isVisible || !!folderTreeFilterText)));
+    });
+
+    if (folderTreeFilterInput) {
+      folderTreeFilterInput.disabled = !hasFolder;
+      if (!hasFolder) {
+        folderTreeFilterInput.value = "";
+        folderTreeFilterInput.hidden = true;
+      }
+    }
+  }
+
+  function updateFolderTreeToolbarState() {
+    updateAutoSelectFileButtons();
+    updateFolderTreeExpandToggleButtons();
+    updateFolderTreeFilterControls();
   }
 
   function setAutoSelectFileEnabled(enabled) {
@@ -1796,7 +1931,6 @@ This is a fully client-side application. Your content never leaves your browser 
   let activeFolderName = "Graph View";
   let activeFolderHandle = null;
   let activeFolderPath = null;
-  let isFolderOpen = false;
   let draggedTabId = null;
   let saveTabStateTimeout = null;
   let graphLayoutSaveTimeout = null;
@@ -3300,27 +3434,44 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function closeFolderTree() {
     folderMarkdownFiles = [];
+    currentFolderTreeNodes = [];
+    folderTreeFilterText = "";
     activeFolderName = "Graph View";
     activeFolderHandle = null;
     activeFolderPath = null;
     isFolderOpen = false;
+    if (folderTreeFilterInput) {
+      folderTreeFilterInput.value = "";
+      folderTreeFilterInput.hidden = true;
+    }
     if (folderTreeRoot) {
       folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
       folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
       folderTreeRoot.innerHTML = getClosedFolderPlaceholder();
     }
     updateCloseFolderButtons();
+    updateFolderTreeToolbarState();
   }
 
-  function renderFolderTree(nodes) {
+  function renderFolderTree(nodes, options = {}) {
     isFolderOpen = true;
+    if (!options.preserveNodes) {
+      currentFolderTreeNodes = nodes || [];
+      folderTreeFilterText = "";
+      if (folderTreeFilterInput) {
+        folderTreeFilterInput.value = "";
+      }
+    }
     hideSidebarClosedFolderContextMenu();
     folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
     folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
     folderTreeRoot.innerHTML = "";
     if (!nodes.length) {
-      folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
+      folderTreeRoot.innerHTML = folderTreeFilterText
+        ? '<p class="folder-tree-placeholder">No files or folders match this filter.</p>'
+        : '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
       updateCloseFolderButtons();
+      updateFolderTreeToolbarState();
       return;
     }
 
@@ -3329,6 +3480,7 @@ This is a fully client-side application. Your content never leaves your browser 
     nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
     folderTreeRoot.appendChild(ul);
     updateCloseFolderButtons();
+    updateFolderTreeToolbarState();
     syncFolderTreeSelectionToActiveTab({ scroll: false });
   }
 
@@ -5398,6 +5550,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     if (!childrenContainer || prefersReducedFolderTreeMotion()) {
       resetFolderTreeAnimation(details, childrenContainer);
       details.open = !details.open;
+      updateFolderTreeExpandToggleButtons();
       return;
     }
 
@@ -5417,6 +5570,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
       const timer = window.setTimeout(() => {
         finishFolderTreeAnimation(details, childrenContainer, true);
+        updateFolderTreeExpandToggleButtons();
       }, 220);
       folderTreeAnimationTimers.set(details, timer);
       return;
@@ -5433,6 +5587,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const timer = window.setTimeout(() => {
       finishFolderTreeAnimation(details, childrenContainer, false);
+      updateFolderTreeExpandToggleButtons();
     }, 220);
     folderTreeAnimationTimers.set(details, timer);
   }
