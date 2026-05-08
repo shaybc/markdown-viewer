@@ -493,12 +493,19 @@ body {
 }
 
 .tree-action-menu {
+  position: relative;
+  z-index: 100000;
   width: 280px;
   min-width: 220px;
   flex: 0 0 280px;
   margin: 0;
   padding-right: 4px;
   border-right: 1px solid var(--border-color);
+}
+
+.tree-action-menu .action-menu,
+.tree-action-menu .action-submenu {
+  z-index: 100001;
 }
 
 .tree-action-menu .action-menu {
