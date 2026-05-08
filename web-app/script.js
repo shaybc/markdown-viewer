@@ -1886,18 +1886,29 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function syncMarkdownTabTagsToFolderState(tab, content) {
+    const normalizedContent = normalizeEditorContent(content);
+    const nextTags = getFileTagsFromContent(normalizedContent);
     const fileEntry = getFolderMarkdownEntryForTab(tab);
-    if (!fileEntry) return;
+    const previousTags = fileEntry
+      ? normalizeFileTagList(fileEntry.tags || [])
+      : normalizeFileTagList(tab?.graphSyncedTags || getOpenGraphSnapshotTagsForMarkdownTab(tab));
 
-    const previousTags = normalizeFileTagList(fileEntry.tags || []);
-    const nextTags = getFileTagsFromContent(content);
-    fileEntry.content = normalizeEditorContent(content);
+    if (fileEntry) {
+      fileEntry.content = normalizedContent;
+    }
+
     if (areTagListsEqual(previousTags, nextTags)) return;
 
-    fileEntry.tags = nextTags;
-    removeTagsFromCountMap(folderTagCounts, previousTags);
-    addTagsToCountMap(folderTagCounts, nextTags);
-    updateFolderTreeNodeTagsForEntry(fileEntry, nextTags);
+    if (fileEntry) {
+      fileEntry.tags = nextTags;
+      removeTagsFromCountMap(folderTagCounts, previousTags);
+      addTagsToCountMap(folderTagCounts, nextTags);
+      updateFolderTreeNodeTagsForEntry(fileEntry, nextTags);
+    }
+    if (tab) tab.graphSyncedTags = nextTags;
+
+    saveKnownTags([...getKnownTags(), ...nextTags]);
+    syncOpenGraphSnapshotsForMarkdownTabTagChange(tab, normalizedContent);
     renderTagManagementList();
     renderLinkAutocomplete();
     if (selectedFolderTreeTags.size) {
@@ -2018,6 +2029,10 @@ document.addEventListener("DOMContentLoaded", function () {
       saveKnownTags([...tags, normalizedTag]);
     }
     renderTagManagementList();
+    const activeGraphTab = getActiveGraphTab();
+    if (activeGraphTab) {
+      updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
+    }
     return true;
   }
 
@@ -2049,6 +2064,18 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function getOpenGraphSnapshotTagsForMarkdownTab(sourceTab) {
+    if (!sourceTab || sourceTab.type === "graph") return [];
+    for (const tab of tabs) {
+      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
+      const matchingSnapshotFile = tab.graphSnapshot.files.find((snapshotFile) => snapshotFileMatchesTab(snapshotFile, sourceTab));
+      if (matchingSnapshotFile) {
+        return normalizeFileTagList(matchingSnapshotFile.tags?.length ? matchingSnapshotFile.tags : getFileTagsFromContent(matchingSnapshotFile.content || ""));
+      }
+    }
+    return [];
+  }
+
   function updateFolderMarkdownEntryForSnapshotFile(snapshotFile) {
     const snapshotNodeId = snapshotFile.id || normalizeGraphNodeName(snapshotFile.path || snapshotFile.fullPath || snapshotFile.name || "");
     const folderEntry = (folderMarkdownFiles || []).find((entry) => {
@@ -2060,6 +2087,44 @@ document.addEventListener("DOMContentLoaded", function () {
       folderEntry.tags = getFileTagsFromContent(folderEntry.content);
       updateFolderTreeNodeTagsForEntry(folderEntry, folderEntry.tags);
     }
+  }
+
+  async function syncOpenGraphSnapshotsForMarkdownTabTagChange(sourceTab, content) {
+    if (!sourceTab || sourceTab.type === "graph") return false;
+    const syncRequestId = ++openGraphSnapshotTagSyncRequestId;
+    const normalizedContent = normalizeEditorContent(content);
+    let changedActiveGraph = false;
+
+    for (const tab of tabs) {
+      if (syncRequestId !== openGraphSnapshotTagSyncRequestId) return false;
+      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
+
+      let graphChanged = false;
+      tab.graphSnapshot.files.forEach((snapshotFile) => {
+        if (!snapshotFileMatchesTab(snapshotFile, sourceTab)) return;
+        snapshotFile.content = normalizedContent;
+        snapshotFile.tags = getFileTagsFromContent(normalizedContent);
+        graphChanged = true;
+      });
+
+      if (!graphChanged) continue;
+      const currentSnapshot = tab.graphSnapshot;
+      tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
+      if (syncRequestId !== openGraphSnapshotTagSyncRequestId) return false;
+      if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+      graphRenderCache.delete(tab.id);
+      markGraphTabAsChanged(tab);
+      changedActiveGraph = changedActiveGraph || tab.id === activeTabId;
+    }
+
+    if (changedActiveGraph) {
+      const activeGraphTab = getActiveGraphTab();
+      updateGraphTagToolbar(activeGraphTab, activeGraphTab?.graphSnapshot || null);
+      renderGraphView();
+    }
+
+    saveTabsToStorage(tabs);
+    return changedActiveGraph;
   }
 
   function getTagDeletionEntryKey(entry) {
@@ -3508,6 +3573,7 @@ This is a fully client-side application. Your content never leaves your browser 
   let folderMarkdownFiles = [];
   let folderTagCounts = new Map();
   let folderTagCountsRefreshId = 0;
+  let openGraphSnapshotTagSyncRequestId = 0;
   let activeFolderName = "Graph View";
   let activeFolderHandle = null;
   let activeFolderPath = null;
@@ -10062,6 +10128,15 @@ ${body}`;
       .sort((a, b) => a.localeCompare(b));
   }
 
+  function getGraphFilterTagNodeIds(graphSnapshot) {
+    const tagIds = new Set(getGraphSnapshotTagNodeIds(graphSnapshot));
+    getAllKnownAndReferencedTags().forEach((tag) => {
+      const tagId = normalizeGraphTagNodeId(tag);
+      if (tagId) tagIds.add(tagId);
+    });
+    return Array.from(tagIds).sort((a, b) => a.localeCompare(b));
+  }
+
   function getGraphTagLabelFromId(tagNodeId) {
     return `#${String(tagNodeId || "").replace(/^tag:/, "")}`;
   }
@@ -10203,6 +10278,7 @@ ${body}`;
         const tag = normalizeTagName(node.tag || node.label || String(node.id || "").replace(/^tag:/, ""));
         addEntry(tag, "tag", "Tag node");
       });
+      getAllKnownAndReferencedTags().forEach((tag) => addEntry(tag, "tag", "Known tag"));
     }
 
     return Array.from(entryMap.values())
@@ -10459,7 +10535,7 @@ ${body}`;
     }
     if (graphSelectedTagFilter) {
       const selectedTagId = graphViewConfig.selectedTagIds[0] || "";
-      const tagIds = getGraphSnapshotTagNodeIds(graphSnapshot);
+      const tagIds = getGraphFilterTagNodeIds(graphSnapshot);
       graphSelectedTagFilter.innerHTML = '<option value="">All files</option>';
       tagIds.forEach((tagId) => {
         const option = document.createElement("option");
@@ -10638,7 +10714,8 @@ ${body}`;
         snapshotFile.id,
         snapshotFile.name,
         snapshotFile.path,
-        snapshotFile.fullPath
+        snapshotFile.fullPath,
+        ...(Array.isArray(snapshotFile.tags) ? snapshotFile.tags : [])
       ].filter(Boolean).join(" ").toLowerCase();
       return searchableText.includes(searchQuery);
     };
