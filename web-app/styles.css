@@ -1976,6 +1976,121 @@ a:focus {
   z-index: 10;
 }
 
+
+.folder-tree-topbar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 36px;
+  height: 36px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--header-bg);
+}
+
+.folder-tree-topbar .tree-action-menu {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding-right: 0;
+  border-right: 0;
+}
+
+.folder-action-menu-button.tool-button {
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.folder-tree-topbar .action-menu {
+  width: 260px;
+  min-width: 260px;
+}
+
+.folder-action-menu-button.dropdown-toggle::after {
+  display: none;
+}
+
+.folder-tree-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+  margin-left: auto;
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.folder-tree-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-color);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.folder-tree-tool-button:hover:not(:disabled) {
+  background-color: var(--button-hover);
+  border-color: var(--border-color);
+}
+
+.folder-tree-tool-button:active:not(:disabled),
+.folder-tree-tool-button[aria-pressed="true"]:not(:disabled) {
+  background-color: var(--button-active);
+  border-color: var(--border-color);
+}
+
+.folder-tree-tool-button:disabled,
+.folder-tree-tool-button[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.folder-tree-filter-input {
+  width: 110px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  padding: 0 8px;
+  font-size: 13px;
+  flex: 0 1 110px;
+}
+
+.folder-tree-filter-input::placeholder {
+  color: var(--disabled-text-color);
+}
+
+.folder-tree-filter-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.15);
+}
+
+.folder-tree-filter-input[hidden] {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .folder-tree-filter-input {
+    width: 90px;
+    flex-basis: 90px;
+  }
+}
+
 .tab-list {
   display: flex;
   align-items: flex-end;

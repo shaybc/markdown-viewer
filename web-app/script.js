@@ -10,6 +10,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // View Mode State - Story 1.1
   let currentViewMode = 'split'; // 'editor', 'split', or 'preview'
   let autoSelectFileEnabled = true;
+  let currentFolderTreeNodes = [];
+  let folderTreeFilterText = "";
+  let isFolderOpen = false;
 
   const markdownEditor = document.getElementById("markdown-editor");
   const editorLineNumbers = document.getElementById("editor-line-numbers");
@@ -21,6 +24,9 @@ document.addEventListener("DOMContentLoaded", function () {
   const newDocumentButtons = document.querySelectorAll(".new-document-button");
   const importFromGithubButton = document.getElementById("import-from-github");
   const importFromFolderButton = document.getElementById("import-from-folder");
+  const folderTreeFilterInput = document.getElementById("folder-tree-filter-input");
+  const folderTreeFilterToggleButtons = document.querySelectorAll(".toggle-folder-tree-filter");
+  const folderTreeExpandToggleButtons = document.querySelectorAll(".toggle-folder-tree-expanded");
   let folderTreeRoot = document.getElementById("folder-tree-root");
 
   console.error("[FolderTree] init", {
@@ -758,46 +764,71 @@ document.addEventListener("DOMContentLoaded", function () {
     pane.className = "folder-tree-pane";
     pane.id = "folder-tree-pane";
     pane.innerHTML = `
-      <div class="tree-action-menu dropdown">
-        <button class="tool-button dropdown-toggle w-100 justify-content-center" type="button" id="desktopActionMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
-          <i class="bi bi-list"></i>
-        </button>
-        <div class="dropdown-menu action-menu w-100" aria-labelledby="desktopActionMenu">
-          <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
-            <i class="bi bi-upload me-2"></i> Open file ...
+      <div class="folder-tree-topbar">
+        <div class="tree-action-menu dropdown">
+          <button class="tool-button dropdown-toggle folder-action-menu-button justify-content-center" type="button" id="desktopActionMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Actions" aria-label="Actions">
+            <i class="bi bi-list"></i>
           </button>
-          <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
-            <i class="bi bi-folder2-open me-2"></i> Open folder ...
-          </button>
-          <button class="dropdown-item action-menu-item close-folder-button" type="button" title="Close the currently open folder" disabled>
-            <i class="bi bi-folder-x me-2"></i> Close Folder
-          </button>
-          <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
-            <i class="bi bi-github me-2"></i> Import from GitHub
-          </button>
-          <hr class="dropdown-divider">
-          <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
-            <i class="bi bi-save me-2"></i> Save Changes
-          </button>
-          <button class="dropdown-item action-menu-item save-all-files-button" type="button" title="Save all unsaved changes" disabled>
-            <i class="bi bi-save2 me-2"></i> Save All
-          </button>
-          <div class="dropdown-submenu action-menu-submenu">
-            <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
-              <i class="bi bi-eye me-2"></i> View
+          <div class="dropdown-menu action-menu" aria-labelledby="desktopActionMenu">
+            <button class="dropdown-item action-menu-item new-document-button" type="button" title="New document">
+              <i class="bi bi-file-earmark-plus me-2"></i> New document
             </button>
-            <div class="dropdown-menu action-submenu" aria-label="View options">
-              <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
-                <i class="bi bi-moon me-2"></i> Theme
+            <hr class="dropdown-divider">
+            <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
+              <i class="bi bi-upload me-2"></i> Open file ...
+            </button>
+            <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
+              <i class="bi bi-folder2-open me-2"></i> Open folder ...
+            </button>
+            <button class="dropdown-item action-menu-item close-folder-button" type="button" title="Close the currently open folder" disabled>
+              <i class="bi bi-folder-x me-2"></i> Close Folder
+            </button>
+            <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
+              <i class="bi bi-github me-2"></i> Import from GitHub
+            </button>
+            <hr class="dropdown-divider">
+            <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
+              <i class="bi bi-save me-2"></i> Save Changes
+            </button>
+            <button class="dropdown-item action-menu-item save-all-files-button" type="button" title="Save all unsaved changes" disabled>
+              <i class="bi bi-save2 me-2"></i> Save All
+            </button>
+            <div class="dropdown-submenu action-menu-submenu">
+              <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                <i class="bi bi-eye me-2"></i> View
               </button>
-              <button class="dropdown-item action-menu-item toggle-sidebar" type="button" title="Hide Sidebar" aria-controls="folder-tree-pane">
-                <i class="bi bi-layout-sidebar me-2"></i><span class="sidebar-toggle-label">Hide Sidebar</span>
-              </button>
-              <button class="dropdown-item action-menu-item toggle-auto-select-file" type="button" title="Disable Auto select file" aria-pressed="true">
-                <i class="bi bi-crosshair me-2"></i><span class="auto-select-file-label">Auto select file Off</span>
-              </button>
+              <div class="dropdown-menu action-submenu" aria-label="View options">
+                <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
+                  <i class="bi bi-moon me-2"></i> Theme
+                </button>
+                <button class="dropdown-item action-menu-item toggle-sidebar" type="button" title="Hide Sidebar" aria-controls="folder-tree-pane">
+                  <i class="bi bi-layout-sidebar me-2"></i><span class="sidebar-toggle-label">Hide Sidebar</span>
+                </button>
+                <button class="dropdown-item action-menu-item toggle-dropzone-panel" type="button" title="Hide Dropzone Panel">
+                  <i class="bi bi-layout-sidebar-inset me-2"></i><span class="dropzone-toggle-label">Hide Dropzone Panel</span>
+                </button>
+                <button class="dropdown-item action-menu-item toggle-auto-select-file" type="button" title="Disable Auto select file" aria-pressed="true">
+                  <i class="bi bi-crosshair me-2"></i><span class="auto-select-file-label">Auto select file Off</span>
+                </button>
+              </div>
             </div>
+            <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
+              <i class="bi bi-diagram-3 me-2"></i> Graph View
+            </button>
           </div>
+        </div>
+        <div class="folder-tree-toolbar" role="toolbar" aria-label="Folder tree tools">
+          <button class="folder-tree-tool-button toggle-folder-tree-expanded" type="button" title="Open a folder to expand or collapse folders" aria-label="Expand or collapse all folders" disabled aria-disabled="true">
+            <i class="bi bi-arrows-expand" aria-hidden="true"></i>
+          </button>
+          <button class="folder-tree-tool-button toggle-auto-select-file" type="button" title="Open a folder to enable Auto select file" aria-label="Auto select file Off" aria-pressed="true" disabled aria-disabled="true">
+            <i class="bi bi-crosshair" aria-hidden="true"></i>
+            <span class="auto-select-file-label visually-hidden">Auto select file Off</span>
+          </button>
+          <button class="folder-tree-tool-button toggle-folder-tree-filter" type="button" title="Open a folder to filter files and folders" aria-label="Filter files and folders" aria-expanded="false" disabled aria-disabled="true">
+            <i class="bi bi-funnel" aria-hidden="true"></i>
+          </button>
+          <input id="folder-tree-filter-input" class="folder-tree-filter-input" type="search" placeholder="Filter files..." aria-label="Filter files and folders" hidden disabled>
         </div>
       </div>
       <div id="folder-tree-root" class="folder-tree-root">
@@ -821,7 +852,6 @@ document.addEventListener("DOMContentLoaded", function () {
   ensureFolderTreePane();
   folderTreeRoot = document.getElementById("folder-tree-root");
   const folderTreePane = document.getElementById("folder-tree-pane");
-  document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
   ensureRecentMenuContainers();
   hydrateRecentItemsFromProfile();
   hydrateRecentHandlesFromIndexedDB();
@@ -831,12 +861,45 @@ document.addEventListener("DOMContentLoaded", function () {
   const toggleSidebarButtons = document.querySelectorAll(".toggle-sidebar");
   const toggleAutoSelectFileButtons = document.querySelectorAll(".toggle-auto-select-file");
   updateFolderImportHint();
-  updateAutoSelectFileButtons();
+  updateFolderTreeToolbarState();
   toggleAutoSelectFileButtons.forEach(function(button) {
     button.addEventListener("click", function() {
+      if (button.classList.contains("folder-tree-tool-button") && !isFolderOpen) return;
       setAutoSelectFileEnabled(!autoSelectFileEnabled);
     });
   });
+
+  folderTreeExpandToggleButtons.forEach(function(button) {
+    button.addEventListener("click", function() {
+      if (!isFolderOpen) return;
+      setAllFolderTreeDetails(hasCollapsedFolderTreeDetails());
+    });
+  });
+
+  folderTreeFilterToggleButtons.forEach(function(button) {
+    button.addEventListener("click", function() {
+      if (!isFolderOpen || !folderTreeFilterInput) return;
+      const shouldShow = folderTreeFilterInput.hidden;
+      folderTreeFilterInput.hidden = !shouldShow;
+      updateFolderTreeFilterControls();
+      if (shouldShow) {
+        folderTreeFilterInput.focus();
+        folderTreeFilterInput.select();
+        return;
+      }
+      folderTreeFilterText = "";
+      folderTreeFilterInput.value = "";
+      renderFilteredFolderTree();
+    });
+  });
+
+  if (folderTreeFilterInput) {
+    folderTreeFilterInput.addEventListener("input", function() {
+      folderTreeFilterText = folderTreeFilterInput.value;
+      renderFilteredFolderTree();
+      updateFolderTreeFilterControls();
+    });
+  }
 
 
   // Mobile View Mode Elements - Story 1.4
@@ -929,10 +992,106 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         button.textContent = label;
       }
-      button.title = title;
+      button.title = isFolderOpen ? title : "Open a folder to enable Auto select file";
       button.setAttribute("aria-label", title);
       button.setAttribute("aria-pressed", String(autoSelectFileEnabled));
+      if (button.classList.contains("folder-tree-tool-button")) {
+        button.disabled = !isFolderOpen;
+        button.setAttribute("aria-disabled", isFolderOpen ? "false" : "true");
+      }
     });
+  }
+
+  function hasCollapsedFolderTreeDetails() {
+    return !!folderTreeRoot && Array.from(folderTreeRoot.querySelectorAll("details")).some(function(details) {
+      return !details.open;
+    });
+  }
+
+  function updateFolderTreeExpandToggleButtons() {
+    const hasFolder = !!isFolderOpen;
+    const shouldExpand = hasCollapsedFolderTreeDetails();
+    const title = !hasFolder
+      ? "Open a folder to expand or collapse folders"
+      : shouldExpand
+        ? "Expand all folders"
+        : "Collapse all folders";
+    const iconClass = shouldExpand ? "bi bi-arrows-expand" : "bi bi-arrows-collapse";
+
+    folderTreeExpandToggleButtons.forEach(function(button) {
+      const icon = button.querySelector("i");
+      if (icon) icon.className = iconClass;
+      button.disabled = !hasFolder;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+    });
+  }
+
+  function setAllFolderTreeDetails(open) {
+    if (!folderTreeRoot) return;
+    folderTreeRoot.querySelectorAll("details").forEach(function(details) {
+      resetFolderTreeAnimation(details, getFolderTreeChildrenContainer(details));
+      details.open = open;
+    });
+    updateFolderTreeExpandToggleButtons();
+  }
+
+  function getFilteredFolderTreeNodes(nodes, filterText) {
+    const normalizedFilter = String(filterText || "").trim().toLowerCase();
+    if (!normalizedFilter) return nodes;
+
+    return (nodes || []).reduce(function(matches, node) {
+      const nameMatches = String(node.name || "").toLowerCase().includes(normalizedFilter);
+
+      if (node.kind === "directory") {
+        const filteredChildren = getFilteredFolderTreeNodes(node.children || [], normalizedFilter);
+        if (nameMatches || filteredChildren.length) {
+          matches.push({ ...node, children: filteredChildren });
+        }
+        return matches;
+      }
+
+      if (nameMatches) {
+        matches.push(node);
+      }
+      return matches;
+    }, []);
+  }
+
+  function renderFilteredFolderTree() {
+    if (!folderTreeRoot || !isFolderOpen) return;
+    const nodes = getFilteredFolderTreeNodes(currentFolderTreeNodes, folderTreeFilterText);
+    renderFolderTree(nodes, { preserveNodes: true });
+    if (folderTreeFilterText) {
+      setAllFolderTreeDetails(true);
+    }
+  }
+
+  function updateFolderTreeFilterControls() {
+    const hasFolder = !!isFolderOpen;
+    const isVisible = !!(folderTreeFilterInput && !folderTreeFilterInput.hidden);
+    folderTreeFilterToggleButtons.forEach(function(button) {
+      button.disabled = !hasFolder;
+      button.title = hasFolder ? "Filter files and folders" : "Open a folder to filter files and folders";
+      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+      button.setAttribute("aria-expanded", String(hasFolder && isVisible));
+      button.setAttribute("aria-pressed", String(hasFolder && (isVisible || !!folderTreeFilterText)));
+    });
+
+    if (folderTreeFilterInput) {
+      folderTreeFilterInput.disabled = !hasFolder;
+      if (!hasFolder) {
+        folderTreeFilterInput.value = "";
+        folderTreeFilterInput.hidden = true;
+      }
+    }
+  }
+
+  function updateFolderTreeToolbarState() {
+    updateAutoSelectFileButtons();
+    updateFolderTreeExpandToggleButtons();
+    updateFolderTreeFilterControls();
   }
 
   function setAutoSelectFileEnabled(enabled) {
@@ -1796,7 +1955,6 @@ This is a fully client-side application. Your content never leaves your browser 
   let activeFolderName = "Graph View";
   let activeFolderHandle = null;
   let activeFolderPath = null;
-  let isFolderOpen = false;
   let draggedTabId = null;
   let saveTabStateTimeout = null;
   let graphLayoutSaveTimeout = null;
@@ -3300,27 +3458,44 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function closeFolderTree() {
     folderMarkdownFiles = [];
+    currentFolderTreeNodes = [];
+    folderTreeFilterText = "";
     activeFolderName = "Graph View";
     activeFolderHandle = null;
     activeFolderPath = null;
     isFolderOpen = false;
+    if (folderTreeFilterInput) {
+      folderTreeFilterInput.value = "";
+      folderTreeFilterInput.hidden = true;
+    }
     if (folderTreeRoot) {
       folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
       folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
       folderTreeRoot.innerHTML = getClosedFolderPlaceholder();
     }
     updateCloseFolderButtons();
+    updateFolderTreeToolbarState();
   }
 
-  function renderFolderTree(nodes) {
+  function renderFolderTree(nodes, options = {}) {
     isFolderOpen = true;
+    if (!options.preserveNodes) {
+      currentFolderTreeNodes = nodes || [];
+      folderTreeFilterText = "";
+      if (folderTreeFilterInput) {
+        folderTreeFilterInput.value = "";
+      }
+    }
     hideSidebarClosedFolderContextMenu();
     folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
     folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
     folderTreeRoot.innerHTML = "";
     if (!nodes.length) {
-      folderTreeRoot.innerHTML = '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
+      folderTreeRoot.innerHTML = folderTreeFilterText
+        ? '<p class="folder-tree-placeholder">No files or folders match this filter.</p>'
+        : '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
       updateCloseFolderButtons();
+      updateFolderTreeToolbarState();
       return;
     }
 
@@ -3329,6 +3504,7 @@ This is a fully client-side application. Your content never leaves your browser 
     nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
     folderTreeRoot.appendChild(ul);
     updateCloseFolderButtons();
+    updateFolderTreeToolbarState();
     syncFolderTreeSelectionToActiveTab({ scroll: false });
   }
 
@@ -5398,6 +5574,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     if (!childrenContainer || prefersReducedFolderTreeMotion()) {
       resetFolderTreeAnimation(details, childrenContainer);
       details.open = !details.open;
+      updateFolderTreeExpandToggleButtons();
       return;
     }
 
@@ -5417,6 +5594,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
       const timer = window.setTimeout(() => {
         finishFolderTreeAnimation(details, childrenContainer, true);
+        updateFolderTreeExpandToggleButtons();
       }, 220);
       folderTreeAnimationTimers.set(details, timer);
       return;
@@ -5433,6 +5611,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const timer = window.setTimeout(() => {
       finishFolderTreeAnimation(details, childrenContainer, false);
+      updateFolderTreeExpandToggleButtons();
     }, 220);
     folderTreeAnimationTimers.set(details, timer);
   }
