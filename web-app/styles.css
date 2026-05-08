@@ -1267,6 +1267,11 @@ a:focus {
   z-index: 1001;
 }
 
+.header-left .mobile-menu {
+  flex-shrink: 0;
+  margin-right: 0.5rem;
+}
+
 @media (max-width: 1080px) {
   .mobile-menu {
     display: block;
