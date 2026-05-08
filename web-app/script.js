@@ -2890,15 +2890,18 @@ This is a fully client-side application. Your content never leaves your browser 
         }
       }
 
+      const fileContent = content || "";
+      const tags = extractMarkdownTags(fileContent);
       const id = normalizeGraphNodeName(path);
       nodeIndex.set(id, path);
-      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path });
+      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path, type: "file", tags });
       snapshotFiles.push({
         id,
         path,
         name,
-        content: content || "",
-        fullPath: fileEntry.fullPath || null
+        content: fileContent,
+        fullPath: fileEntry.fullPath || null,
+        tags
       });
     }
 
@@ -8454,6 +8457,86 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     } catch (_error) {
       return target;
     }
+  }
+
+  function getMarkdownFrontmatterMatch(markdown) {
+    return String(markdown || "").match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  }
+
+  function normalizeTagName(tag) {
+    const normalized = String(tag || "")
+      .trim()
+      .replace(/^#+/, "")
+      .trim();
+
+    return normalized ? normalized.toLowerCase() : "";
+  }
+
+  function collectNormalizedTags(tags, values) {
+    values.forEach((value) => {
+      if (Array.isArray(value)) {
+        collectNormalizedTags(tags, value);
+        return;
+      }
+
+      const normalized = normalizeTagName(value);
+      if (normalized) tags.add(normalized);
+    });
+  }
+
+  function extractYamlFrontmatterTags(frontmatterText) {
+    const tags = new Set();
+
+    if (typeof jsyaml !== "undefined" && jsyaml?.load) {
+      try {
+        const data = jsyaml.load(frontmatterText) || {};
+        if (data && Object.prototype.hasOwnProperty.call(data, "tags")) {
+          const tagValue = data.tags;
+          collectNormalizedTags(tags, Array.isArray(tagValue) ? tagValue : [tagValue]);
+        }
+        return Array.from(tags);
+      } catch (error) {
+        console.warn("Frontmatter tags YAML parse error:", error);
+      }
+    }
+
+    const inlineTagsMatch = frontmatterText.match(/^\s*tags\s*:\s*\[([^\]]*)\]\s*$/im);
+    if (inlineTagsMatch) {
+      collectNormalizedTags(tags, inlineTagsMatch[1].split(","));
+    }
+
+    const multilineTagsMatch = frontmatterText.match(/^\s*tags\s*:\s*(?:#.*)?(?:\r?\n((?:\s*-\s*[^\r\n]+\r?\n?)+))/im);
+    if (multilineTagsMatch) {
+      collectNormalizedTags(
+        tags,
+        multilineTagsMatch[1]
+          .split(/\r?\n/)
+          .map((line) => line.replace(/^\s*-\s*/, ""))
+      );
+    }
+
+    return Array.from(tags);
+  }
+
+  function extractMarkdownTags(markdown) {
+    const tags = new Set();
+    const source = String(markdown || "");
+    const frontmatterMatch = getMarkdownFrontmatterMatch(source);
+    const bodyMarkdown = frontmatterMatch ? source.slice(frontmatterMatch[0].length) : source;
+    const searchableMarkdown = stripMarkdownCodeForLinkExtraction(bodyMarkdown);
+    const inlineTagRegex = /(^|[^\p{L}\p{N}_\/-])#([\p{L}\p{N}][\p{L}\p{N}_-]*(?:\/[\p{L}\p{N}][\p{L}\p{N}_-]*)*)/gu;
+    let match;
+
+    if (frontmatterMatch) {
+      collectNormalizedTags(tags, extractYamlFrontmatterTags(frontmatterMatch[1]));
+    }
+
+    while ((match = inlineTagRegex.exec(searchableMarkdown)) !== null) {
+      const normalized = normalizeTagName(match[2]);
+      if (normalized) tags.add(normalized);
+    }
+
+    return Array.from(tags);
   }
 
   function extractMarkdownLinks(markdown) {
