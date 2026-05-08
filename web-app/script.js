@@ -10370,6 +10370,23 @@ ${body}`;
       filterGraphToNodeIds(new Set([focusNodeId, ...getFullOutgoingNodeIds(focusNodeId)]));
     }
 
+    nodes.forEach((nodeData) => {
+      if (isTagNode(nodeData)) {
+        delete nodeData.groupId;
+        delete nodeData.groupColor;
+        return;
+      }
+      const snapshotFile = snapshotFilesById.get(nodeData.id);
+      const matchingGroup = getGraphGroupMatch(nodeData, snapshotFile, graphViewConfig);
+      if (matchingGroup) {
+        nodeData.groupId = matchingGroup.id;
+        nodeData.groupColor = matchingGroup.color;
+      } else {
+        delete nodeData.groupId;
+        delete nodeData.groupColor;
+      }
+    });
+
     activeTab.visiblePointCount = nodes.length;
     updateStatusLine({ visiblePointCount: nodes.length });
 
@@ -10463,7 +10480,10 @@ ${body}`;
     const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", (d) => nodeRadius(d.id))
       .attr("class", (d) => `graph-node graph-node-${getGraphNodeType(d)}`)
-      .style("fill", (d) => getGraphGroupMatch(d, snapshotFilesById.get(d.id), graphViewConfig)?.color || null)
+      .style("fill", (d) => {
+        if (isTagNode(d)) return null;
+        return d.groupColor || null;
+      })
       .call(d3.drag()
         .on("start", (event, d) => {
           if (graphSettings.magneticEnabled && !event.active) simulation.alphaTarget(0.3).restart();
