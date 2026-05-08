@@ -1525,6 +1525,10 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
+  const graphShowTagsButton = document.getElementById("graph-show-tags");
+  const graphHideTagsButton = document.getElementById("graph-hide-tags");
+  const graphSelectedTagFilter = document.getElementById("graph-selected-tag-filter");
+  const graphOnlySelectedTagButton = document.getElementById("graph-only-selected-tag");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
   const githubImportModal = document.getElementById("github-import-modal");
@@ -2927,8 +2931,37 @@ This is a fully client-side application. Your content never leaves your browser 
   let untitledCounter = 0;
   const graphRenderCache = new Map();
   const GRAPH_DOCUMENT_SCHEMA_VERSION = 1;
+  const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
+    showTags: true,
+    hiddenTagIds: [],
+    selectedTagIds: []
+  });
 
   renderTagManagementList();
+
+  function normalizeGraphTagNodeId(value) {
+    const rawValue = String(value || "").trim();
+    if (!rawValue) return "";
+    if (rawValue.startsWith("tag:")) return `tag:${normalizeTagName(rawValue.slice(4))}`;
+    return `tag:${normalizeTagName(rawValue)}`;
+  }
+
+  function normalizeGraphTagNodeIds(values) {
+    return Array.from(new Set((Array.isArray(values) ? values : [])
+      .map(normalizeGraphTagNodeId)
+      .filter((tagId) => tagId && tagId !== "tag:")));
+  }
+
+  function normalizeGraphViewConfig(config) {
+    const source = config && typeof config === "object" ? config : {};
+    return {
+      ...DEFAULT_GRAPH_VIEW_CONFIG,
+      ...source,
+      showTags: source.showTags !== false,
+      hiddenTagIds: normalizeGraphTagNodeIds(source.hiddenTagIds),
+      selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds)
+    };
+  }
 
   function cloneGraphPersistenceValue(value) {
     if (value === undefined) return undefined;
@@ -2971,7 +3004,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const source = document && typeof document === "object" ? document : {};
     const snapshot = normalizeGraphSnapshot(source.snapshot || source.graphSnapshot || null);
     const hasViewConfig = Object.prototype.hasOwnProperty.call(source, "viewConfig");
-    const viewConfig = cloneGraphPersistenceValue(hasViewConfig ? source.viewConfig : (source.graphViewConfig || null));
+    const viewConfig = normalizeGraphViewConfig(cloneGraphPersistenceValue(hasViewConfig ? source.viewConfig : (source.graphViewConfig || null)));
     const layoutSource = source.graphLayout !== undefined ? source.graphLayout : (
       source.graphLayoutData !== undefined ? source.graphLayoutData : (
         source.layout !== undefined ? source.layout : source.layoutData
@@ -9079,20 +9112,85 @@ ${body}`;
     }
   }
 
+  function getGraphSnapshotTagNodeIds(graphSnapshot) {
+    return (graphSnapshot?.nodes || [])
+      .filter((node) => (node?.type || "file") === "tag")
+      .map((node) => normalizeGraphTagNodeId(node.id || node.tag || node.label))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  function getGraphTagLabelFromId(tagNodeId) {
+    return `#${String(tagNodeId || "").replace(/^tag:/, "")}`;
+  }
+
+  function updateGraphTagToolbar(tab, graphSnapshot) {
+    const graphViewConfig = normalizeGraphViewConfig(tab?.graphViewConfig);
+    const isGraphTab = !!(tab && tab.type === "graph");
+    if (graphShowTagsButton) {
+      graphShowTagsButton.disabled = !isGraphTab;
+      graphShowTagsButton.classList.toggle("active", isGraphTab && graphViewConfig.showTags);
+      graphShowTagsButton.setAttribute("aria-pressed", isGraphTab && graphViewConfig.showTags ? "true" : "false");
+    }
+    if (graphHideTagsButton) {
+      graphHideTagsButton.disabled = !isGraphTab;
+      graphHideTagsButton.classList.toggle("active", isGraphTab && !graphViewConfig.showTags);
+      graphHideTagsButton.setAttribute("aria-pressed", isGraphTab && !graphViewConfig.showTags ? "true" : "false");
+    }
+    if (graphSelectedTagFilter) {
+      const selectedTagId = graphViewConfig.selectedTagIds[0] || "";
+      const tagIds = getGraphSnapshotTagNodeIds(graphSnapshot);
+      graphSelectedTagFilter.innerHTML = '<option value="">All files</option>';
+      tagIds.forEach((tagId) => {
+        const option = document.createElement("option");
+        option.value = tagId;
+        option.textContent = getGraphTagLabelFromId(tagId);
+        graphSelectedTagFilter.appendChild(option);
+      });
+      graphSelectedTagFilter.value = tagIds.includes(selectedTagId) ? selectedTagId : "";
+      graphSelectedTagFilter.disabled = !isGraphTab || !tagIds.length;
+    }
+    if (graphOnlySelectedTagButton) {
+      graphOnlySelectedTagButton.disabled = !isGraphTab;
+      graphOnlySelectedTagButton.classList.toggle("active", isGraphTab && graphViewConfig.selectedTagIds.length > 0);
+      graphOnlySelectedTagButton.setAttribute("aria-pressed", isGraphTab && graphViewConfig.selectedTagIds.length > 0 ? "true" : "false");
+    }
+  }
+
+  function updateActiveGraphViewConfig(patch) {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab) return;
+    activeGraphTab.graphViewConfig = normalizeGraphViewConfig({
+      ...(activeGraphTab.graphViewConfig || {}),
+      ...patch
+    });
+    if (activeGraphTab.graphDocument && typeof activeGraphTab.graphDocument === "object") {
+      activeGraphTab.graphDocument.viewConfig = activeGraphTab.graphViewConfig;
+      activeGraphTab.graphDocument.updatedAt = Date.now();
+    }
+    graphRenderCache.delete(activeGraphTab.id);
+    markGraphTabAsChanged(activeGraphTab);
+    saveTabsToStorage(tabs);
+    renderGraphView();
+  }
+
   async function renderGraphView() {
     if (!graphViewCanvas) return;
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
-    const graphViewConfig = activeTab && activeTab.type === "graph" ? (activeTab.graphViewConfig || null) : null;
+    const graphViewConfig = activeTab && activeTab.type === "graph" ? normalizeGraphViewConfig(activeTab.graphViewConfig) : normalizeGraphViewConfig(null);
+    if (activeTab && activeTab.type === "graph") activeTab.graphViewConfig = graphViewConfig;
     hideInactiveGraphRenders(activeTab?.id);
     graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
     if (!activeTab || activeTab.type !== "graph") {
       updateStatusLine({ visiblePointCount: 0 });
+      updateGraphTagToolbar(null, null);
       renderTagManagementList();
       return;
     }
 
     renderTagManagementList();
     let graphSnapshot = activeTab.graphSnapshot || null;
+    updateGraphTagToolbar(activeTab, graphSnapshot);
     if (!graphSnapshot && folderMarkdownFiles.length) {
       const snapshotFiles = folderMarkdownFiles.slice();
       const loadingMessage = document.createElement("p");
@@ -9101,6 +9199,7 @@ ${body}`;
       graphViewCanvas.appendChild(loadingMessage);
       graphSnapshot = await createGraphSnapshot(snapshotFiles, activeTab.folderName || activeTab.title);
       activeTab.graphSnapshot = graphSnapshot;
+      updateGraphTagToolbar(activeTab, graphSnapshot);
       saveTabsToStorage(tabs);
       if (activeTabId !== activeTab.id) {
         loadingMessage.remove();
@@ -9116,6 +9215,7 @@ ${body}`;
       });
       graphRenderCache.clear();
       activeTab.visiblePointCount = 0;
+      updateGraphTagToolbar(activeTab, graphSnapshot);
       updateStatusLine({ visiblePointCount: 0 });
       graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">This graph tab does not have a saved graph snapshot.</p>';
       return;
@@ -9162,20 +9262,72 @@ ${body}`;
       const tagName = nodeData?.tag || String(labelText).replace(/^#/, "");
       return `#${tagName}`;
     };
+    const getLinkSourceId = (link) => link?.source?.id || link?.source;
+    const getLinkTargetId = (link) => link?.target?.id || link?.target;
+
     if (graphViewConfig && Array.isArray(graphViewConfig.allowedNodeIds) && graphViewConfig.allowedNodeIds.length) {
       const allowedNodeIds = new Set(graphViewConfig.allowedNodeIds);
       const allowedNodes = nodes.filter((n) => allowedNodeIds.has(n.id));
-      const allowedLinks = links.filter((l) => allowedNodeIds.has(l.source) && allowedNodeIds.has(l.target));
+      const allowedLinks = links.filter((l) => allowedNodeIds.has(getLinkSourceId(l)) && allowedNodeIds.has(getLinkTargetId(l)));
       nodes.length = 0;
       nodes.push(...allowedNodes);
       links.length = 0;
       links.push(...allowedLinks);
     }
 
+    if (graphViewConfig && Array.isArray(graphViewConfig.selectedTagIds) && graphViewConfig.selectedTagIds.length) {
+      const selectedTagIds = new Set(normalizeGraphTagNodeIds(graphViewConfig.selectedTagIds));
+      const selectedFileIds = new Set();
+      const connectedTagIds = new Set();
+      links.filter(isTagLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        const sourceIsSelectedTag = selectedTagIds.has(sourceId);
+        const targetIsSelectedTag = selectedTagIds.has(targetId);
+        if (!sourceIsSelectedTag && !targetIsSelectedTag) return;
+        const fileId = sourceIsSelectedTag ? targetId : sourceId;
+        const tagId = sourceIsSelectedTag ? sourceId : targetId;
+        if (!fileId || !tagId) return;
+        selectedFileIds.add(fileId);
+      });
+      links.filter(isTagLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (selectedFileIds.has(sourceId) && String(targetId || "").startsWith("tag:")) connectedTagIds.add(targetId);
+        if (selectedFileIds.has(targetId) && String(sourceId || "").startsWith("tag:")) connectedTagIds.add(sourceId);
+      });
+      const selectedNodeIds = new Set([...selectedFileIds, ...connectedTagIds]);
+      const selectedNodes = nodes.filter((n) => selectedNodeIds.has(n.id));
+      const selectedLinks = links.filter((l) => selectedNodeIds.has(getLinkSourceId(l)) && selectedNodeIds.has(getLinkTargetId(l)));
+      nodes.length = 0;
+      nodes.push(...selectedNodes);
+      links.length = 0;
+      links.push(...selectedLinks);
+    }
+
+    if (graphViewConfig && graphViewConfig.showTags === false) {
+      const fileNodes = nodes.filter((n) => !isTagNode(n));
+      const nonTagLinks = links.filter((l) => !isTagLink(l));
+      nodes.length = 0;
+      nodes.push(...fileNodes);
+      links.length = 0;
+      links.push(...nonTagLinks);
+    }
+
+    if (graphViewConfig && Array.isArray(graphViewConfig.hiddenTagIds) && graphViewConfig.hiddenTagIds.length) {
+      const hiddenTagIds = new Set(normalizeGraphTagNodeIds(graphViewConfig.hiddenTagIds));
+      const visibleNodes = nodes.filter((n) => !hiddenTagIds.has(n.id));
+      const visibleLinks = links.filter((l) => !hiddenTagIds.has(getLinkSourceId(l)) && !hiddenTagIds.has(getLinkTargetId(l)));
+      nodes.length = 0;
+      nodes.push(...visibleNodes);
+      links.length = 0;
+      links.push(...visibleLinks);
+    }
+
     if (graphViewConfig && Array.isArray(graphViewConfig.hiddenNodeIds) && graphViewConfig.hiddenNodeIds.length) {
       const hiddenNodeIds = new Set(graphViewConfig.hiddenNodeIds);
       const visibleNodes = nodes.filter((n) => !hiddenNodeIds.has(n.id));
-      const visibleLinks = links.filter((l) => !hiddenNodeIds.has(l.source) && !hiddenNodeIds.has(l.target));
+      const visibleLinks = links.filter((l) => !hiddenNodeIds.has(getLinkSourceId(l)) && !hiddenNodeIds.has(getLinkTargetId(l)));
       nodes.length = 0;
       nodes.push(...visibleNodes);
       links.length = 0;
@@ -9184,15 +9336,12 @@ ${body}`;
 
     const filterGraphToNodeIds = (nodeIds) => {
       const filteredNodes = nodes.filter((n) => nodeIds.has(n.id));
-      const filteredLinks = links.filter((l) => nodeIds.has(l.source) && nodeIds.has(l.target));
+      const filteredLinks = links.filter((l) => nodeIds.has(getLinkSourceId(l)) && nodeIds.has(getLinkTargetId(l)));
       nodes.length = 0;
       nodes.push(...filteredNodes);
       links.length = 0;
       links.push(...filteredLinks);
     };
-
-    const getLinkSourceId = (link) => link?.source?.id || link?.source;
-    const getLinkTargetId = (link) => link?.target?.id || link?.target;
 
     const getDirectOutgoingNodeIds = (nodeId) => links
       .filter((link) => isMarkdownLink(link) && getLinkSourceId(link) === nodeId)
@@ -10360,6 +10509,29 @@ ${body}`;
 
   desktopOpenGraphButtons.forEach((button) => button.addEventListener("click", openGraphView));
   if (mobileOpenGraphView) mobileOpenGraphView.addEventListener("click", openGraphView);
+  if (graphShowTagsButton) graphShowTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: true }));
+  if (graphHideTagsButton) graphHideTagsButton.addEventListener("click", () => updateActiveGraphViewConfig({ showTags: false }));
+  if (graphSelectedTagFilter) {
+    graphSelectedTagFilter.addEventListener("change", () => {
+      const selectedTagId = normalizeGraphTagNodeId(graphSelectedTagFilter.value);
+      updateActiveGraphViewConfig({ selectedTagIds: selectedTagId ? [selectedTagId] : [] });
+    });
+  }
+  if (graphOnlySelectedTagButton) {
+    graphOnlySelectedTagButton.addEventListener("click", () => {
+      const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
+      if (currentConfig.selectedTagIds.length) {
+        updateActiveGraphViewConfig({ selectedTagIds: [] });
+        return;
+      }
+      const selectedTagId = normalizeGraphTagNodeId(graphSelectedTagFilter?.value);
+      if (!selectedTagId) {
+        alert("Choose a tag before filtering the graph to selected-tag files.");
+        return;
+      }
+      updateActiveGraphViewConfig({ selectedTagIds: [selectedTagId], showTags: true });
+    });
+  }
 
   exportHtml.addEventListener("click", function () {
     try {
