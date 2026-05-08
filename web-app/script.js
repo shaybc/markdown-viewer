@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let currentFolderTreeNodes = [];
   let folderTreeFilterText = "";
   let currentFolderSortMode = "name-asc";
+  let showUnsupportedFolderFiles = false;
   let isFolderOpen = false;
 
   const markdownEditor = document.getElementById("markdown-editor");
@@ -29,6 +30,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const folderTreeFilterInput = document.getElementById("folder-tree-filter-input");
   const folderTreeFilterToggleButtons = document.querySelectorAll(".toggle-folder-tree-filter");
   const folderTreeExpandToggleButtons = document.querySelectorAll(".toggle-folder-tree-expanded");
+  const toggleUnsupportedFileButtons = document.querySelectorAll(".toggle-unsupported-files");
   let folderTreeRoot = document.getElementById("folder-tree-root");
 
   console.error("[FolderTree] init", {
@@ -1461,6 +1463,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
+  toggleUnsupportedFileButtons.forEach(function(button) {
+    button.addEventListener("click", function() {
+      setShowUnsupportedFolderFiles(!showUnsupportedFolderFiles);
+    });
+  });
+
 
   // Mobile View Mode Elements - Story 1.4
   const mobileViewModeButtons = document.querySelectorAll(".mobile-view-mode-btn");
@@ -1522,7 +1530,9 @@ document.addEventListener("DOMContentLoaded", function () {
     magneticEnabled: loadGlobalState().graphMagneticEnabled !== false
   };
   autoSelectFileEnabled = loadGlobalState().autoSelectFileEnabled !== false;
+  showUnsupportedFolderFiles = loadGlobalState().showUnsupportedFolderFiles === true;
   updateAutoSelectFileButtons();
+  updateUnsupportedFileToggleButtons();
   applySidebarWidth(loadGlobalState().sidebarWidth, false);
 
   setSidebarVisible(loadGlobalState().sidebarVisible !== false, false);
@@ -1603,6 +1613,20 @@ document.addEventListener("DOMContentLoaded", function () {
     updateFolderTreeExpandToggleButtons();
   }
 
+  function getVisibleFolderTreeNodes(nodes) {
+    return (nodes || []).reduce(function(visibleNodes, node) {
+      if (node.kind === "directory") {
+        visibleNodes.push({ ...node, children: getVisibleFolderTreeNodes(node.children || []) });
+        return visibleNodes;
+      }
+
+      if (showUnsupportedFolderFiles || isSidebarDocumentPath(node.name)) {
+        visibleNodes.push(node);
+      }
+      return visibleNodes;
+    }, []);
+  }
+
   function getFilteredFolderTreeNodes(nodes, filterText) {
     const normalizedFilter = String(filterText || "").trim().toLowerCase();
     if (!normalizedFilter) return nodes;
@@ -1627,7 +1651,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function renderFilteredFolderTree() {
     if (!folderTreeRoot || !isFolderOpen) return;
-    const nodes = getFilteredFolderTreeNodes(currentFolderTreeNodes, folderTreeFilterText);
+    const nodes = getFilteredFolderTreeNodes(getVisibleFolderTreeNodes(currentFolderTreeNodes), folderTreeFilterText);
     renderFolderTree(nodes, { preserveNodes: true });
     if (folderTreeFilterText) {
       setAllFolderTreeDetails(true);
@@ -1685,8 +1709,31 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function updateUnsupportedFileToggleButtons() {
+    const label = showUnsupportedFolderFiles ? "Hide unsupported file types" : "Show unsupported file types";
+    const title = `${label} in the folder view`;
+
+    toggleUnsupportedFileButtons.forEach(function(button) {
+      const labelElement = button.querySelector(".unsupported-files-toggle-label");
+      if (labelElement) {
+        labelElement.textContent = label;
+      }
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      button.setAttribute("aria-pressed", String(showUnsupportedFolderFiles));
+    });
+  }
+
+  function setShowUnsupportedFolderFiles(enabled) {
+    showUnsupportedFolderFiles = !!enabled;
+    saveGlobalState({ showUnsupportedFolderFiles });
+    updateUnsupportedFileToggleButtons();
+    renderFilteredFolderTree();
+  }
+
   function updateFolderTreeToolbarState() {
     updateAutoSelectFileButtons();
+    updateUnsupportedFileToggleButtons();
     updateFolderTreeExpandToggleButtons();
     updateFolderTreeFilterControls();
     updateFolderTreeSortControls();
@@ -4166,7 +4213,7 @@ This is a fully client-side application. Your content never leaves your browser 
         const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
         const children = await listMarkdownTree(entry, currentPath);
         entries.push({ kind: "directory", name: entry.name, path: currentPath, children, handle: entry });
-      } else if (entry.kind === "file" && isSidebarDocumentPath(entry.name)) {
+      } else if (entry.kind === "file") {
         const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
         let file = null;
         try {
@@ -4250,8 +4297,9 @@ This is a fully client-side application. Your content never leaves your browser 
     hideSidebarClosedFolderContextMenu();
     folderTreeRoot.removeEventListener("contextmenu", handleFolderTreeRootContextMenu);
     folderTreeRoot.addEventListener("contextmenu", handleFolderTreeRootContextMenu);
+    const displayNodes = getVisibleFolderTreeNodes(nodes || []);
     folderTreeRoot.innerHTML = "";
-    if (!nodes.length) {
+    if (!displayNodes.length) {
       folderTreeRoot.innerHTML = folderTreeFilterText
         ? '<p class="folder-tree-placeholder">No files or folders match this filter.</p>'
         : '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
@@ -4262,7 +4310,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
     const ul = document.createElement("ul");
     ul.className = "folder-tree-list";
-    nodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
+    displayNodes.forEach((node) => ul.appendChild(renderFolderTreeNode(node)));
     folderTreeRoot.appendChild(ul);
     updateCloseFolderButtons();
     updateFolderTreeToolbarState();
@@ -4663,7 +4711,7 @@ This is a fully client-side application. Your content never leaves your browser 
       if (entry.isDirectory) {
         const children = await listMarkdownTreeFromEntry(entry);
         entries.push({ kind: "directory", name: entry.name, children, handle: entry });
-      } else if (entry.isFile && isSidebarDocumentPath(entry.name)) {
+      } else if (entry.isFile) {
         try {
           const file = await getFileFromEntry(entry);
           const modifiedAt = Number(file?.lastModified || 0) || 0;
@@ -4792,7 +4840,7 @@ async function listMarkdownTreeNeutralino(dirPath) {
       if (item.type === "DIRECTORY") {
         const children = await listMarkdownTreeNeutralino(fullPath);
         entries.push({ kind: "directory", name: item.entry, children, fullPath, createdAt: Number(stats?.createdAt || 0), modifiedAt: Number(stats?.modifiedAt || 0) });
-      } else if (item.type === "FILE" && isSidebarDocumentPath(item.entry)) {
+      } else if (item.type === "FILE") {
         entries.push({ kind: "file", name: item.entry, fullPath, createdAt: Number(stats?.createdAt || stats?.modifiedAt || 0), modifiedAt: Number(stats?.modifiedAt || 0) });
       }
     }
@@ -6469,13 +6517,19 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const button = document.createElement("button");
     let sidebarOpenClickTimer = null;
     const isGraphFile = isGraphFilePath(node.name);
+    const isUnsupportedFile = !isSidebarDocumentPath(node.name);
     button.type = "button";
-    button.className = "folder-tree-file" + (isGraphFile ? " folder-tree-graph-file" : "");
-    button.title = isGraphFile ? "Click to open graph" : "Click to preview; double-click to keep open";
+    button.className = "folder-tree-file"
+      + (isGraphFile ? " folder-tree-graph-file" : "")
+      + (isUnsupportedFile ? " folder-tree-unsupported-file" : "");
+    button.title = isUnsupportedFile
+      ? "Unsupported file type"
+      : (isGraphFile ? "Click to open graph" : "Click to preview; double-click to keep open");
     button.dataset.name = node.name || "";
     button.dataset.path = node.path || "";
     button.dataset.fullPath = node.fullPath || "";
-    button.innerHTML = `<i class="bi ${isGraphFile ? "bi-diagram-3" : "bi-file-earmark-text"}"></i><span>${node.name}</span>`;
+    const fileIconClass = isUnsupportedFile ? "bi-file-earmark-x" : (isGraphFile ? "bi-diagram-3" : "bi-file-earmark-text");
+    button.innerHTML = `<i class="bi ${fileIconClass}"></i><span>${node.name}</span>`;
 
     async function readSidebarFileContent() {
       if (typeof NL_VERSION !== "undefined" && node.fullPath) {
@@ -6527,18 +6581,20 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
     }
 
-    button.addEventListener("click", () => {
-      window.clearTimeout(sidebarOpenClickTimer);
-      sidebarOpenClickTimer = window.setTimeout(() => {
-        openSidebarFile({ temporary: true });
-      }, 200);
-    });
+    if (!isUnsupportedFile) {
+      button.addEventListener("click", () => {
+        window.clearTimeout(sidebarOpenClickTimer);
+        sidebarOpenClickTimer = window.setTimeout(() => {
+          openSidebarFile({ temporary: true });
+        }, 200);
+      });
 
-    button.addEventListener("dblclick", (event) => {
-      event.preventDefault();
-      window.clearTimeout(sidebarOpenClickTimer);
-      openSidebarFile({ temporary: false });
-    });
+      button.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        window.clearTimeout(sidebarOpenClickTimer);
+        openSidebarFile({ temporary: false });
+      });
+    }
 
     button.addEventListener("contextmenu", (event) => {
       window.clearTimeout(sidebarOpenClickTimer);
@@ -6585,7 +6641,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     };
 
     Array.from(fileList).forEach((file) => {
-      if (!isSidebarDocumentPath(file.name)) return;
       const relPath = (file.webkitRelativePath || file.name).split("/");
       const fileName = relPath.pop();
       let cursor = root;
