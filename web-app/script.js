@@ -28,6 +28,10 @@ document.addEventListener("DOMContentLoaded", function () {
   const importFromGithubButton = document.getElementById("import-from-github");
   const importFromFolderButton = document.getElementById("import-from-folder");
   const folderTreeFilterInput = document.getElementById("folder-tree-filter-input");
+  const createTagButton = document.getElementById("create-tag-button");
+  const deleteTagButton = document.getElementById("delete-tag-button");
+  const tagManagementSearch = document.getElementById("tag-management-search");
+  const tagManagementList = document.getElementById("tag-management-list");
   const folderTreeFilterToggleButtons = document.querySelectorAll(".toggle-folder-tree-filter");
   const folderTreeExpandToggleButtons = document.querySelectorAll(".toggle-folder-tree-expanded");
   let folderTreeRoot = document.getElementById("folder-tree-root");
@@ -1560,8 +1564,195 @@ document.addEventListener("DOMContentLoaded", function () {
     localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify({ ...loadGlobalState(), ...patch }));
   }
 
+  function getKnownTags() {
+    return normalizeFileTagList(loadGlobalState().knownTags || []);
+  }
+
+  function saveKnownTags(tags) {
+    saveGlobalState({ knownTags: normalizeFileTagList(tags).sort((a, b) => a.localeCompare(b)) });
+  }
+
+  function getActiveGraphSnapshotTagCounts() {
+    const counts = new Map();
+    const activeGraphTab = getActiveGraphTab();
+    (activeGraphTab?.graphSnapshot?.files || []).forEach((snapshotFile) => {
+      const tags = snapshotFile.tags?.length ? snapshotFile.tags : getFileTagsFromContent(snapshotFile.content || "");
+      tags.forEach((tag) => {
+        const normalizedTag = normalizeTagName(tag);
+        if (!normalizedTag) return;
+        counts.set(normalizedTag, (counts.get(normalizedTag) || 0) + 1);
+      });
+    });
+    return counts;
+  }
+
+  function getAllKnownAndReferencedTags() {
+    const tagSet = new Set(getKnownTags());
+    getActiveGraphSnapshotTagCounts().forEach((_count, tag) => tagSet.add(tag));
+    return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+  }
+
+  function renderTagManagementList() {
+    if (!tagManagementList) return;
+    const query = String(tagManagementSearch?.value || "").trim().toLowerCase();
+    const counts = getActiveGraphSnapshotTagCounts();
+    const tags = getAllKnownAndReferencedTags().filter((tag) => !query || tag.includes(query));
+    tagManagementList.innerHTML = "";
+
+    if (!tags.length) {
+      const empty = document.createElement("div");
+      empty.className = "tag-management-list-empty";
+      empty.textContent = query ? "No matching tags" : "No known tags yet";
+      tagManagementList.appendChild(empty);
+      return;
+    }
+
+    tags.forEach((tag) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tag-management-list-item";
+      button.dataset.tagName = tag;
+      button.setAttribute("role", "option");
+      button.innerHTML = `<i class="bi bi-tag" aria-hidden="true"></i><span>#${escapeHtml(tag)}</span><span class="tag-management-list-item-count">${counts.get(tag) || 0}</span>`;
+      button.addEventListener("click", () => {
+        if (tagManagementSearch) tagManagementSearch.value = tag;
+      });
+      tagManagementList.appendChild(button);
+    });
+  }
+
+  function createTag(tagName) {
+    const normalizedTag = normalizeTagName(tagName);
+    if (!normalizedTag) {
+      alert("Enter a tag name to create.");
+      return false;
+    }
+
+    const tags = getKnownTags();
+    if (!tags.includes(normalizedTag)) {
+      saveKnownTags([...tags, normalizedTag]);
+    }
+    renderTagManagementList();
+    return true;
+  }
+
+  function snapshotFileMatchesTab(snapshotFile, tab) {
+    if (!snapshotFile || !tab || tab.type === "graph") return false;
+    const candidatePaths = new Set([snapshotFile.fullPath, snapshotFile.path].filter(Boolean).map(getComparableFilePath));
+    const candidateNames = new Set([
+      snapshotFile.name,
+      snapshotFile.path ? getFileName(snapshotFile.path) : null,
+      snapshotFile.fullPath ? getFileName(snapshotFile.fullPath) : null
+    ].filter(Boolean));
+
+    if (tab.sourceFilePath && candidatePaths.has(getComparableFilePath(tab.sourceFilePath))) return true;
+    if (tab.sourceFileName && candidateNames.has(tab.sourceFileName)) return true;
+    return !!(tab.title && candidateNames.has(tab.title));
+  }
+
+  function updateOpenMarkdownTabsForSnapshotFile(snapshotFile) {
+    const normalizedContent = normalizeEditorContent(snapshotFile.content || "");
+    tabs.forEach((tab) => {
+      if (!snapshotFileMatchesTab(snapshotFile, tab)) return;
+      tab.content = normalizedContent;
+      if (tab.id === activeTabId) {
+        markdownEditor.value = normalizedContent;
+        renderEditorSyntaxHighlights();
+        updateEditorLineNumbers();
+        renderMarkdown();
+      }
+    });
+  }
+
+  function updateFolderMarkdownEntryForSnapshotFile(snapshotFile) {
+    const snapshotNodeId = snapshotFile.id || normalizeGraphNodeName(snapshotFile.path || snapshotFile.fullPath || snapshotFile.name || "");
+    const folderEntry = (folderMarkdownFiles || []).find((entry) => {
+      const entryPath = entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || "";
+      return normalizeGraphNodeName(entryPath) === snapshotNodeId;
+    });
+    if (folderEntry) folderEntry.content = snapshotFile.content || "";
+  }
+
+  async function rebuildActiveGraphTagNodesAndEdges(activeGraphTab) {
+    if (!activeGraphTab?.graphSnapshot) return;
+    const currentSnapshot = activeGraphTab.graphSnapshot;
+    activeGraphTab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || activeGraphTab.folderName || activeGraphTab.title);
+    if (currentSnapshot.createdAt) activeGraphTab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+    graphRenderCache.delete(activeGraphTab.id);
+  }
+
+  async function deleteTag(tagName) {
+    const normalizedTag = normalizeTagName(tagName);
+    if (!normalizedTag) {
+      alert("Enter a tag name to delete.");
+      return false;
+    }
+
+    const confirmed = window.confirm(`Delete tag "#${normalizedTag}"? This removes it from every file in the active graph snapshot.`);
+    if (!confirmed) return false;
+
+    const activeGraphTab = getActiveGraphTab();
+    let changedFiles = 0;
+    if (activeGraphTab?.graphSnapshot?.files) {
+      activeGraphTab.graphSnapshot.files.forEach((snapshotFile) => {
+        const currentContent = snapshotFile.content || "";
+        const currentTags = getFileTagsFromContent(currentContent);
+        if (!currentTags.includes(normalizedTag)) return;
+        const nextContent = removeTagFromContent(currentContent, normalizedTag);
+        snapshotFile.content = nextContent;
+        snapshotFile.tags = getFileTagsFromContent(nextContent);
+        updateFolderMarkdownEntryForSnapshotFile(snapshotFile);
+        updateOpenMarkdownTabsForSnapshotFile(snapshotFile);
+        changedFiles += 1;
+      });
+
+      await rebuildActiveGraphTagNodesAndEdges(activeGraphTab);
+      markGraphTabAsChanged(activeGraphTab);
+    }
+
+    saveKnownTags(getKnownTags().filter((tag) => tag !== normalizedTag));
+    saveTabsToStorage(tabs);
+    renderTabBar(tabs, activeTabId);
+    updateSaveCurrentFileButtons();
+    renderTagManagementList();
+
+    if (activeGraphTab && activeTabId === activeGraphTab.id) {
+      renderGraphView();
+    }
+
+    if (!changedFiles && !getKnownTags().includes(normalizedTag)) {
+      console.info(`Deleted metadata-only tag #${normalizedTag}.`);
+    }
+    return true;
+  }
+
   function getComparableFilePath(path) {
     return String(path || "").replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+  }
+
+  if (createTagButton) {
+    createTagButton.addEventListener("click", () => {
+      const suggestedTag = tagManagementSearch?.value || "";
+      const tag = window.prompt("Create tag:", suggestedTag);
+      createTag(tag);
+    });
+  }
+
+  if (deleteTagButton) {
+    deleteTagButton.addEventListener("click", () => {
+      const suggestedTag = tagManagementSearch?.value || "";
+      const tag = window.prompt("Delete tag:", suggestedTag);
+      deleteTag(tag);
+    });
+  }
+
+  if (tagManagementSearch) {
+    tagManagementSearch.addEventListener("input", renderTagManagementList);
+    tagManagementSearch.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      createTag(tagManagementSearch.value);
+    });
   }
 
   function getTabTreeFileCandidates(tab) {
@@ -2736,6 +2927,8 @@ This is a fully client-side application. Your content never leaves your browser 
   let untitledCounter = 0;
   const graphRenderCache = new Map();
   const GRAPH_DOCUMENT_SCHEMA_VERSION = 1;
+
+  renderTagManagementList();
 
   function cloneGraphPersistenceValue(value) {
     if (value === undefined) return undefined;
@@ -5091,6 +5284,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     showFullLocalGraph: { label: "Show full local graph", icon: "bi bi-diagram-3" },
     addTag: { label: "Add tag…", icon: "bi bi-tag" },
     removeTag: { label: "Remove tag…", icon: "bi bi-tag-fill" },
+    deleteTag: { label: "Delete tag", icon: "bi bi-trash3" },
     turnMagneticForcesOff: { label: "Turn magnetic forces off", icon: "bi bi-magnet" },
     copyDependencies: { label: "Copy dependencies", icon: "bi bi-list-ul" },
     copyFullDependencies: { label: "Copy full dependencies", icon: "bi bi-bezier2" },
@@ -8893,9 +9087,11 @@ ${body}`;
     graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
     if (!activeTab || activeTab.type !== "graph") {
       updateStatusLine({ visiblePointCount: 0 });
+      renderTagManagementList();
       return;
     }
 
+    renderTagManagementList();
     let graphSnapshot = activeTab.graphSnapshot || null;
     if (!graphSnapshot && folderMarkdownFiles.length) {
       const snapshotFiles = folderMarkdownFiles.slice();
@@ -9227,6 +9423,12 @@ ${body}`;
       "Remove a YAML frontmatter tag from this Markdown file."
     );
     removeTagBtn.classList.add("hidden");
+    const deleteTagBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.deleteTag.label,
+      CONTEXT_MENU_ACTIONS.deleteTag.icon,
+      "Remove this tag from every file in the active graph snapshot."
+    );
+    deleteTagBtn.classList.add("hidden", "graph-context-menu-item-danger");
     const deleteFileBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.deleteFile.label,
       CONTEXT_MENU_ACTIONS.deleteFile.icon,
@@ -9322,6 +9524,7 @@ ${body}`;
     contextMenu.appendChild(fullLocalGraphBtn);
     contextMenu.appendChild(addTagBtn);
     contextMenu.appendChild(removeTagBtn);
+    contextMenu.appendChild(deleteTagBtn);
     contextMenu.appendChild(contextMenuDeleteSeparator);
     contextMenu.appendChild(deleteFileBtn);
     contextMenu.appendChild(contextMenuDeleteEndSeparator);
@@ -9528,6 +9731,7 @@ ${body}`;
 
       snapshotFile.content = nextContent;
       snapshotFile.tags = getFileTagsFromContent(nextContent);
+      if (action === "add") saveKnownTags([...getKnownTags(), normalizedTag]);
 
       const folderEntry = getFolderMarkdownEntryForNode(graphNode);
       if (folderEntry) folderEntry.content = nextContent;
@@ -9593,6 +9797,7 @@ ${body}`;
       fullLocalGraphBtn,
       addTagBtn,
       removeTagBtn,
+      deleteTagBtn,
       contextMenuDeleteSeparator,
       deleteFileBtn,
       contextMenuDeleteEndSeparator,
@@ -9641,8 +9846,12 @@ ${body}`;
       contextMenuActionSeparator.classList.remove("hidden");
       setNodeContextItemsHidden(false);
       const isFileNode = (d.type || "file") !== "tag";
+      [openFileBtn, openDefaultAppBtn, revealFileBtn, renameFileBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, exportSubmenu, deleteFileBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode));
       addTagBtn.classList.toggle("hidden", !isFileNode);
       removeTagBtn.classList.toggle("hidden", !isFileNode);
+      deleteTagBtn.classList.toggle("hidden", isFileNode);
+      contextMenuDeleteSeparator.classList.toggle("hidden", !isFileNode);
+      contextMenuDeleteEndSeparator.classList.toggle("hidden", !isFileNode);
       positionContextMenu(event);
       contextMenu.classList.remove("hidden");
     });
@@ -9881,6 +10090,19 @@ ${body}`;
       } catch (error) {
         console.error("Failed to remove tag:", error);
         alert("Unable to remove this tag.");
+      }
+    });
+
+    deleteTagBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode || contextTargetNode.type !== "tag") return;
+      const tag = contextTargetNode.tag || String(contextTargetNode.id || "").replace(/^tag:/, "");
+      hideContextMenu();
+      try {
+        await deleteTag(tag);
+      } catch (error) {
+        console.error("Failed to delete tag:", error);
+        alert("Unable to delete this tag.");
       }
     });
 
