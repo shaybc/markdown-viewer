@@ -167,10 +167,15 @@ Neutralino.events.on("ready", () => {
 	}
 });
 
-// Open file passed as command-line argument (e.g. when double-clicking a .md file)
+function isInitialTextFilePath(filePath) {
+  return /\.(md|markdown|mdviewer-graph\.json|mdgraph\.json|json|txt|text|java|css|js|ts|html|htm|xml|csv|ya?ml|toml|ini|log|properties|conf|sh|bash|py|rb|php|sql)$/i.test(filePath || "")
+    || /(^|[\/])(dockerfile|makefile|license|readme|changelog)$/i.test(filePath || "");
+}
+
+// Open text-based file passed as command-line argument (e.g. when double-clicking a .md or .txt file)
 (async function loadInitialFile() {
   const args = Array.isArray(NL_ARGS) ? NL_ARGS : (() => { try { return JSON.parse(NL_ARGS); } catch(e) { return []; } })();
-  const filePath = args.find(a => typeof a === 'string' && /\.(md|markdown)$/i.test(a));
+  const filePath = args.find(a => typeof a === 'string' && isInitialTextFilePath(a));
   if (!filePath) return;
 
   try {

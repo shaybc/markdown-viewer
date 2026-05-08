@@ -1384,7 +1384,7 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
       </div>
       <div id="folder-tree-root" class="folder-tree-root">
-        <p class="folder-tree-placeholder">Open a folder to browse Markdown and graph files.</p>
+        <p class="folder-tree-placeholder">Open a folder to browse text and graph files.</p>
       </div>
       <div class="sidebar-dropzone-resizer" id="sidebar-dropzone-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize sidebar dropzone" tabindex="0"></div>
       <div class="sidebar-dropzone-panel">
@@ -1620,7 +1620,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return visibleNodes;
       }
 
-      if (showUnsupportedFolderFiles || isSidebarDocumentPath(node.name)) {
+      if (showUnsupportedFolderFiles || isSidebarDocumentNode(node)) {
         visibleNodes.push(node);
       }
       return visibleNodes;
@@ -3260,7 +3260,10 @@ This is a fully client-side application. Your content never leaves your browser 
         titleSpan.appendChild(graphIcon);
         titleSpan.append(document.createTextNode(displayName));
       } else {
-        titleSpan.textContent = displayName;
+        const tabIcon = document.createElement("i");
+        tabIcon.className = `bi ${getFileIconClass(tab.sourceFileName || tab.sourceFilePath || tab.title)} me-1`;
+        titleSpan.appendChild(tabIcon);
+        titleSpan.append(document.createTextNode(displayName));
       }
 
       // Three-dot menu button
@@ -3674,7 +3677,7 @@ This is a fully client-side application. Your content never leaves your browser 
     if (statusTipElement) {
       statusTipElement.textContent = previewHoveredLinkUrl || (activeGraphTab
         ? "Tip: hold ctrl / shift to see out / back links"
-        : "Tip: drag in Markdown files, use split preview, or open a folder to build a graph.");
+        : "Tip: drag in text files, use split preview, or open a folder to build a graph.");
     }
 
     if (graphPointsStatusElement && graphPointsCountElement) {
@@ -4252,7 +4255,7 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function getClosedFolderPlaceholder() {
-    return '<p class="folder-tree-placeholder">Open a folder to browse Markdown and graph files.</p>';
+    return '<p class="folder-tree-placeholder">Open a folder to browse text and graph files.</p>';
   }
 
   function updateCloseFolderButtons() {
@@ -4302,7 +4305,7 @@ This is a fully client-side application. Your content never leaves your browser 
     if (!displayNodes.length) {
       folderTreeRoot.innerHTML = folderTreeFilterText
         ? '<p class="folder-tree-placeholder">No files or folders match this filter.</p>'
-        : '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
+        : '<p class="folder-tree-placeholder">No text-based or graph files found in this folder.</p>';
       updateCloseFolderButtons();
       updateFolderTreeToolbarState();
       return;
@@ -4527,11 +4530,58 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function isGraphFilePath(path) {
-    return /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(path || "");
+    return /\.(mdviewer-graph\.json|mdgraph\.json)$/i.test(path || "");
+  }
+
+  function isJsonPath(path) {
+    return /\.json$/i.test(path || "");
+  }
+
+  function isPotentialGraphFilePath(path) {
+    return isGraphFilePath(path) || isJsonPath(path);
+  }
+
+  function getFileExtension(path) {
+    const match = String(path || "").toLowerCase().match(/\.([a-z0-9+_-]+)$/i);
+    return match ? match[1] : "";
+  }
+
+  function isKnownTextFilePath(path) {
+    const extension = getFileExtension(path);
+    if (!extension) {
+      return /(^|[\/])(dockerfile|makefile|rakefile|gemfile|license|readme|changelog|authors|contributors)$/i.test(path || "");
+    }
+    return new Set([
+      "txt", "text", "md", "markdown", "json", "jsonc", "js", "jsx", "ts", "tsx", "mjs", "cjs",
+      "css", "scss", "sass", "less", "html", "htm", "xml", "svg", "csv", "tsv", "yaml", "yml",
+      "toml", "ini", "conf", "config", "env", "properties", "java", "c", "h", "cpp", "hpp", "cc",
+      "cs", "go", "rs", "py", "rb", "php", "swift", "kt", "kts", "sh", "bash", "zsh", "fish",
+      "bat", "cmd", "ps1", "sql", "r", "lua", "pl", "pm", "scala", "clj", "ex", "exs", "erl",
+      "hrl", "fs", "fsx", "vb", "dockerfile", "gitignore", "gitattributes", "editorconfig", "log"
+    ]).has(extension) || /(^|[\/])(dockerfile|makefile|rakefile|gemfile|license|readme|changelog|authors|contributors)$/i.test(path || "");
+  }
+
+  function isTextFileLike(file) {
+    if (!file) return false;
+    const type = String(file.type || "").toLowerCase();
+    return type.startsWith("text/")
+      || type === "application/json"
+      || type === "application/xml"
+      || type === "application/javascript"
+      || type === "application/x-javascript"
+      || isKnownTextFilePath(file.name || file.path);
+  }
+
+  function isTextDocumentPath(path) {
+    return isMarkdownPath(path) || isPotentialGraphFilePath(path) || isKnownTextFilePath(path);
   }
 
   function isSidebarDocumentPath(path) {
-    return isMarkdownPath(path) || isGraphFilePath(path);
+    return isTextDocumentPath(path);
+  }
+
+  function isSidebarDocumentNode(node) {
+    return !!(node && (isSidebarDocumentPath(node.name || node.path || node.fullPath) || isTextFileLike(node.file)));
   }
 
   function looksLikeGraphDocument(document) {
@@ -4571,13 +4621,15 @@ This is a fully client-side application. Your content never leaves your browser 
     }
 
     const content = await readOpenFileSourceContent(sourceFile);
-    try {
-      const parsed = JSON.parse(content);
-      if (looksLikeGraphDocument(parsed)) {
-        return openSavedGraphDocument({ ...sourceFile, name, content });
+    if (isJsonPath(filePath)) {
+      try {
+        const parsed = JSON.parse(content);
+        if (looksLikeGraphDocument(parsed)) {
+          return openSavedGraphDocument({ ...sourceFile, name, content });
+        }
+      } catch (_) {
+        // Invalid JSON is still text and can be edited in the basic text editor.
       }
-    } catch (_) {
-      // Non-JSON files without a known extension are treated as Markdown.
     }
 
     return openMarkdownSourceFile({ ...sourceFile, name, content });
@@ -4588,7 +4640,7 @@ This is a fully client-side application. Your content never leaves your browser 
       try {
         const selected = await Neutralino.os.showOpenDialog("Open file", {
           filters: [
-            { name: "Markdown and graph files", extensions: ["md", "markdown", "mdviewer-graph.json", "mdgraph.json", "json"] }
+            { name: "Text-based files", extensions: ["md", "markdown", "mdviewer-graph.json", "mdgraph.json", "json", "txt", "java", "css", "js", "ts", "html", "xml", "csv", "yml", "yaml", "toml", "ini", "log"] }
           ]
         });
         const selectedPath = Array.isArray(selected) ? selected[0] : selected;
@@ -4612,10 +4664,10 @@ This is a fully client-side application. Your content never leaves your browser 
           multiple: false,
           types: [
             {
-              description: "Markdown and graph files",
+              description: "Text-based files",
               accept: {
                 "text/markdown": [".md", ".markdown"],
-                "text/plain": [".md", ".markdown"],
+                "text/plain": [".txt", ".text", ".java", ".css", ".js", ".ts", ".html", ".xml", ".csv", ".yml", ".yaml", ".toml", ".ini", ".log"],
                 "application/json": [".json"]
               }
             }
@@ -4727,7 +4779,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   async function getDocumentFileHandleFromDrop(dataTransfer, fileSystemHandles) {
     const handles = fileSystemHandles || await getFileSystemHandlesFromDrop(dataTransfer);
-    return handles.find((handle) => handle && handle.kind === "file" && (isMarkdownPath(handle.name) || isGraphFilePath(handle.name))) || null;
+    return handles.find((handle) => handle && handle.kind === "file" && isTextDocumentPath(handle.name)) || null;
   }
 
   async function getDocumentFileFromEntryDrop(dataTransfer) {
@@ -4735,7 +4787,7 @@ This is a fully client-side application. Your content never leaves your browser 
     for (const item of items) {
       if (typeof item.webkitGetAsEntry !== "function") continue;
       const entry = item.webkitGetAsEntry();
-      if (!entry || !entry.isFile || (!isMarkdownPath(entry.name) && !isGraphFilePath(entry.name))) continue;
+      if (!entry || !entry.isFile || !isTextDocumentPath(entry.name)) continue;
       try {
         const file = await getFileFromEntry(entry);
         return { file, name: entry.name };
@@ -4750,7 +4802,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const files = Array.from((dataTransfer && dataTransfer.files) || []);
 
     if (typeof NL_VERSION !== "undefined") {
-      const droppedPath = files.find((file) => file && file.path && (isMarkdownPath(file.path || file.name) || isGraphFilePath(file.path || file.name)));
+      const droppedPath = files.find((file) => file && file.path && (isTextDocumentPath(file.path || file.name) || isTextFileLike(file)));
       if (droppedPath) {
         await openDocumentSourceFile({
           name: getFileName(droppedPath.path || droppedPath.name),
@@ -4775,7 +4827,7 @@ This is a fully client-side application. Your content never leaves your browser 
       return true;
     }
 
-    const file = files.find((candidate) => candidate && (isMarkdownPath(candidate.name) || isGraphFilePath(candidate.name)));
+    const file = files.find((candidate) => candidate && (isTextDocumentPath(candidate.name) || isTextFileLike(candidate)));
     if (file) {
       await openDocumentSourceFile({
         name: file.name,
@@ -4790,7 +4842,7 @@ This is a fully client-side application. Your content never leaves your browser 
   async function openDroppedFolder(dataTransfer, fileSystemHandles) {
     if (typeof NL_VERSION !== "undefined") {
       const files = Array.from((dataTransfer && dataTransfer.files) || []);
-      const droppedPath = files.find((file) => file && file.path && !isMarkdownPath(file.path || file.name) && !isGraphFilePath(file.path || file.name));
+      const droppedPath = files.find((file) => file && file.path && !isTextDocumentPath(file.path || file.name));
       if (droppedPath) {
         await openFolderTreeFromNeutralinoPath(droppedPath.path);
         return true;
@@ -5048,7 +5100,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   function getOpenFolderActionTitle() {
     const button = getOpenFolderMainMenuButton();
-    return (button && button.title) || "Open a folder to browse Markdown and graph files.";
+    return (button && button.title) || "Open a folder to browse text and graph files.";
   }
 
   function getPathDirectory(path) {
@@ -6480,6 +6532,37 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     folderTreeAnimationTimers.set(details, timer);
   }
 
+  function getFileIconClass(fileName, options = {}) {
+    if (options.isUnsupportedFile) return "bi-file-earmark-x";
+    if (options.isGraphFile || isGraphFilePath(fileName)) return "bi-diagram-3";
+    const extension = getFileExtension(fileName);
+    const iconByExtension = {
+      json: "bi-filetype-json",
+      js: "bi-filetype-js",
+      mjs: "bi-filetype-js",
+      cjs: "bi-filetype-js",
+      ts: "bi-filetype-tsx",
+      tsx: "bi-filetype-tsx",
+      jsx: "bi-filetype-jsx",
+      css: "bi-filetype-css",
+      html: "bi-filetype-html",
+      htm: "bi-filetype-html",
+      java: "bi-filetype-java",
+      py: "bi-filetype-py",
+      php: "bi-filetype-php",
+      rb: "bi-filetype-rb",
+      sql: "bi-filetype-sql",
+      xml: "bi-filetype-xml",
+      yaml: "bi-filetype-yml",
+      yml: "bi-filetype-yml",
+      csv: "bi-filetype-csv",
+      txt: "bi-filetype-txt",
+      text: "bi-filetype-txt"
+    };
+    if (iconByExtension[extension]) return iconByExtension[extension];
+    return isMarkdownPath(fileName) ? "bi-file-earmark-text" : "bi-file-text";
+  }
+
   function renderFolderTreeNode(node, parentPath = "") {
     const li = document.createElement("li");
     li.className = "folder-tree-item";
@@ -6517,18 +6600,19 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     const button = document.createElement("button");
     let sidebarOpenClickTimer = null;
     const isGraphFile = isGraphFilePath(node.name);
-    const isUnsupportedFile = !isSidebarDocumentPath(node.name);
+    const isJsonFile = isJsonPath(node.name);
+    const isUnsupportedFile = !isSidebarDocumentNode(node);
     button.type = "button";
     button.className = "folder-tree-file"
       + (isGraphFile ? " folder-tree-graph-file" : "")
       + (isUnsupportedFile ? " folder-tree-unsupported-file" : "");
     button.title = isUnsupportedFile
-      ? "Unsupported file type"
-      : (isGraphFile ? "Click to open graph" : "Click to preview; double-click to keep open");
+      ? "Unsupported binary or unknown file type"
+      : (isGraphFile ? "Click to open graph" : "Click to preview in the text editor; double-click to keep open");
     button.dataset.name = node.name || "";
     button.dataset.path = node.path || "";
     button.dataset.fullPath = node.fullPath || "";
-    const fileIconClass = isUnsupportedFile ? "bi-file-earmark-x" : (isGraphFile ? "bi-diagram-3" : "bi-file-earmark-text");
+    const fileIconClass = getFileIconClass(node.name, { isGraphFile, isJsonFile, isUnsupportedFile });
     button.innerHTML = `<i class="bi ${fileIconClass}"></i><span>${node.name}</span>`;
 
     async function readSidebarFileContent() {
@@ -6564,8 +6648,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
         const content = await readSidebarFileContent();
         const sourceFile = getSidebarFileSource();
-        if (isGraphFile) {
-          await openSavedGraphDocument({ ...sourceFile, content });
+        if (isGraphFile || isJsonFile) {
+          const openedTab = await openDocumentSourceFile({ ...sourceFile, content });
+          if (openedTab && options && options.temporary === false) {
+            pinTemporaryTab(openedTab.id);
+          }
         } else {
           const title = getMarkdownTitleFromFileName(node.name);
           if (options && options.temporary === false) {
@@ -10527,7 +10614,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
     const files = dt.files;
     if (files.length) {
-      alert("Please open a Markdown file (.md or .markdown), a graph file (.mdviewer-graph.json, .mdgraph.json, or .json), or a folder that contains Markdown files.");
+      alert("Please open a text-based file (for example .md, .txt, .java, .css, or .json), a saved graph file (.mdviewer-graph.json or .mdgraph.json), or a folder that contains text files.");
     }
   }
 
