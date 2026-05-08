@@ -70,39 +70,8 @@
     <div class="app-container">
         <header class="app-header">
             <div class="container-fluid d-flex justify-content-between align-items-center header-container">
-                <!-- Left section: Logo, GitHub, Stats -->
+                <!-- Left section: Mobile menu, Logo, GitHub -->
                 <div class="d-flex align-items-center header-left">
-                    <h1 class="h4 mb-0 me-2">Markdown Viewer</h1>
-                    <a href="https://github.com/ThisIs-Developer/Markdown-Viewer/" class="github-link" title="View on GitHub" target="_blank" rel="noopener noreferrer">
-                        <i class="bi bi-github"></i>
-                    </a>
-                </div>
-
-                <!-- Center section: View Mode Buttons -->
-                <div class="view-mode-group d-none d-md-flex" role="group" aria-label="View mode">
-                    <button class="view-mode-btn" data-mode="editor" aria-pressed="false" title="Editor only">
-                        <i class="bi bi-file-text"></i>
-                        <span>Editor</span>
-                    </button>
-                    <button class="view-mode-btn active" data-mode="split" aria-pressed="true" title="Split view">
-                        <i class="bi bi-layout-split"></i>
-                        <span>Split</span>
-                    </button>
-                    <button class="view-mode-btn" data-mode="preview" aria-pressed="false" title="Preview only">
-                        <i class="bi bi-eye"></i>
-                        <span>Preview</span>
-                    </button>
-                </div>
-
-                <input type="file" id="file-input" class="file-input" accept=".md,.markdown,.mdviewer-graph.json,.mdgraph.json,.json,text/markdown,application/json">
-                <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
-
-                <!-- Right section: Sync toggle and mobile menu -->
-                <div class="header-right d-flex align-items-center gap-2">
-                    <button id="toggle-sync" class="tool-button header-sync-toggle sync-toggle-button sync-enabled border-primary" type="button" title="Toggle Sync Scrolling" aria-label="Toggle sync scrolling">
-                        <i class="bi bi-link"></i> <span>Sync Off</span>
-                    </button>
-
                     <!-- Hamburger menu for mobile -->
                     <div class="mobile-menu d-md-none">
                         <button id="mobile-menu-toggle" class="tool-button" title="Menu">
@@ -210,6 +179,38 @@
 
                         <div id="mobile-menu-overlay"></div>
                     </div>
+
+                    <h1 class="h4 mb-0 me-2">Markdown Viewer</h1>
+                    <a href="https://github.com/ThisIs-Developer/Markdown-Viewer/" class="github-link" title="View on GitHub" target="_blank" rel="noopener noreferrer">
+                        <i class="bi bi-github"></i>
+                    </a>
+                </div>
+
+                <!-- Center section: View Mode Buttons -->
+                <div class="view-mode-group d-none d-md-flex" role="group" aria-label="View mode">
+                    <button class="view-mode-btn" data-mode="editor" aria-pressed="false" title="Editor only">
+                        <i class="bi bi-file-text"></i>
+                        <span>Editor</span>
+                    </button>
+                    <button class="view-mode-btn active" data-mode="split" aria-pressed="true" title="Split view">
+                        <i class="bi bi-layout-split"></i>
+                        <span>Split</span>
+                    </button>
+                    <button class="view-mode-btn" data-mode="preview" aria-pressed="false" title="Preview only">
+                        <i class="bi bi-eye"></i>
+                        <span>Preview</span>
+                    </button>
+                </div>
+
+                <input type="file" id="file-input" class="file-input" accept=".md,.markdown,.mdviewer-graph.json,.mdgraph.json,.json,text/markdown,application/json">
+                <input type="file" id="folder-input" class="file-input" webkitdirectory directory multiple>
+
+                <!-- Right section: Sync toggle -->
+                <div class="header-right d-flex align-items-center gap-2">
+                    <button id="toggle-sync" class="tool-button header-sync-toggle sync-toggle-button sync-enabled border-primary" type="button" title="Toggle Sync Scrolling" aria-label="Toggle sync scrolling">
+                        <i class="bi bi-link"></i> <span>Sync Off</span>
+                    </button>
+
                 </div>
             </div>
         </header>
