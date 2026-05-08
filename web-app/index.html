@@ -503,10 +503,10 @@
       <div class="graph-view-content">
         <div class="graph-view-header">
           <h5><i class="bi bi-diagram-3 me-2"></i>Graph View</h5>
-          <div class="graph-view-toolbar" role="region" aria-label="Graph view filters">
+          <div class="graph-view-toolbar collapsed" role="region" aria-label="Graph view filters">
             <div class="graph-filter-panel-heading">
               <span class="graph-filter-panel-title"><i class="bi bi-funnel"></i> Filters</span>
-              <button id="graph-filter-panel-toggle" class="graph-filter-toggle" type="button" aria-label="Collapse graph filters" aria-expanded="true" title="Collapse filters">
+              <button id="graph-filter-panel-toggle" class="graph-filter-toggle" type="button" aria-label="Expand graph filters" aria-expanded="false" title="Expand filters">
                 <i class="bi bi-chevron-right graph-filter-expanded-icon"></i>
                 <i class="bi bi-funnel graph-filter-collapsed-icon"></i>
                 <span>Filters</span>
@@ -517,7 +517,7 @@
                 <label class="graph-filter-section-label" for="graph-file-search-filter">Search files</label>
                 <input id="graph-file-search-filter" class="graph-file-search-filter" type="search" placeholder="Search file names..." aria-label="Search graph files by name or path">
               </div>
-              <details class="graph-filter-section graph-collapsible-section" open>
+              <details class="graph-filter-section graph-collapsible-section">
                 <summary class="graph-filter-section-label graph-collapsible-summary">
                   <span>Tags</span>
                   <i class="bi bi-chevron-down" aria-hidden="true"></i>
@@ -540,7 +540,7 @@
                   </button>
                 </div>
               </details>
-              <details class="graph-filter-section graph-collapsible-section" open>
+              <details class="graph-filter-section graph-collapsible-section">
                 <summary class="graph-filter-section-label graph-collapsible-summary">
                   <span>Groups</span>
                   <i class="bi bi-chevron-down" aria-hidden="true"></i>
@@ -553,7 +553,7 @@
                   </button>
                 </div>
               </details>
-              <details class="graph-filter-section graph-filter-control-section graph-collapsible-section" aria-label="Graph display settings" open>
+              <details class="graph-filter-section graph-filter-control-section graph-collapsible-section" aria-label="Graph display settings">
                 <summary class="graph-filter-section-label graph-collapsible-summary">
                   <span>Display</span>
                   <i class="bi bi-chevron-down" aria-hidden="true"></i>
@@ -578,7 +578,7 @@
                   </label>
                 </div>
               </details>
-              <details class="graph-filter-section graph-filter-control-section graph-collapsible-section" aria-label="Graph force settings" open>
+              <details class="graph-filter-section graph-filter-control-section graph-collapsible-section" aria-label="Graph force settings">
                 <summary class="graph-filter-section-label graph-collapsible-summary">
                   <span>Forces</span>
                   <i class="bi bi-chevron-down" aria-hidden="true"></i>
