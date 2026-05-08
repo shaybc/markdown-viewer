@@ -1863,8 +1863,15 @@ a:focus {
   border-right: none;
 }
 
-.view-mode-btn:hover {
+.view-mode-btn:hover:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--button-hover);
+}
+
+.view-mode-btn:disabled,
+.view-mode-btn[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .view-mode-btn.active {
@@ -2021,9 +2028,16 @@ a:focus {
   border-right: none;
 }
 
-.mobile-view-mode-btn:hover,
-.mobile-view-mode-btn:active {
+.mobile-view-mode-btn:hover:not(:disabled):not([aria-disabled="true"]),
+.mobile-view-mode-btn:active:not(:disabled):not([aria-disabled="true"]) {
   background-color: var(--button-hover);
+}
+
+.mobile-view-mode-btn:disabled,
+.mobile-view-mode-btn[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .mobile-view-mode-btn.active {
