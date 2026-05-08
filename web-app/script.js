@@ -3053,6 +3053,7 @@ This is a fully client-side application. Your content never leaves your browser 
   let graphLayoutSaveTimeout = null;
   let untitledCounter = 0;
   const graphRenderCache = new Map();
+  let graphRenderRequestId = 0;
   const GRAPH_DOCUMENT_SCHEMA_VERSION = 1;
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
     showTags: true,
@@ -3409,6 +3410,21 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.graphDocument.updatedAt = Date.now();
     }
     return nextLayout;
+  }
+
+  function getGraphRenderWrappersForTab(tabId) {
+    if (!graphViewCanvas || !tabId) return [];
+    return Array.from(graphViewCanvas.querySelectorAll(".graph-tab-render"))
+      .filter((wrapper) => wrapper.dataset.graphTabId === String(tabId));
+  }
+
+  function removeGraphRenderForTab(tabId) {
+    if (!tabId) return;
+    const entry = graphRenderCache.get(tabId);
+    if (entry?.simulation) entry.simulation.stop();
+    if (entry?.wrapper) entry.wrapper.remove();
+    graphRenderCache.delete(tabId);
+    getGraphRenderWrappersForTab(tabId).forEach((wrapper) => wrapper.remove());
   }
 
   function hideInactiveGraphRenders(activeGraphTabId) {
@@ -9306,7 +9322,8 @@ ${body}`;
       activeGraphTab.graphDocument.viewConfig = activeGraphTab.graphViewConfig;
       activeGraphTab.graphDocument.updatedAt = Date.now();
     }
-    graphRenderCache.delete(activeGraphTab.id);
+    removeGraphRenderForTab(activeGraphTab.id);
+    updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
     markGraphTabAsChanged(activeGraphTab);
     saveTabsToStorage(tabs);
     renderGraphView();
@@ -9314,6 +9331,7 @@ ${body}`;
 
   async function renderGraphView() {
     if (!graphViewCanvas) return;
+    const renderRequestId = ++graphRenderRequestId;
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
     const graphViewConfig = activeTab && activeTab.type === "graph" ? normalizeGraphViewConfig(activeTab.graphViewConfig) : normalizeGraphViewConfig(null);
     if (activeTab && activeTab.type === "graph") activeTab.graphViewConfig = graphViewConfig;
@@ -9336,13 +9354,13 @@ ${body}`;
       loadingMessage.textContent = "Building graph view…";
       graphViewCanvas.appendChild(loadingMessage);
       graphSnapshot = await createGraphSnapshot(snapshotFiles, activeTab.folderName || activeTab.title);
-      activeTab.graphSnapshot = graphSnapshot;
-      updateGraphTagToolbar(activeTab, graphSnapshot);
-      saveTabsToStorage(tabs);
-      if (activeTabId !== activeTab.id) {
+      if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
         loadingMessage.remove();
         return;
       }
+      activeTab.graphSnapshot = graphSnapshot;
+      updateGraphTagToolbar(activeTab, graphSnapshot);
+      saveTabsToStorage(tabs);
       graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
     }
 
@@ -9375,6 +9393,9 @@ ${body}`;
       if (cachedRender.wrapper) cachedRender.wrapper.remove();
       graphRenderCache.delete(activeTab.id);
     }
+
+    if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) return;
+    removeGraphRenderForTab(activeTab.id);
 
     const graphRenderWrapper = document.createElement("div");
     graphRenderWrapper.className = "graph-tab-render";
