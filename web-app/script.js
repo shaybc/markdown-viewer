@@ -3108,7 +3108,8 @@ This is a fully client-side application. Your content never leaves your browser 
       sourceFilePath: null,
       savedContent: content,
       type: "markdown",
-      folderName: null
+      folderName: null,
+      isUnsupportedFile: false
     };
   }
 
@@ -3497,7 +3498,7 @@ This is a fully client-side application. Your content never leaves your browser 
     if (tab.type === "graph") return;
     tab.content = markdownEditor.value;
     tab.scrollPos = markdownEditor.scrollTop;
-    tab.viewMode = currentViewMode || 'split';
+    tab.viewMode = isUnsupportedFileTab(tab) ? 'editor' : (currentViewMode || 'split');
     saveTabsToStorage(tabs);
   }
 
@@ -3706,7 +3707,7 @@ This is a fully client-side application. Your content never leaves your browser 
 
   function restoreViewMode(mode) {
     currentViewMode = null;
-    setViewMode(mode || 'split');
+    setViewMode(getAllowedViewModeForActiveTab(mode || 'split'));
   }
 
   function switchTab(tabId) {
@@ -3758,6 +3759,30 @@ This is a fully client-side application. Your content never leaves your browser 
     tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
     tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
     tab.sourceFilePath = sourceFile && sourceFile.path ? sourceFile.path : null;
+    tab.isUnsupportedFile = isUnsupportedSourceFile(sourceFile);
+    if (tab.isUnsupportedFile) tab.viewMode = 'editor';
+  }
+
+  function isUnsupportedSourceFile(sourceFile) {
+    if (!sourceFile) return false;
+    if (sourceFile.isUnsupportedFile === true) return true;
+    const path = sourceFile.path || sourceFile.name || sourceFile.file?.name || sourceFile.handle?.name || "";
+    return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
+  }
+
+  function isUnsupportedFileTab(tab) {
+    if (!tab || tab.type === "graph") return false;
+    if (tab.isUnsupportedFile === true) return true;
+    const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
+    return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
+  }
+
+  function getActiveTab() {
+    return tabs.find(function(tab) { return tab.id === activeTabId; }) || null;
+  }
+
+  function getAllowedViewModeForActiveTab(mode) {
+    return isUnsupportedFileTab(getActiveTab()) ? 'editor' : (mode || 'split');
   }
 
   function activateSidebarTab(tab) {
@@ -3791,7 +3816,8 @@ This is a fully client-side application. Your content never leaves your browser 
 
     if (!tab) {
       const normalizedContent = normalizeEditorContent(content);
-      tab = createTab(normalizedContent, title || 'Untitled', currentViewMode || 'split');
+      const requestedViewMode = isUnsupportedSourceFile(sourceFile) ? 'editor' : (currentViewMode || 'split');
+      tab = createTab(normalizedContent, title || 'Untitled', requestedViewMode);
       tab.isTemporary = isTemporary;
       applySidebarFileMetadata(tab, sourceFile);
       tab.savedContent = normalizedContent;
@@ -3801,7 +3827,7 @@ This is a fully client-side application. Your content never leaves your browser 
       tab.title = title || 'Untitled';
       tab.content = normalizedContent;
       tab.scrollPos = 0;
-      tab.viewMode = currentViewMode || tab.viewMode || 'split';
+      tab.viewMode = isUnsupportedSourceFile(sourceFile) ? 'editor' : (currentViewMode || tab.viewMode || 'split');
       tab.isTemporary = isTemporary;
       applySidebarFileMetadata(tab, sourceFile);
       tab.savedContent = normalizedContent;
@@ -4069,8 +4095,9 @@ This is a fully client-side application. Your content never leaves your browser 
     }
     saveCurrentTabState();
     const dupTitle = tab.title + ' (copy)';
-    const dup = createTab(tab.content, dupTitle, tab.viewMode);
+    const dup = createTab(tab.content, dupTitle, isUnsupportedFileTab(tab) ? 'editor' : tab.viewMode);
     dup.savedContent = tab.savedContent;
+    dup.isUnsupportedFile = isUnsupportedFileTab(tab);
     const idx = tabs.findIndex(function(t) { return t.id === tabId; });
     tabs.splice(idx + 1, 0, dup);
     switchTab(dup.id);
@@ -7708,8 +7735,39 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   // View Mode Functions - Story 1.1 & 1.2
+  function updateViewModeButtons(mode) {
+    const unsupportedActiveTab = isUnsupportedFileTab(getActiveTab());
+
+    function updateButton(btn) {
+      const btnMode = btn.getAttribute('data-mode');
+      const isActive = btnMode === mode;
+      const isDisabled = unsupportedActiveTab && btnMode !== 'editor';
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      btn.disabled = isDisabled;
+      btn.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
+      if (isDisabled) {
+        btn.title = `${btnMode === 'split' ? 'Split view' : 'Preview only'} is unavailable for unsupported files`;
+      } else if (btnMode === 'editor') {
+        btn.title = unsupportedActiveTab ? 'Editor only (required for unsupported files)' : 'Editor only';
+      } else if (btnMode === 'split') {
+        btn.title = 'Split view';
+      } else if (btnMode === 'preview') {
+        btn.title = 'Preview only';
+      }
+    }
+
+    viewModeButtons.forEach(updateButton);
+    mobileViewModeButtons.forEach(updateButton);
+  }
+
   function setViewMode(mode) {
-    if (mode === currentViewMode) return;
+    mode = getAllowedViewModeForActiveTab(mode);
+    if (mode === currentViewMode) {
+      updateViewModeButtons(mode);
+      updateSyncToggleVisibility(mode);
+      return;
+    }
 
     const previousMode = currentViewMode;
     currentViewMode = mode;
@@ -7718,29 +7776,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     contentContainer.classList.remove('view-editor-only', 'view-preview-only', 'view-split');
     contentContainer.classList.add('view-' + (mode === 'editor' ? 'editor-only' : mode === 'preview' ? 'preview-only' : 'split'));
 
-    // Update button active states (desktop)
-    viewModeButtons.forEach(btn => {
-      const btnMode = btn.getAttribute('data-mode');
-      if (btnMode === mode) {
-        btn.classList.add('active');
-        btn.setAttribute('aria-pressed', 'true');
-      } else {
-        btn.classList.remove('active');
-        btn.setAttribute('aria-pressed', 'false');
-      }
-    });
-
-    // Story 1.4: Update mobile button active states
-    mobileViewModeButtons.forEach(btn => {
-      const btnMode = btn.getAttribute('data-mode');
-      if (btnMode === mode) {
-        btn.classList.add('active');
-        btn.setAttribute('aria-pressed', 'true');
-      } else {
-        btn.classList.remove('active');
-        btn.setAttribute('aria-pressed', 'false');
-      }
-    });
+    updateViewModeButtons(mode);
 
     // Story 1.2: Show/hide sync toggle based on view mode
     updateSyncToggleVisibility(mode);
