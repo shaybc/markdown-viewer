@@ -10309,6 +10309,7 @@ ${body}`;
     const graphLayer = svg.append("g").attr("class", "graph-layer");
 
     let currentZoomTransform = d3.zoomIdentity;
+    let label = null;
     const zoomBehavior = d3.zoom()
       .scaleExtent([0.2, 4])
       .on("zoom", (event) => {
@@ -10381,7 +10382,7 @@ ${body}`;
         }));
     const graphTooltipPathsById = new Map((graphSnapshot.files || []).map((file) => [file.id, file.fullPath || file.path]));
     node.append("title").text((d) => graphTooltipPathsById.get(d.id) || d.fullPath || getGraphNodeLabel(d));
-    const label = labelLayer.selectAll("text").data(nodes).enter().append("text")
+    label = labelLayer.selectAll("text").data(nodes).enter().append("text")
       .text(getGraphNodeLabel)
       .attr("class", (d) => `graph-label graph-label-${getGraphNodeType(d)}`);
 
@@ -11388,6 +11389,7 @@ ${body}`;
     window.addEventListener("keyup", updateHoveredGraphHighlight);
 
     function updateLabelVisibility() {
+      if (!label) return;
       const threshold = graphViewConfig.textFadeThreshold;
       const zoomScale = currentZoomTransform?.k || 1;
       const opacity = threshold <= 0 || zoomScale >= threshold ? 1 : Math.max(0, zoomScale / threshold);
