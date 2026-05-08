@@ -503,9 +503,23 @@
       <div class="graph-view-content">
         <div class="graph-view-header">
           <h5><i class="bi bi-diagram-3 me-2"></i>Graph View</h5>
-          <button id="graph-view-close" class="tool-button" title="Close graph view">
-            <i class="bi bi-x-lg"></i>
-          </button>
+          <div class="graph-view-toolbar" role="toolbar" aria-label="Graph view tag filters">
+            <button id="graph-show-tags" class="tool-button" type="button" title="Show tag nodes and tag links">
+              <i class="bi bi-tags"></i> Show tags
+            </button>
+            <button id="graph-hide-tags" class="tool-button" type="button" title="Hide tag nodes and tag links">
+              <i class="bi bi-tags-fill"></i> Hide tags
+            </button>
+            <select id="graph-selected-tag-filter" class="graph-tag-filter-select" aria-label="Selected tag filter">
+              <option value="">All files</option>
+            </select>
+            <button id="graph-only-selected-tag" class="tool-button" type="button" title="Only show files with the selected tag">
+              <i class="bi bi-funnel"></i> Only files with selected tag
+            </button>
+            <button id="graph-view-close" class="tool-button" title="Close graph view">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
         </div>
         <div id="graph-view-canvas" class="graph-view-canvas"></div>
       </div>
