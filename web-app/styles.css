@@ -1978,13 +1978,15 @@ a:focus {
 
 
 .folder-tree-topbar {
+  display: flex;
   align-items: center;
-  width: 280px;
-  min-width: 220px;
-  flex: 0 0 280px;
-  height: 100%;
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 36px;
+  height: 36px;
   padding: 0 4px;
-  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--header-bg);
 }
 
 .folder-tree-topbar .tree-action-menu {
@@ -1997,7 +1999,7 @@ a:focus {
 
 .folder-action-menu-button.tool-button {
   width: 36px;
-  height: 36px;
+  height: 32px;
   padding: 0;
   border-radius: 4px;
 }

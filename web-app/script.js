@@ -764,46 +764,71 @@ document.addEventListener("DOMContentLoaded", function () {
     pane.className = "folder-tree-pane";
     pane.id = "folder-tree-pane";
     pane.innerHTML = `
-      <div class="tree-action-menu dropdown">
-        <button class="tool-button dropdown-toggle w-100 justify-content-center" type="button" id="desktopActionMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
-          <i class="bi bi-list"></i>
-        </button>
-        <div class="dropdown-menu action-menu w-100" aria-labelledby="desktopActionMenu">
-          <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
-            <i class="bi bi-upload me-2"></i> Open file ...
+      <div class="folder-tree-topbar">
+        <div class="tree-action-menu dropdown">
+          <button class="tool-button dropdown-toggle folder-action-menu-button justify-content-center" type="button" id="desktopActionMenu" data-bs-toggle="dropdown" aria-expanded="false" title="Actions" aria-label="Actions">
+            <i class="bi bi-list"></i>
           </button>
-          <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
-            <i class="bi bi-folder2-open me-2"></i> Open folder ...
-          </button>
-          <button class="dropdown-item action-menu-item close-folder-button" type="button" title="Close the currently open folder" disabled>
-            <i class="bi bi-folder-x me-2"></i> Close Folder
-          </button>
-          <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
-            <i class="bi bi-github me-2"></i> Import from GitHub
-          </button>
-          <hr class="dropdown-divider">
-          <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
-            <i class="bi bi-save me-2"></i> Save Changes
-          </button>
-          <button class="dropdown-item action-menu-item save-all-files-button" type="button" title="Save all unsaved changes" disabled>
-            <i class="bi bi-save2 me-2"></i> Save All
-          </button>
-          <div class="dropdown-submenu action-menu-submenu">
-            <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
-              <i class="bi bi-eye me-2"></i> View
+          <div class="dropdown-menu action-menu" aria-labelledby="desktopActionMenu">
+            <button class="dropdown-item action-menu-item new-document-button" type="button" title="New document">
+              <i class="bi bi-file-earmark-plus me-2"></i> New document
             </button>
-            <div class="dropdown-menu action-submenu" aria-label="View options">
-              <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
-                <i class="bi bi-moon me-2"></i> Theme
+            <hr class="dropdown-divider">
+            <button class="dropdown-item action-menu-item" id="import-from-file" title="Open Markdown or graph file">
+              <i class="bi bi-upload me-2"></i> Open file ...
+            </button>
+            <button class="dropdown-item action-menu-item" id="import-from-folder" title="Import Markdown from folder">
+              <i class="bi bi-folder2-open me-2"></i> Open folder ...
+            </button>
+            <button class="dropdown-item action-menu-item close-folder-button" type="button" title="Close the currently open folder" disabled>
+              <i class="bi bi-folder-x me-2"></i> Close Folder
+            </button>
+            <button class="dropdown-item action-menu-item" id="import-from-github" title="Import Markdown from GitHub">
+              <i class="bi bi-github me-2"></i> Import from GitHub
+            </button>
+            <hr class="dropdown-divider">
+            <button class="dropdown-item action-menu-item save-current-file-button" type="button" title="Save changes to current file" disabled>
+              <i class="bi bi-save me-2"></i> Save Changes
+            </button>
+            <button class="dropdown-item action-menu-item save-all-files-button" type="button" title="Save all unsaved changes" disabled>
+              <i class="bi bi-save2 me-2"></i> Save All
+            </button>
+            <div class="dropdown-submenu action-menu-submenu">
+              <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+                <i class="bi bi-eye me-2"></i> View
               </button>
-              <button class="dropdown-item action-menu-item toggle-sidebar" type="button" title="Hide Sidebar" aria-controls="folder-tree-pane">
-                <i class="bi bi-layout-sidebar me-2"></i><span class="sidebar-toggle-label">Hide Sidebar</span>
-              </button>
-              <button class="dropdown-item action-menu-item toggle-auto-select-file" type="button" title="Disable Auto select file" aria-pressed="true">
-                <i class="bi bi-crosshair me-2"></i><span class="auto-select-file-label">Auto select file Off</span>
-              </button>
+              <div class="dropdown-menu action-submenu" aria-label="View options">
+                <button id="theme-toggle" class="dropdown-item action-menu-item" title="Toggle Dark Mode">
+                  <i class="bi bi-moon me-2"></i> Theme
+                </button>
+                <button class="dropdown-item action-menu-item toggle-sidebar" type="button" title="Hide Sidebar" aria-controls="folder-tree-pane">
+                  <i class="bi bi-layout-sidebar me-2"></i><span class="sidebar-toggle-label">Hide Sidebar</span>
+                </button>
+                <button class="dropdown-item action-menu-item toggle-dropzone-panel" type="button" title="Hide Dropzone Panel">
+                  <i class="bi bi-layout-sidebar-inset me-2"></i><span class="dropzone-toggle-label">Hide Dropzone Panel</span>
+                </button>
+                <button class="dropdown-item action-menu-item toggle-auto-select-file" type="button" title="Disable Auto select file" aria-pressed="true">
+                  <i class="bi bi-crosshair me-2"></i><span class="auto-select-file-label">Auto select file Off</span>
+                </button>
+              </div>
             </div>
+            <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
+              <i class="bi bi-diagram-3 me-2"></i> Graph View
+            </button>
           </div>
+        </div>
+        <div class="folder-tree-toolbar" role="toolbar" aria-label="Folder tree tools">
+          <button class="folder-tree-tool-button toggle-folder-tree-expanded" type="button" title="Open a folder to expand or collapse folders" aria-label="Expand or collapse all folders" disabled aria-disabled="true">
+            <i class="bi bi-arrows-expand" aria-hidden="true"></i>
+          </button>
+          <button class="folder-tree-tool-button toggle-auto-select-file" type="button" title="Open a folder to enable Auto select file" aria-label="Auto select file Off" aria-pressed="true" disabled aria-disabled="true">
+            <i class="bi bi-crosshair" aria-hidden="true"></i>
+            <span class="auto-select-file-label visually-hidden">Auto select file Off</span>
+          </button>
+          <button class="folder-tree-tool-button toggle-folder-tree-filter" type="button" title="Open a folder to filter files and folders" aria-label="Filter files and folders" aria-expanded="false" disabled aria-disabled="true">
+            <i class="bi bi-funnel" aria-hidden="true"></i>
+          </button>
+          <input id="folder-tree-filter-input" class="folder-tree-filter-input" type="search" placeholder="Filter files..." aria-label="Filter files and folders" hidden disabled>
         </div>
       </div>
       <div id="folder-tree-root" class="folder-tree-root">
@@ -827,7 +852,6 @@ document.addEventListener("DOMContentLoaded", function () {
   ensureFolderTreePane();
   folderTreeRoot = document.getElementById("folder-tree-root");
   const folderTreePane = document.getElementById("folder-tree-pane");
-  document.querySelectorAll("#folder-tree-pane .tree-action-menu").forEach((node) => node.remove());
   ensureRecentMenuContainers();
   hydrateRecentItemsFromProfile();
   hydrateRecentHandlesFromIndexedDB();
