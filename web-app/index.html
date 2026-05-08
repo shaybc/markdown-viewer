@@ -268,6 +268,19 @@
               </button>
             </div>
           </div>
+          <div class="folder-tree-toolbar" role="toolbar" aria-label="Folder tree tools">
+            <button class="folder-tree-tool-button toggle-folder-tree-expanded" type="button" title="Open a folder to expand or collapse folders" aria-label="Expand or collapse all folders" disabled aria-disabled="true">
+              <i class="bi bi-arrows-expand" aria-hidden="true"></i>
+            </button>
+            <button class="folder-tree-tool-button toggle-auto-select-file" type="button" title="Open a folder to enable Auto select file" aria-label="Auto select file Off" aria-pressed="true" disabled aria-disabled="true">
+              <i class="bi bi-crosshair" aria-hidden="true"></i>
+              <span class="auto-select-file-label visually-hidden">Auto select file Off</span>
+            </button>
+            <button class="folder-tree-tool-button toggle-folder-tree-filter" type="button" title="Open a folder to filter files and folders" aria-label="Filter files and folders" aria-expanded="false" disabled aria-disabled="true">
+              <i class="bi bi-funnel" aria-hidden="true"></i>
+            </button>
+            <input id="folder-tree-filter-input" class="folder-tree-filter-input" type="search" placeholder="Filter files..." aria-label="Filter files and folders" hidden disabled>
+          </div>
           <button class="tab-scroll-btn tab-scroll-left" id="tab-scroll-left" type="button" title="Scroll tabs left" aria-label="Scroll tabs left">
             <i class="bi bi-chevron-left"></i>
           </button>

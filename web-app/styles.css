@@ -1976,6 +1976,83 @@ a:focus {
   z-index: 10;
 }
 
+
+.folder-tree-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  padding: 0 6px;
+  border-right: 1px solid var(--border-color);
+  flex: 0 0 auto;
+}
+
+.folder-tree-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-color);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.folder-tree-tool-button:hover:not(:disabled) {
+  background-color: var(--button-hover);
+  border-color: var(--border-color);
+}
+
+.folder-tree-tool-button:active:not(:disabled),
+.folder-tree-tool-button[aria-pressed="true"]:not(:disabled) {
+  background-color: var(--button-active);
+  border-color: var(--border-color);
+}
+
+.folder-tree-tool-button:disabled,
+.folder-tree-tool-button[aria-disabled="true"] {
+  color: var(--disabled-text-color);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.folder-tree-filter-input {
+  width: 150px;
+  height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  padding: 0 8px;
+  font-size: 13px;
+  flex: 0 0 150px;
+}
+
+.folder-tree-filter-input::placeholder {
+  color: var(--disabled-text-color);
+}
+
+.folder-tree-filter-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.15);
+}
+
+.folder-tree-filter-input[hidden] {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .folder-tree-filter-input {
+    width: 110px;
+    flex-basis: 110px;
+  }
+}
+
 .tab-list {
   display: flex;
   align-items: flex-end;
