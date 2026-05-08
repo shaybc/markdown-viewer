@@ -3472,6 +3472,17 @@ This is a fully client-side application. Your content never leaves your browser 
   let untitledCounter = 0;
   const graphRenderCache = new Map();
   let graphRenderRequestId = 0;
+  const GRAPH_GROUP_QUERY_UPDATE_DELAY = 180;
+  const GRAPH_GROUP_DEFAULT_COLORS = Object.freeze([
+    "#7c3aed",
+    "#2563eb",
+    "#059669",
+    "#d97706",
+    "#dc2626",
+    "#db2777",
+    "#0891b2",
+    "#4f46e5"
+  ]);
   const GRAPH_DOCUMENT_SCHEMA_VERSION = 1;
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
     showTags: true,
@@ -3530,12 +3541,17 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   function getGraphColorInputValue(value) {
-    const color = normalizeGraphGroupColor(value, "#7c3aed");
+    const color = normalizeGraphGroupColor(value, GRAPH_GROUP_DEFAULT_COLORS[0]);
     if (/^#[0-9a-f]{6}$/i.test(color)) return color;
     if (/^#[0-9a-f]{3}$/i.test(color)) {
       return `#${color.slice(1).split("").map((digit) => digit + digit).join("")}`;
     }
-    return "#7c3aed";
+    return GRAPH_GROUP_DEFAULT_COLORS[0];
+  }
+
+  function getNextDefaultGraphGroupColor(groups) {
+    const groupCount = Array.isArray(groups) ? groups.length : 0;
+    return GRAPH_GROUP_DEFAULT_COLORS[groupCount % GRAPH_GROUP_DEFAULT_COLORS.length];
   }
 
   function normalizeGraphGroups(groups) {
@@ -3544,7 +3560,7 @@ This is a fully client-side application. Your content never leaves your browser 
       .map((group) => {
         const source = group && typeof group === "object" ? group : {};
         const query = String(source.query || "").trim();
-        const color = normalizeGraphGroupColor(source.color, "#7c3aed");
+        const color = normalizeGraphGroupColor(source.color, GRAPH_GROUP_DEFAULT_COLORS[0]);
         const baseId = String(source.id || "").trim() || createGraphGroupId(`${query}:${color}`);
         let id = baseId;
         let suffix = 2;
@@ -10107,7 +10123,17 @@ ${body}`;
       queryInput.value = group.query || "";
       queryInput.disabled = !isGraphTab;
       queryInput.setAttribute("aria-label", `Graph group ${index + 1} query`);
-      queryInput.addEventListener("change", () => updateGraphGroup(group.id, { query: queryInput.value }));
+      let queryUpdateTimeout = null;
+      const updateGroupQuery = () => {
+        window.clearTimeout(queryUpdateTimeout);
+        queryUpdateTimeout = null;
+        updateGraphGroup(group.id, { query: queryInput.value });
+      };
+      queryInput.addEventListener("input", () => {
+        window.clearTimeout(queryUpdateTimeout);
+        queryUpdateTimeout = window.setTimeout(updateGroupQuery, GRAPH_GROUP_QUERY_UPDATE_DELAY);
+      });
+      queryInput.addEventListener("change", updateGroupQuery);
       queryInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
@@ -11736,10 +11762,11 @@ ${body}`;
     graphAddGroupButton.addEventListener("click", () => {
       const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
       const nextIndex = currentConfig.groups.length + 1;
+      const nextDefaultColor = getNextDefaultGraphGroupColor(currentConfig.groups);
       const group = normalizeGraphGroups([{
         id: createGraphGroupId(`group:${Date.now()}:${nextIndex}`),
         query: "",
-        color: "#7c3aed",
+        color: nextDefaultColor,
         enabled: true
       }])[0];
       updateActiveGraphViewConfig({ groups: [...currentConfig.groups, group] });
