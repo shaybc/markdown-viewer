@@ -125,6 +125,9 @@
                             <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
                                 <i class="bi bi-diagram-3 me-2"></i> Graph View
                             </button>
+                            <button class="dropdown-item action-menu-item export-folder-to-graph" type="button" title="Create a portable graph archive that includes Markdown file contents." disabled aria-disabled="true">
+                                <i class="bi bi-download me-2"></i> Export Folder to Graph
+                            </button>
                         </div>
                     </div>
                     <!-- Hamburger menu for mobile -->
@@ -228,6 +231,10 @@
 
                             <button id="mobile-open-graph-view" class="mobile-menu-item" title="Open Graph View">
                                 <i class="bi bi-diagram-3 me-2"></i> Graph View
+                            </button>
+
+                            <button class="mobile-menu-item export-folder-to-graph" type="button" title="Create a portable graph archive that includes Markdown file contents." disabled aria-disabled="true">
+                                <i class="bi bi-download me-2"></i> Export Folder to Graph
                             </button>
                         </div>
                     </div>
@@ -334,6 +341,9 @@
                         </button>
                         <button class="folder-tree-tool-button open-graph-view" type="button" title="Open a folder to open Graph View" aria-label="Open Graph View" disabled aria-disabled="true">
                             <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                        </button>
+                        <button class="folder-tree-tool-button export-folder-to-graph" type="button" title="Open a folder to export it to a portable graph archive with Markdown file contents" aria-label="Export Folder to Graph" disabled aria-disabled="true">
+                            <i class="bi bi-download" aria-hidden="true"></i>
                         </button>
                         <div class="tag-management-menu dropdown">
                             <button class="folder-tree-tool-button tag-management-menu-button dropdown-toggle" type="button" id="tagManagementMenu" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Open a folder to manage tags" aria-label="Manage tags" disabled aria-disabled="true">
