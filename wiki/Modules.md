@@ -12,6 +12,7 @@ This document describes the major modules in **Markdown Viewer**. Because the ap
 - [Documentation and Support Modules](#documentation-and-support-modules)
 - [Logical Modules in `web-app/script.js`](#logical-modules-in-web-appscriptjs)
 - [Detailed Runtime Module Reference](#detailed-runtime-module-reference)
+- [Script Function Reference](#script-function-reference)
 - [Data Modules and Storage Keys](#data-modules-and-storage-keys)
 - [External Library Modules](#external-library-modules)
 
@@ -212,6 +213,12 @@ The main JavaScript file is organized into functional areas. The following list 
 ## Detailed Runtime Module Reference
 
 The full, dedicated reference for the Application Runtime Module is available at [Application Runtime Module](Application-Runtime-Module). It explains the execution model, dependency integration, state model, module inventory, core workflows, browser/desktop compatibility branches, cross-cutting concerns, and change guidelines for `web-app/script.js`.
+
+---
+
+## Script Function Reference
+
+For a numbered inventory of named function signatures, logical module mapping, and function logic notes, see [Script Function Reference](Script-Functions).
 
 ---
 

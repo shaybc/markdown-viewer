@@ -38,6 +38,7 @@ Then open **http://localhost:8080** in your browser.
 | [Architecture and Technology](Architecture-and-Technology) | Understand the runtime architecture, deployment model, data flow, and stack |
 | [Project Modules](Modules) | Review the repository modules and logical application modules |
 | [Application Runtime Module](Application-Runtime-Module) | Explore the modules and logic parts implemented in `web-app/script.js` |
+| [Script Function Reference](Script-Functions) | Review every named function signature in `web-app/script.js` with module mapping and logic notes |
 | [Contributing](Contributing) | How to contribute to the project |
 | [FAQ](FAQ) | Frequently asked questions |
 

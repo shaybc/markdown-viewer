@@ -16,6 +16,7 @@ This document describes the modules and logic parts implemented inside the **App
 - [Core Workflows](#core-workflows)
 - [Browser and Desktop Compatibility Logic](#browser-and-desktop-compatibility-logic)
 - [Cross-Cutting Concerns](#cross-cutting-concerns)
+- [Script Function Reference](#script-function-reference)
 - [Guidance for Future Changes](#guidance-for-future-changes)
 
 ---
@@ -231,6 +232,12 @@ The runtime checks feature availability before using APIs instead of assuming on
 - The runtime updates ARIA states for toggles, selected folder files, menus, and autocomplete where applicable.
 - Desktop and mobile controls are both wired to shared actions.
 - Keyboard shortcuts and Escape/outside-click handlers close menus and dialogs consistently.
+
+---
+
+## Script Function Reference
+
+For a complete numbered list of named functions in `web-app/script.js`, including source line, function signature, logical module participation, and a short logic note, see [Script Function Reference](Script-Functions).
 
 ---
 
