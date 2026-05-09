@@ -1768,6 +1768,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const graphRepelForce = document.getElementById("graph-repel-force");
   const graphLinkForce = document.getElementById("graph-link-force");
   const graphLinkDistance = document.getElementById("graph-link-distance");
+  const graphResetDefaultsButton = document.getElementById("graph-reset-defaults");
   const shareButton         = document.getElementById("share-button");
   const mobileShareButton   = document.getElementById("mobile-share-button");
   const githubImportModal = document.getElementById("github-import-modal");
@@ -3596,7 +3597,7 @@ This is a fully client-side application. Your content never leaves your browser 
   ]);
   const GRAPH_DOCUMENT_SCHEMA_VERSION = 1;
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
-    showTags: true,
+    showTags: false,
     hiddenTagIds: [],
     selectedTagIds: [],
     groups: [],
@@ -3694,7 +3695,7 @@ This is a fully client-side application. Your content never leaves your browser 
     return {
       ...DEFAULT_GRAPH_VIEW_CONFIG,
       ...source,
-      showTags: source.showTags !== false,
+      showTags: source.showTags === true,
       hiddenTagIds: normalizeGraphTagNodeIds(source.hiddenTagIds),
       selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds),
       groups: normalizeGraphGroups(source.groups),
@@ -10205,12 +10206,12 @@ ${body}`;
     return null;
   }
 
-  function updateGraphGroup(groupId, patch) {
+  function updateGraphGroup(groupId, patch, options = {}) {
     const activeGraphTab = getActiveGraphTab();
     if (!activeGraphTab) return;
     const graphViewConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
     const groups = graphViewConfig.groups.map((group) => (group.id === groupId ? { ...group, ...patch } : group));
-    updateActiveGraphViewConfig({ groups });
+    updateActiveGraphViewConfig({ groups }, options);
   }
 
   function deleteGraphGroup(groupId) {
@@ -10223,16 +10224,17 @@ ${body}`;
   const GRAPH_GROUP_QUERY_PREFIX_HELP = [
     { prefix: "path", label: "path:", description: "Match folders, path segments, or full paths." },
     { prefix: "file", label: "file:", description: "Match Markdown file names." },
-    { prefix: "tag", label: "tag:", description: "Match normalized frontmatter tags." }
+    { prefix: "tag", label: "tag:", description: "Match normalized frontmatter tags." },
+    { prefix: "text", label: "text:", description: "Match file contents." },
+    { prefix: "line", label: "line:", description: "Match individual Markdown lines." }
   ];
-  const GRAPH_GROUP_QUERY_SUGGESTION_LIMIT = 8;
   let activeGraphGroupSuggestionClose = null;
 
   function getGraphGroupQueryContext(input) {
     const value = String(input?.value || "");
     const cursor = typeof input?.selectionStart === "number" ? input.selectionStart : value.length;
     const beforeCursor = value.slice(0, cursor);
-    const prefixMatch = beforeCursor.match(/(^|\s)(path|file|tag):([^\s]*)$/i);
+    const prefixMatch = beforeCursor.match(/(^|\s)(path|file|tag|text|line):([^\s]*)$/i);
     if (!prefixMatch) {
       return { prefix: "", query: "", replaceStart: cursor, replaceEnd: cursor };
     }
@@ -10282,8 +10284,7 @@ ${body}`;
     }
 
     return Array.from(entryMap.values())
-      .sort((a, b) => a.value.localeCompare(b.value, undefined, { sensitivity: "base" }))
-      .slice(0, GRAPH_GROUP_QUERY_SUGGESTION_LIMIT);
+      .sort((a, b) => a.value.localeCompare(b.value, undefined, { sensitivity: "base" }));
   }
 
   function attachGraphGroupQuerySuggestions(row, queryInput, group, sourceTab) {
@@ -10320,7 +10321,7 @@ ${body}`;
       queryInput.focus();
       queryInput.setSelectionRange(cursor, cursor);
       closePopover();
-      updateGraphGroup(group.id, { query: nextValue });
+      updateGraphGroup(group.id, { query: nextValue }, { skipToolbar: true });
     };
 
     const renderPopover = () => {
@@ -10474,7 +10475,7 @@ ${body}`;
       const updateGroupQuery = () => {
         window.clearTimeout(queryUpdateTimeout);
         queryUpdateTimeout = null;
-        updateGraphGroup(group.id, { query: queryInput.value });
+        updateGraphGroup(group.id, { query: queryInput.value }, { skipToolbar: true });
       };
       queryInput.addEventListener("input", () => {
         window.clearTimeout(queryUpdateTimeout);
@@ -10570,9 +10571,28 @@ ${body}`;
     if (graphRepelForce) graphRepelForce.value = graphViewConfig.repelForce;
     if (graphLinkForce) graphLinkForce.value = graphViewConfig.linkForce;
     if (graphLinkDistance) graphLinkDistance.value = graphViewConfig.linkDistance;
+    if (graphResetDefaultsButton) graphResetDefaultsButton.disabled = !isGraphTab;
   }
 
-  function updateActiveGraphViewConfig(patch) {
+  function resetActiveGraphViewToDefaults() {
+    const currentConfig = normalizeGraphViewConfig(getActiveGraphTab()?.graphViewConfig);
+    updateActiveGraphViewConfig({
+      showTags: DEFAULT_GRAPH_VIEW_CONFIG.showTags,
+      selectedTagIds: [],
+      searchQuery: DEFAULT_GRAPH_VIEW_CONFIG.searchQuery,
+      groups: currentConfig.groups.map((group) => ({ ...group, enabled: false })),
+      showArrows: DEFAULT_GRAPH_VIEW_CONFIG.showArrows,
+      textFadeThreshold: DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold,
+      nodeSize: DEFAULT_GRAPH_VIEW_CONFIG.nodeSize,
+      linkThickness: DEFAULT_GRAPH_VIEW_CONFIG.linkThickness,
+      centerForce: DEFAULT_GRAPH_VIEW_CONFIG.centerForce,
+      repelForce: DEFAULT_GRAPH_VIEW_CONFIG.repelForce,
+      linkForce: DEFAULT_GRAPH_VIEW_CONFIG.linkForce,
+      linkDistance: DEFAULT_GRAPH_VIEW_CONFIG.linkDistance
+    });
+  }
+
+  function updateActiveGraphViewConfig(patch, options = {}) {
     const activeGraphTab = getActiveGraphTab();
     if (!activeGraphTab) return;
     activeGraphTab.graphViewConfig = normalizeGraphViewConfig({
@@ -10584,10 +10604,10 @@ ${body}`;
       activeGraphTab.graphDocument.updatedAt = Date.now();
     }
     removeGraphRenderForTab(activeGraphTab.id);
-    updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
+    if (!options.skipToolbar) updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
     markGraphTabAsChanged(activeGraphTab);
     saveTabsToStorage(tabs);
-    renderGraphView();
+    renderGraphView({ skipToolbar: options.skipToolbar });
   }
 
   function animateActiveGraphView() {
@@ -10606,7 +10626,7 @@ ${body}`;
     }
   }
 
-  async function renderGraphView() {
+  async function renderGraphView(options = {}) {
     if (!graphViewCanvas) return;
     const renderRequestId = ++graphRenderRequestId;
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
@@ -10623,7 +10643,7 @@ ${body}`;
 
     renderTagManagementList();
     let graphSnapshot = activeTab.graphSnapshot || null;
-    updateGraphTagToolbar(activeTab, graphSnapshot);
+    if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
     if (!graphSnapshot && folderMarkdownFiles.length) {
       const snapshotFiles = folderMarkdownFiles.slice();
       const loadingMessage = document.createElement("p");
@@ -10636,7 +10656,7 @@ ${body}`;
         return;
       }
       activeTab.graphSnapshot = graphSnapshot;
-      updateGraphTagToolbar(activeTab, graphSnapshot);
+      if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
       saveTabsToStorage(tabs);
       graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
     }
@@ -10648,7 +10668,7 @@ ${body}`;
       });
       graphRenderCache.clear();
       activeTab.visiblePointCount = 0;
-      updateGraphTagToolbar(activeTab, graphSnapshot);
+      if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
       updateStatusLine({ visiblePointCount: 0 });
       graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">This graph tab does not have a saved graph snapshot.</p>';
       return;
@@ -12162,6 +12182,7 @@ ${body}`;
   bindGraphRangeControl(graphRepelForce, "repelForce");
   bindGraphRangeControl(graphLinkForce, "linkForce");
   bindGraphRangeControl(graphLinkDistance, "linkDistance");
+  if (graphResetDefaultsButton) graphResetDefaultsButton.addEventListener("click", resetActiveGraphViewToDefaults);
 
   function initializeGraphFilterTooltips() {
     if (!graphViewToolbar) return;
@@ -12180,6 +12201,7 @@ ${body}`;
       ["#graph-repel-force", "Push points away from each other. Higher values spread the graph out more."],
       ["#graph-link-force", "Control how strongly linked points pull toward their target link distance."],
       ["#graph-link-distance", "Set the preferred distance between connected points."],
+      ["#graph-reset-defaults", "Reset search, selected tag, group toggles, display options, and force settings to defaults."],
       ["#graph-view-close", "Close graph view and return to the document view."],
       [".graph-collapsible-summary", "Expand or collapse this section of graph filters."],
       [".graph-group-query-input", "Type a group query. Use prefixes such as path:, file:, tag:, text:, or line:."],

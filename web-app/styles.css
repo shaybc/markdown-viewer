@@ -1153,6 +1153,11 @@ body {
   background: var(--button-hover);
 }
 
+.graph-reset-defaults-button {
+  justify-content: center;
+  width: 100%;
+}
+
 .graph-group-query-suggestion-title {
   overflow: hidden;
   font-weight: 600;
