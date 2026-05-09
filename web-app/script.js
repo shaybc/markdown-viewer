@@ -2126,7 +2126,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     for (const tab of tabs) {
       if (syncRequestId !== openGraphSnapshotTagSyncRequestId) return false;
-      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
+      if (tab?.type !== "graph" || !tab.graphSnapshot?.files || isKeepSavedGraphMode(tab)) continue;
 
       let graphChanged = false;
       tab.graphSnapshot.files.forEach((snapshotFile) => {
@@ -2162,7 +2162,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function getActiveGraphSnapshotFileDeletionTargets(tagName, existingKeys) {
     const activeGraphTab = getActiveGraphTab();
-    if (!activeGraphTab?.graphSnapshot?.files) return [];
+    if (!activeGraphTab?.graphSnapshot?.files || isKeepSavedGraphMode(activeGraphTab)) return [];
 
     return activeGraphTab.graphSnapshot.files
       .filter((snapshotFile) => !existingKeys.has(getTagDeletionEntryKey(snapshotFile)))
@@ -2209,7 +2209,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let changedActiveGraph = false;
 
     for (const tab of tabs) {
-      if (tab?.type !== "graph" || !tab.graphSnapshot?.files) continue;
+      if (tab?.type !== "graph" || !tab.graphSnapshot?.files || isKeepSavedGraphMode(tab)) continue;
 
       let graphChanged = false;
       tab.graphSnapshot.files.forEach((snapshotFile) => {
@@ -3939,6 +3939,10 @@ This is a fully client-side application. Your content never leaves your browser 
     ].some((count) => Number(count) > 0);
   }
 
+  function isKeepSavedGraphMode(tab) {
+    return !!(tab && tab.type === "graph" && tab.keepSavedGraphMode);
+  }
+
 
   function getGraphNodeNormalizedPath(node) {
     if (!node) return "";
@@ -4054,6 +4058,31 @@ This is a fully client-side application. Your content never leaves your browser 
     }, 4500);
   }
 
+  function ensureSavedGraphModePill() {
+    if (!graphViewToolbar) return null;
+    let pill = graphViewToolbar.querySelector(".saved-graph-mode-pill");
+    if (!pill) {
+      pill = document.createElement("div");
+      pill.className = "saved-graph-mode-pill hidden";
+      pill.setAttribute("role", "status");
+      pill.setAttribute("aria-live", "polite");
+      pill.textContent = "Saved graph mode — current folder changes are ignored.";
+      const panelHeading = graphViewToolbar.querySelector(".graph-filter-panel-heading");
+      if (panelHeading?.nextSibling) {
+        graphViewToolbar.insertBefore(pill, panelHeading.nextSibling);
+      } else {
+        graphViewToolbar.prepend(pill);
+      }
+    }
+    return pill;
+  }
+
+  function updateSavedGraphModePill(tab) {
+    const pill = ensureSavedGraphModePill();
+    if (!pill) return;
+    pill.classList.toggle("hidden", !isKeepSavedGraphMode(tab));
+  }
+
   function getGraphComparisonSummaryCounts(comparison) {
     const counts = comparison?.counts || {};
     return {
@@ -4137,7 +4166,7 @@ This is a fully client-side application. Your content never leaves your browser 
   }
 
   async function promptForStaleSavedGraphIfNeeded(tab) {
-    if (!tab?.graphSnapshot || !folderMarkdownFiles.length) return;
+    if (!tab?.graphSnapshot || !folderMarkdownFiles.length || isKeepSavedGraphMode(tab)) return;
     const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
     if (graphDocumentType !== GRAPH_DOCUMENT_TYPE_VIEW) return;
 
@@ -4152,6 +4181,17 @@ This is a fully client-side application. Your content never leaves your browser 
     }
   }
 
+  function keepSavedGraphFromStaleModal() {
+    const staleComparison = activeGraphStaleComparison;
+    const tab = tabs.find((candidate) => candidate.id === staleComparison?.tabId) || getActiveGraphTab();
+    if (tab?.type === "graph") {
+      tab.keepSavedGraphMode = true;
+      saveTabsToStorage(tabs);
+      if (activeTabId === tab.id) updateSavedGraphModePill(tab);
+    }
+    hideGraphStaleModal();
+  }
+
   async function updateGraphFromStaleModal() {
     const staleComparison = activeGraphStaleComparison;
     if (!staleComparison?.currentSnapshot) return;
@@ -4163,6 +4203,7 @@ This is a fully client-side application. Your content never leaves your browser 
       savedLayout: tab.graphLayout,
       savedConfig: tab.graphViewConfig
     });
+    tab.keepSavedGraphMode = false;
     markGraphTabAsChanged(tab);
     saveTabsToStorage(tabs);
     hideGraphStaleModal();
@@ -5476,20 +5517,148 @@ This is a fully client-side application. Your content never leaves your browser 
     }) || null;
   }
 
+  function showSavedGraphMissingPathDialog() {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "saved-graph-missing-file-modal";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-labelledby", "saved-graph-missing-file-title");
+      overlay.innerHTML = `
+        <div class="saved-graph-missing-file-dialog">
+          <p id="saved-graph-missing-file-title" class="saved-graph-missing-file-message">This file no longer exists at the saved path.</p>
+          <div class="saved-graph-missing-file-actions">
+            <button class="tool-button saved-graph-locate-file" type="button">Locate file</button>
+            <button class="tool-button saved-graph-remove-file" type="button">Remove from graph</button>
+            <button class="tool-button saved-graph-cancel-file" type="button">Cancel</button>
+          </div>
+        </div>
+      `;
+
+      const cleanup = (action) => {
+        overlay.remove();
+        resolve(action);
+      };
+
+      overlay.querySelector(".saved-graph-locate-file")?.addEventListener("click", () => cleanup("locate"));
+      overlay.querySelector(".saved-graph-remove-file")?.addEventListener("click", () => cleanup("remove"));
+      overlay.querySelector(".saved-graph-cancel-file")?.addEventListener("click", () => cleanup("cancel"));
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) cleanup("cancel");
+      });
+      overlay.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") cleanup("cancel");
+      });
+
+      document.body.appendChild(overlay);
+      overlay.querySelector(".saved-graph-locate-file")?.focus({ preventScroll: true });
+    });
+  }
+
+  async function locateReplacementMarkdownFileForSavedGraphNode() {
+    if (isNeutralinoRuntime() && Neutralino.os?.showOpenDialog) {
+      const selected = await Neutralino.os.showOpenDialog("Locate Markdown file", {
+        multiSelections: false,
+        filters: [{ name: "Markdown files", extensions: ["md", "markdown"] }]
+      });
+      const selectedPath = Array.isArray(selected) ? selected[0] : selected;
+      if (!selectedPath) return null;
+      return {
+        name: getFileName(selectedPath),
+        path: selectedPath,
+        content: await Neutralino.filesystem.readFile(selectedPath)
+      };
+    }
+
+    if (typeof window.showOpenFilePicker === "function") {
+      const handles = await window.showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: "Markdown files",
+            accept: { "text/markdown": [".md", ".markdown"], "text/plain": [".md", ".markdown"] }
+          }
+        ]
+      });
+      const handle = handles && handles[0];
+      if (!handle) return null;
+      const file = await handle.getFile();
+      return {
+        name: file.name || handle.name || "document.md",
+        handle,
+        content: await file.text()
+      };
+    }
+
+    alert("Locate file is available in browsers that support the file picker or in the desktop app.");
+    return null;
+  }
+
+  async function openLocatedSavedGraphFile(graphNode) {
+    try {
+      const locatedFile = await locateReplacementMarkdownFileForSavedGraphNode();
+      if (!locatedFile) return null;
+      return openSidebarFileInPermanentTab(
+        normalizeEditorContent(locatedFile.content || ""),
+        getMarkdownTitleFromFileName(locatedFile.name || graphNode?.label || "document.md"),
+        { name: locatedFile.name, handle: locatedFile.handle || null, path: locatedFile.path || null }
+      );
+    } catch (error) {
+      if (error && error.name === "AbortError") return null;
+      console.error("Failed to locate saved graph file:", error);
+      alert("Unable to open the located file.");
+      return null;
+    }
+  }
+
+  function removeSavedGraphNodeFromActiveTab(nodeId) {
+    const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
+    if (!activeGraphTab?.graphSnapshot || !nodeId) return;
+    activeGraphTab.graphSnapshot = {
+      ...activeGraphTab.graphSnapshot,
+      nodes: (activeGraphTab.graphSnapshot.nodes || []).filter((node) => node.id !== nodeId),
+      links: (activeGraphTab.graphSnapshot.links || []).filter((link) => {
+        const sourceId = link.source?.id || link.source;
+        const targetId = link.target?.id || link.target;
+        return sourceId !== nodeId && targetId !== nodeId;
+      }),
+      files: (activeGraphTab.graphSnapshot.files || []).filter((file) => file.id !== nodeId)
+    };
+    activeGraphTab.graphDocument = serializeGraphTab(activeGraphTab, { documentType: GRAPH_DOCUMENT_TYPE_VIEW });
+    markGraphTabAsChanged(activeGraphTab);
+    saveTabsToStorage(tabs);
+    graphRenderCache.delete(activeGraphTab.id);
+    renderGraphView();
+  }
+
+  async function handleMissingSavedGraphNodePath(graphNode) {
+    const action = await showSavedGraphMissingPathDialog();
+    if (action === "locate") return openLocatedSavedGraphFile(graphNode);
+    if (action === "remove") removeSavedGraphNodeFromActiveTab(graphNode?.id);
+    return null;
+  }
+
   async function openGraphNodeFileInPermanentTab(graphNode) {
     if (!graphNode) return null;
 
     const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
+    const keepSavedMode = isKeepSavedGraphMode(activeGraphTab);
     const snapshotFile = activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
-    const folderEntry = (folderMarkdownFiles || []).find(function(entry) {
+    const folderEntry = keepSavedMode ? null : (folderMarkdownFiles || []).find(function(entry) {
       return getGraphFileEntryNodeId(entry) === graphNode.id;
     });
     const fileEntry = snapshotFile || folderEntry;
-    const readableFileEntry = (fileEntry && typeof fileEntry.content === "string") ? fileEntry : (folderEntry || fileEntry);
+    const readableFileEntry = keepSavedMode
+      ? snapshotFile
+      : ((fileEntry && typeof fileEntry.content === "string") ? fileEntry : (folderEntry || fileEntry));
 
     if (!fileEntry) {
       alert("Unable to find the selected file in this graph snapshot.");
       return null;
+    }
+
+    if (keepSavedMode && readableFileEntry?.content === undefined && !readableFileEntry?.handle && !(isNeutralinoRuntime() && readableFileEntry?.fullPath)) {
+      return handleMissingSavedGraphNodePath(graphNode);
     }
 
     const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || graphNode.fullPath || null;
@@ -5516,6 +5685,7 @@ This is a fully client-side application. Your content never leaves your browser 
       return openSidebarFileInPermanentTab(content, getMarkdownTitleFromFileName(name), sourceFile);
     } catch (error) {
       console.error("Failed to open graph node file:", error);
+      if (keepSavedMode) return handleMissingSavedGraphNodePath(graphNode);
       alert("Unable to open selected file.");
       return null;
     }
@@ -10651,15 +10821,7 @@ ${body}`;
     const graphData = deserializeGraphDocument(graphDocumentForTab);
     const fallbackName = getGraphTitleFromFileName(name) || "Saved Graph";
     const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument: graphData.graphDocument });
-    let updatedFromCurrentFolder = false;
-    if (graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_VIEW && folderMarkdownFiles.length) {
-      const currentSnapshot = await createGraphSnapshot(folderMarkdownFiles.slice(), activeFolderName || graphData.folderName || fallbackName);
-      updatedFromCurrentFolder = applyCurrentFolderSnapshotToSavedGraphTab(graphTab, currentSnapshot, {
-        savedSnapshot: graphData.graphSnapshot,
-        savedLayout: graphData.graphLayout,
-        savedConfig: graphData.graphViewConfig
-      });
-    }
+    graphTab.keepSavedGraphMode = graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_VIEW;
     graphTab.sourceFileName = name;
     graphTab.title = fallbackName;
     if (source.handle) graphTab.sourceFileHandle = source.handle;
@@ -10668,9 +10830,7 @@ ${body}`;
     tabs.push(graphTab);
     saveTabsToStorage(tabs);
     switchTab(graphTab.id);
-    if (updatedFromCurrentFolder) {
-      showGraphUpdatedBanner();
-    } else {
+    if (!isKeepSavedGraphMode(graphTab)) {
       promptForStaleSavedGraphIfNeeded(graphTab);
     }
     return graphTab;
@@ -11156,6 +11316,7 @@ ${body}`;
   function updateGraphTagToolbar(tab, graphSnapshot) {
     const graphViewConfig = normalizeGraphViewConfig(tab?.graphViewConfig);
     const isGraphTab = !!(tab && tab.type === "graph");
+    updateSavedGraphModePill(tab);
     renderGraphGroupsToolbar(tab);
     if (graphShowTagsButton) {
       graphShowTagsButton.disabled = !isGraphTab;
@@ -11283,7 +11444,7 @@ ${body}`;
     renderTagManagementList();
     let graphSnapshot = activeTab.graphSnapshot || null;
     if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
-    if (!graphSnapshot && folderMarkdownFiles.length) {
+    if (!graphSnapshot && folderMarkdownFiles.length && !isKeepSavedGraphMode(activeTab)) {
       const snapshotFiles = folderMarkdownFiles.slice();
       const loadingMessage = document.createElement("p");
       loadingMessage.className = "folder-tree-placeholder";
@@ -11890,7 +12051,7 @@ ${body}`;
       if (!graphNode) return null;
       const activeGraphTab = getActiveGraphTab();
       const snapshotFile = activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
-      return snapshotFile || getFolderMarkdownEntryForNode(graphNode);
+      return snapshotFile || (isKeepSavedGraphMode(activeGraphTab) ? null : getFolderMarkdownEntryForNode(graphNode));
     };
 
     const getNodeFileName = (nodeId) => {
@@ -12079,6 +12240,10 @@ ${body}`;
       if (!graphNode || graphNode.type === "tag") return;
       const activeGraphTab = getActiveGraphTab();
       const snapshotFile = getSnapshotFileForNode(graphNode);
+      if (isKeepSavedGraphMode(activeGraphTab)) {
+        alert("Saved graph mode does not update saved tags or links.");
+        return;
+      }
       if (!activeGraphTab || !snapshotFile) {
         alert("Unable to find the selected file in this graph snapshot.");
         return;
@@ -12226,8 +12391,10 @@ ${body}`;
       contextMenuActionSeparator.classList.remove("hidden");
       setNodeContextItemsHidden(false);
       const isFileNode = (d.type || "file") !== "tag";
-      [openFileBtn, openDefaultAppBtn, revealFileBtn, renameFileBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, exportSubmenu, deleteFileBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode));
-      tagsSubmenu.classList.toggle("hidden", !isFileNode);
+      const keepSavedMode = isKeepSavedGraphMode(activeTab);
+      [openFileBtn, openDefaultAppBtn, revealFileBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      [renameFileBtn, deleteFileBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode || keepSavedMode));
+      tagsSubmenu.classList.toggle("hidden", !isFileNode || keepSavedMode);
       if (isFileNode) {
         const snapshotFile = getSnapshotFileForNode(d);
         const currentTags = normalizeFileTagList(d.tags?.length ? d.tags : snapshotFile?.tags || []);
@@ -12837,8 +13004,8 @@ ${body}`;
   bindGraphRangeControl(graphLinkForce, "linkForce");
   bindGraphRangeControl(graphLinkDistance, "linkDistance");
   if (graphResetDefaultsButton) graphResetDefaultsButton.addEventListener("click", resetActiveGraphViewToDefaults);
-  graphStaleCloseButton?.addEventListener("click", hideGraphStaleModal);
-  graphStaleKeepButton?.addEventListener("click", hideGraphStaleModal);
+  graphStaleCloseButton?.addEventListener("click", keepSavedGraphFromStaleModal);
+  graphStaleKeepButton?.addEventListener("click", keepSavedGraphFromStaleModal);
   graphStaleUpdateButton?.addEventListener("click", updateGraphFromStaleModal);
   graphStaleViewDetailsButton?.addEventListener("click", () => {
     setGraphStaleDetailsVisible(graphStaleDetails?.classList.contains("hidden"));
