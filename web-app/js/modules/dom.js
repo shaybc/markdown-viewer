@@ -1,4 +1,4 @@
 export function registerDom(app) {
-  app.elements.document = document;
-  app.elements.window = window;
+  app.dom.document = document;
+  app.dom.window = window;
 }
