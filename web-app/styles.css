@@ -992,6 +992,71 @@ body {
   filter: brightness(0.96);
 }
 
+
+.saved-graph-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.65rem 0 0;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  color: var(--text-color);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.saved-graph-mode-pill.hidden {
+  display: none;
+}
+
+.saved-graph-missing-file-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.saved-graph-missing-file-dialog {
+  width: min(460px, 95vw);
+  padding: 1.15rem;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--preview-bg);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  color: var(--text-color);
+}
+
+.saved-graph-missing-file-message {
+  margin: 0 0 1rem;
+  font-weight: 700;
+}
+
+.saved-graph-missing-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+@media (max-width: 560px) {
+  .saved-graph-missing-file-actions {
+    flex-direction: column;
+  }
+
+  .saved-graph-missing-file-actions .tool-button {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
 @media (max-width: 560px) {
   .graph-stale-summary {
     grid-template-columns: 1fr;
