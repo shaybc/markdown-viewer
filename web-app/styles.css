@@ -1658,6 +1658,15 @@ body {
   stroke-width: 1px;
 }
 
+.graph-link-status-saved-only {
+  stroke-dasharray: 6 6;
+  stroke-opacity: 0.28;
+}
+
+.graph-link-tag.graph-link-status-saved-only {
+  stroke-opacity: 0.28;
+}
+
 .graph-link.highlighted-direct {
   stroke: #8b5cf6;
   stroke-opacity: 1;
@@ -1686,10 +1695,19 @@ body {
   stroke-width: 1.5px;
 }
 
+.graph-node-status-saved-only,
+.graph-label-status-saved-only {
+  opacity: 0.35;
+}
+
 .graph-arrowhead {
   fill: #ffffff;
   opacity: 0.95;
   pointer-events: none;
+}
+
+.graph-arrowhead-status-saved-only {
+  opacity: 0.28;
 }
 
 .graph-arrowhead.highlighted-backlink {
