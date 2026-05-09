@@ -3834,19 +3834,70 @@ This is a fully client-side application. Your content never leaves your browser 
     return serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_EXPORT });
   }
 
-  function normalizeGraphDocumentType(source, snapshot) {
-    const explicitDocumentType = typeof source.documentType === "string" ? source.documentType : "";
-    if (GRAPH_DOCUMENT_TYPES.has(explicitDocumentType)) return explicitDocumentType;
+  function getExplicitGraphDocumentType(source) {
+    if (!source || typeof source !== "object") return "";
+    if (Object.prototype.hasOwnProperty.call(source, "documentType")) {
+      return typeof source.documentType === "string" ? source.documentType.trim() : "";
+    }
 
     // Accept a document-level `type` alias for imported graph documents, but avoid
     // treating persisted application tab types such as `graph` as graph document types.
-    const explicitTypeAlias = typeof source.type === "string" ? source.type : "";
-    if (GRAPH_DOCUMENT_TYPES.has(explicitTypeAlias)) return explicitTypeAlias;
+    const explicitTypeAlias = typeof source.type === "string" ? source.type.trim() : "";
+    return GRAPH_DOCUMENT_TYPES.has(explicitTypeAlias) ? explicitTypeAlias : "";
+  }
 
+  function inferLegacyGraphDocumentType(snapshot) {
     // Legacy graph documents did not include a document type. Files with embedded
     // snapshot file content are full exports; files without embedded content are
     // view-only graph documents.
     return graphSnapshotHasEmbeddedFileContent(snapshot) ? GRAPH_DOCUMENT_TYPE_EXPORT : GRAPH_DOCUMENT_TYPE_VIEW;
+  }
+
+  function normalizeGraphDocumentType(source, snapshot) {
+    const explicitDocumentType = getExplicitGraphDocumentType(source);
+    if (GRAPH_DOCUMENT_TYPES.has(explicitDocumentType)) return explicitDocumentType;
+
+    if (Object.prototype.hasOwnProperty.call(source, "documentType")) {
+      throw new Error(`Unsupported graph document type: ${String(source.documentType || "(empty)")}.`);
+    }
+
+    const typeAlias = typeof source.type === "string" ? source.type.trim() : "";
+    if (typeAlias && typeAlias !== "graph" && typeAlias !== "markdown" && looksLikeGraphDocument(source)) {
+      throw new Error(`Unsupported graph document type: ${typeAlias}.`);
+    }
+
+    return inferLegacyGraphDocumentType(snapshot);
+  }
+
+  function getGraphDocumentKind(source, snapshot) {
+    const explicitDocumentType = getExplicitGraphDocumentType(source);
+    if (GRAPH_DOCUMENT_TYPES.has(explicitDocumentType)) {
+      return { documentType: explicitDocumentType, isLegacy: false };
+    }
+
+    return { documentType: inferLegacyGraphDocumentType(snapshot), isLegacy: true };
+  }
+
+  function validateParsedGraphDocument(document) {
+    if (!document || typeof document !== "object" || Array.isArray(document)) {
+      throw new Error("The selected JSON file is not a valid graph document.");
+    }
+
+    if (Object.prototype.hasOwnProperty.call(document, "documentType")) {
+      const documentType = typeof document.documentType === "string" ? document.documentType.trim() : "";
+      if (!GRAPH_DOCUMENT_TYPES.has(documentType)) {
+        throw new Error(`Unsupported graph document type: ${String(document.documentType || "(empty)")}. Supported types are ${GRAPH_DOCUMENT_TYPE_EXPORT} and ${GRAPH_DOCUMENT_TYPE_VIEW}.`);
+      }
+    }
+
+    const typeAlias = typeof document.type === "string" ? document.type.trim() : "";
+    if (typeAlias && typeAlias !== "graph" && typeAlias !== "markdown" && !GRAPH_DOCUMENT_TYPES.has(typeAlias) && looksLikeGraphDocument(document)) {
+      throw new Error(`Unsupported graph document type: ${typeAlias}. Supported types are ${GRAPH_DOCUMENT_TYPE_EXPORT} and ${GRAPH_DOCUMENT_TYPE_VIEW}.`);
+    }
+
+    if (!looksLikeGraphDocument(document)) {
+      throw new Error("The selected JSON file is not a Markdown Viewer graph file.");
+    }
   }
 
   function normalizeGraphDocument(document) {
@@ -10207,13 +10258,21 @@ ${body}`;
       throw new Error("The selected graph file is not valid JSON.");
     }
 
-    if (!looksLikeGraphDocument(graphDocument)) {
-      throw new Error("The selected JSON file is not a Markdown Viewer graph file.");
-    }
+    validateParsedGraphDocument(graphDocument);
 
-    const graphData = deserializeGraphDocument(graphDocument);
+    const normalizedSnapshot = normalizeGraphSnapshot(graphDocument.snapshot || graphDocument.graphSnapshot || null);
+    const graphDocumentKind = getGraphDocumentKind(graphDocument, normalizedSnapshot);
+    const graphDocumentForTab = graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_EXPORT
+      ? graphDocument
+      : {
+        ...graphDocument,
+        documentType: GRAPH_DOCUMENT_TYPE_VIEW,
+        snapshot: stripGraphSnapshotContent(normalizedSnapshot),
+        graphSnapshot: undefined
+      };
+    const graphData = deserializeGraphDocument(graphDocumentForTab);
     const fallbackName = getGraphTitleFromFileName(name) || "Saved Graph";
-    const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument });
+    const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument: graphData.graphDocument });
     graphTab.sourceFileName = name;
     graphTab.title = fallbackName;
     if (source.handle) graphTab.sourceFileHandle = source.handle;
