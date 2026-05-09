@@ -1578,6 +1578,9 @@ document.addEventListener("DOMContentLoaded", function () {
           <button class="folder-tree-tool-button open-graph-view" type="button" title="Open a folder to open Graph View" aria-label="Open Graph View" disabled aria-disabled="true">
             <i class="bi bi-diagram-3" aria-hidden="true"></i>
           </button>
+          <button class="folder-tree-tool-button export-folder-to-graph" type="button" title="Open a folder to export it to a portable graph archive with Markdown file contents" aria-label="Export Folder to Graph" disabled aria-disabled="true">
+            <i class="bi bi-download" aria-hidden="true"></i>
+          </button>
           <button class="folder-tree-tool-button toggle-unsupported-files" type="button" title="Open a folder to show unsupported file types" aria-label="Show unsupported file types in the folder view" aria-pressed="false" disabled aria-disabled="true">
             <i class="bi bi-file-earmark-x" aria-hidden="true"></i>
           </button>
@@ -2387,6 +2390,10 @@ document.addEventListener("DOMContentLoaded", function () {
     return document.querySelectorAll(".folder-tree-tool-button.open-graph-view");
   }
 
+  function getFolderTreeGraphExportButtons() {
+    return document.querySelectorAll(".export-folder-to-graph");
+  }
+
   function getTagManagementMenuButtons() {
     return document.querySelectorAll(".tag-management-menu-button");
   }
@@ -2570,6 +2577,19 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function updateFolderTreeGraphExportButtons() {
+    const hasFolder = !!isFolderOpen;
+    const label = "Export Folder to Graph";
+    const description = "Create a portable graph archive that includes Markdown file contents.";
+    const title = hasFolder ? description : "Open a folder to export it to a portable graph archive with Markdown file contents";
+    getFolderTreeGraphExportButtons().forEach(function(button) {
+      button.disabled = !hasFolder;
+      button.title = title;
+      button.setAttribute("aria-label", label);
+      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
+    });
+  }
+
   function updateTagManagementMenuButtons() {
     const hasFolder = !!isFolderOpen;
     const title = hasFolder ? "Manage tags" : "Open a folder to manage tags";
@@ -2596,6 +2616,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function updateFolderTreeToolbarState() {
     updateAutoSelectFileButtons();
     updateFolderTreeGraphViewButtons();
+    updateFolderTreeGraphExportButtons();
     updateTagManagementMenuButtons();
     updateUnsupportedFileToggleButtons();
     updateFolderTreeExpandToggleButtons();
@@ -6127,6 +6148,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     exportMarkdown: { label: "Export as Markdown", icon: "bi bi-file-earmark-text" },
     exportHtml: { label: "Export as HTML", icon: "bi bi-file-earmark-code" },
     exportPdf: { label: "Export as PDF", icon: "bi bi-file-earmark-pdf" },
+    exportFolderToGraph: { label: "Export Folder to Graph", icon: "bi bi-download" },
     showGraphView: { label: "Show graph view", icon: "bi bi-diagram-3" },
     refresh: { label: "Refresh", icon: "bi bi-arrow-clockwise" },
     newFile: { label: "New file ...", icon: "bi bi-file-earmark-plus" },
@@ -7511,6 +7533,17 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     saveTabsToStorage(tabs);
   }
 
+  async function exportSidebarFolderToGraph(node) {
+    if (!node || node.kind !== "directory") return false;
+    if (isOpenFolderRootContextNode(node)) {
+      return exportActiveFolderToGraph();
+    }
+
+    const folderName = getSidebarFolderGraphTitle(node);
+    const folderFiles = await collectMarkdownFilesForSidebarFolder(node);
+    return exportFolderFilesToGraph(folderFiles, folderName);
+  }
+
   async function revealSidebarFolder(node) {
     const folderPath = getSidebarFolderFilesystemPath(node);
     if (!folderPath || !isNeutralinoRuntime() || !Neutralino.os?.open) {
@@ -7552,6 +7585,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       CONTEXT_MENU_ACTIONS.showGraphView.label,
       CONTEXT_MENU_ACTIONS.showGraphView.icon,
       "Open a graph view containing only Markdown files in this folder and its sub-folders."
+    );
+    const exportFolderToGraphBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.exportFolderToGraph.label,
+      CONTEXT_MENU_ACTIONS.exportFolderToGraph.icon,
+      "Create a portable graph archive that includes Markdown file contents."
     );
     const refreshFolderTreeBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.refresh.label,
@@ -7604,6 +7642,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       newFileBtn,
       newFolderBtn,
       showGraphBtn,
+      exportFolderToGraphBtn,
       refreshFolderTreeBtn,
       deleteFolderSeparator,
       deleteFolderBtn
@@ -7633,6 +7672,19 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       } catch (error) {
         console.error("Failed to open sidebar folder graph view:", error);
         alert("Unable to open a graph view for this folder.");
+      }
+    });
+
+    exportFolderToGraphBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFolderContextMenu();
+      try {
+        await exportSidebarFolderToGraph(target);
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.error("Failed to export sidebar folder to graph:", error);
+        alert("Unable to export this folder to a graph archive.");
       }
     });
 
@@ -9940,6 +9992,74 @@ ${body}`;
   }
 
 
+  function getGraphExportContent(graphSnapshot, folderName, graphViewConfig) {
+    const graphTab = createGraphTab(folderName || graphSnapshot?.folderName || "Graph View", {
+      graphSnapshot,
+      graphViewConfig: graphViewConfig || null
+    });
+    const graphDocument = serializeGraphTab(graphTab, { documentType: GRAPH_DOCUMENT_TYPE_EXPORT });
+    return JSON.stringify(graphDocument, null, 2);
+  }
+
+  async function writeGraphExportWithSaveDialog(content, suggestedName) {
+    const dialogTitle = "Export Folder to Graph - includes Markdown file contents";
+    const fileTypeDescription = "Portable graph archive with Markdown file contents";
+
+    if (typeof NL_VERSION !== "undefined") {
+      const defaultPath = activeFolderPath ? joinPath(activeFolderPath, suggestedName) : suggestedName;
+      const selectedPath = await Neutralino.os.showSaveDialog(dialogTitle, {
+        defaultPath,
+        filters: [
+          { name: fileTypeDescription, extensions: ["mdviewer-graph.json", "mdgraph.json", "json"] }
+        ]
+      });
+      if (!selectedPath) return null;
+      const finalPath = /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(selectedPath) ? selectedPath : `${selectedPath}.mdviewer-graph.json`;
+      await Neutralino.filesystem.writeFile(finalPath, content);
+      return { name: getFileName(finalPath), path: finalPath };
+    }
+
+    if (typeof window.showSaveFilePicker === "function" && !isFirefoxBrowser()) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: [
+          {
+            description: fileTypeDescription,
+            accept: { "application/json": [".json"] }
+          }
+        ]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      return { name: handle.name, handle };
+    }
+
+    saveAs(new Blob([content], { type: "application/json;charset=utf-8" }), suggestedName);
+    return { name: suggestedName };
+  }
+
+  async function exportFolderFilesToGraph(folderFiles, folderName) {
+    if (!folderFiles.length) {
+      alert("This folder does not contain Markdown files to export to a graph archive.");
+      return false;
+    }
+
+    const graphSnapshot = await createGraphSnapshot(folderFiles, folderName || "Graph View");
+    const content = getGraphExportContent(graphSnapshot, folderName || graphSnapshot.folderName || "Graph View", null);
+    const suggestedName = getSuggestedGraphFileName({ folderName: folderName || graphSnapshot.folderName || "Graph View" });
+    return !!(await writeGraphExportWithSaveDialog(content, suggestedName));
+  }
+
+  async function exportActiveFolderToGraph() {
+    if (!folderMarkdownFiles.length) {
+      alert("Open a folder first to export it to a graph archive.");
+      return false;
+    }
+    return exportFolderFilesToGraph(folderMarkdownFiles, activeFolderName || "Graph View");
+  }
+
+
   function getActiveGraphSaveContent(graphTab) {
     const cachedRender = graphRenderCache.get(graphTab.id);
     if (cachedRender?.nodes) {
@@ -10006,51 +10126,14 @@ ${body}`;
     const suggestedName = getSuggestedGraphFileName(graphTab);
 
     try {
-      if (typeof NL_VERSION !== "undefined") {
-        const defaultPath = activeFolderPath ? joinPath(activeFolderPath, suggestedName) : suggestedName;
-        const selectedPath = await Neutralino.os.showSaveDialog("Save Graph", {
-          defaultPath,
-          filters: [
-            { name: "Markdown Viewer graph files", extensions: ["mdviewer-graph.json", "mdgraph.json", "json"] }
-          ]
-        });
-        if (!selectedPath) return false;
-        const finalPath = /\.(mdviewer-graph\.json|mdgraph\.json|json)$/i.test(selectedPath) ? selectedPath : `${selectedPath}.mdviewer-graph.json`;
-        await Neutralino.filesystem.writeFile(finalPath, content);
-        updateGraphTabAfterSave(graphTab, {
-          name: getFileName(finalPath),
-          path: finalPath
-        });
-        return true;
-      }
-
-      if (typeof window.showSaveFilePicker === "function" && !isFirefoxBrowser()) {
-        const handle = await window.showSaveFilePicker({
-          suggestedName,
-          types: [
-            {
-              description: "Markdown Viewer graph files",
-              accept: { "application/json": [".json"] }
-            }
-          ]
-        });
-        const writable = await handle.createWritable();
-        await writable.write(content);
-        await writable.close();
-        updateGraphTabAfterSave(graphTab, {
-          name: handle.name,
-          handle
-        });
-        return true;
-      }
-
-      saveAs(new Blob([content], { type: "application/json;charset=utf-8" }), suggestedName);
-      updateGraphTabAfterSave(graphTab, { name: suggestedName });
+      const metadata = await writeGraphExportWithSaveDialog(content, suggestedName);
+      if (!metadata) return false;
+      updateGraphTabAfterSave(graphTab, metadata);
       return true;
     } catch (error) {
       if (error && error.name === "AbortError") return false;
-      console.error("Failed to save graph:", error);
-      alert("Failed to save graph: " + error.message);
+      console.error("Failed to export graph:", error);
+      alert("Failed to export graph: " + error.message);
       return false;
     }
   }
@@ -12168,6 +12251,19 @@ ${body}`;
 
   document.querySelectorAll(".save-all-files-button").forEach(function(button) {
     button.addEventListener("click", saveAllChangedTabs);
+  });
+
+  document.addEventListener("click", async function(event) {
+    const button = event.target.closest(".export-folder-to-graph");
+    if (!button || button.disabled) return;
+    event.preventDefault();
+    try {
+      await exportActiveFolderToGraph();
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      console.error("Failed to export folder to graph:", error);
+      alert("Failed to export folder to graph: " + error.message);
+    }
   });
 
   exportMd.addEventListener("click", async function () {
