@@ -1578,7 +1578,7 @@ document.addEventListener("DOMContentLoaded", function () {
           <button class="folder-tree-tool-button open-graph-view" type="button" title="Open a folder to open Graph View" aria-label="Open Graph View" disabled aria-disabled="true">
             <i class="bi bi-diagram-3" aria-hidden="true"></i>
           </button>
-          <button class="folder-tree-tool-button export-folder-to-graph" type="button" title="Open a folder to export it to a portable graph archive with Markdown file contents" aria-label="Export Folder to Graph" disabled aria-disabled="true">
+          <button class="folder-tree-tool-button export-folder-to-graph" type="button" title="Create a portable graph archive that includes Markdown file contents." aria-label="Export Folder to Graph" disabled aria-disabled="true">
             <i class="bi bi-download" aria-hidden="true"></i>
           </button>
           <button class="folder-tree-tool-button toggle-unsupported-files" type="button" title="Open a folder to show unsupported file types" aria-label="Show unsupported file types in the folder view" aria-pressed="false" disabled aria-disabled="true">
@@ -2609,7 +2609,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const hasFolder = !!isFolderOpen;
     const label = "Export Folder to Graph";
     const description = "Create a portable graph archive that includes Markdown file contents.";
-    const title = hasFolder ? description : "Open a folder to export it to a portable graph archive with Markdown file contents";
+    const title = hasFolder ? description : "Create a portable graph archive that includes Markdown file contents.";
     getFolderTreeGraphExportButtons().forEach(function(button) {
       button.disabled = !hasFolder;
       button.title = title;
@@ -3649,7 +3649,7 @@ This is a fully client-side application. Your content never leaves your browser 
   const GRAPH_DOCUMENT_TYPE_VIEW = "graph-view";
   const GRAPH_DOCUMENT_TYPE_EXPORT = "graph-export";
   const GRAPH_DOCUMENT_TYPES = new Set([GRAPH_DOCUMENT_TYPE_VIEW, GRAPH_DOCUMENT_TYPE_EXPORT]);
-  const LIGHTWEIGHT_SAVED_GRAPH_TEXT_SEARCH_MESSAGE = "Text search is unavailable because this saved graph view does not contain file contents. Use Update Graph to search current files, or open a full folder export.";
+  const LIGHTWEIGHT_SAVED_GRAPH_TEXT_SEARCH_MESSAGE = "Text search is unavailable because this saved graph view does not contain file contents. Use Update graph to search current files, or open Export Folder to Graph.";
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
     showTags: false,
     hiddenTagIds: [],
@@ -4263,16 +4263,17 @@ This is a fully client-side application. Your content never leaves your browser 
   function updateSavedGraphModePill(tab) {
     const pill = ensureSavedGraphModePill();
     if (!pill) return;
-    pill.classList.toggle("hidden", !isKeepSavedGraphMode(tab));
-    if (!isKeepSavedGraphMode(tab)) {
-      pill.innerHTML = "";
-      return;
-    }
+    const isGraphTab = !!(tab && tab.type === "graph");
+    const isCompareMode = !!tab?.graphComparisonSnapshot;
+    const isSavedMode = isKeepSavedGraphMode(tab);
+    pill.classList.toggle("hidden", !isGraphTab);
     pill.innerHTML = "";
+    if (!isGraphTab) return;
+
     const label = document.createElement("span");
-    label.textContent = "Saved graph mode — current folder changes are ignored.";
+    label.textContent = isCompareMode ? "Compare" : (isSavedMode ? "Saved graph" : "Current folder");
     pill.appendChild(label);
-    if (tab?.savedGraphComparisonDetails) {
+    if (isSavedMode && !isCompareMode && tab?.savedGraphComparisonDetails) {
       const detailsButton = document.createElement("button");
       detailsButton.type = "button";
       detailsButton.className = "saved-graph-mode-details-button";
@@ -5456,15 +5457,20 @@ This is a fully client-side application. Your content never leaves your browser 
     const graphNeedsSave = !!(graphTab && (!isFileBackedGraphTab(graphTab) || graphHasUnsavedChanges));
     const hasWritableSource = !!(tab && (tab.sourceFileHandle || (isNeutralinoRuntime() && tab.sourceFilePath)));
     const title = graphTab
-      ? (graphNeedsSave ? "Save graph changes" : "No graph changes to save")
+      ? "Save layout, groups, filters, hidden points, tags, and connections. File contents are not included."
       : (hasUnsavedChanges
         ? (hasWritableSource ? "Save changes to current file" : "Save changes as Markdown")
         : "No changes to save");
+    const label = graphTab ? "Save Graph View" : "Save Changes";
 
     document.querySelectorAll(".save-current-file-button").forEach(function(button) {
       button.disabled = graphTab ? !graphNeedsSave : !hasUnsavedChanges;
-      button.title = title;
+      button.title = graphTab && !graphNeedsSave ? "No graph changes to save" : title;
       button.setAttribute("aria-label", title);
+      const icon = button.querySelector("i");
+      button.textContent = "";
+      if (icon) button.append(icon, document.createTextNode(` ${label}`));
+      else button.textContent = label;
     });
 
     const unsavedCount = getUnsavedTabs().length;
@@ -10937,8 +10943,10 @@ ${body}`;
 
   async function writeGraphExportWithSaveDialog(content, suggestedName, options = {}) {
     const includeMarkdownContents = options.includeMarkdownContents === true;
-    const dialogTitle = includeMarkdownContents ? "Export Folder to Graph - includes Markdown file contents" : "Save Graph View";
-    const fileTypeDescription = includeMarkdownContents ? "Portable graph archive with Markdown file contents" : "Markdown Viewer graph view";
+    const dialogTitle = includeMarkdownContents ? "Export Folder to Graph" : "Save Graph View";
+    const fileTypeDescription = includeMarkdownContents
+      ? "Create a portable graph archive that includes Markdown file contents."
+      : "Save layout, groups, filters, hidden points, tags, and connections. File contents are not included.";
 
     if (typeof NL_VERSION !== "undefined") {
       const defaultPath = activeFolderPath ? joinPath(activeFolderPath, suggestedName) : suggestedName;
