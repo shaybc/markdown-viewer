@@ -115,7 +115,221 @@ const browserLibraryStub = `
     window.jspdf = { jsPDF: function () { return { internal: { pageSize: { getWidth: function () { return 100; }, getHeight: function () { return 100; } } }, addImage: function () {}, save: function () {} }; } };
     window.html2canvas = function () { return Promise.resolve(document.createElement("canvas")); };
     window.pdfMake = {};
-    window.d3 = {};
+    function createD3Stub() {
+      var svgTags = new Set(["svg", "g", "line", "path", "circle", "text", "title"]);
+
+      function createElement(tagName) {
+        return svgTags.has(tagName)
+          ? document.createElementNS("http://www.w3.org/2000/svg", tagName)
+          : document.createElement(tagName);
+      }
+
+      function resolveValue(value, element, data, index) {
+        return typeof value === "function" ? value.call(element, data, index) : value;
+      }
+
+      function Selection(elements, parents, enterData) {
+        this.elements = elements || [];
+        this.parents = parents || [];
+        this.enterData = enterData || null;
+      }
+
+      Selection.prototype.append = function (tagName) {
+        var created = [];
+        if (this.enterData) {
+          this.parents.forEach(function (parent) {
+            this.enterData.forEach(function (dataItem) {
+              var child = createElement(tagName);
+              child.__data__ = dataItem;
+              parent.appendChild(child);
+              created.push(child);
+            });
+          }, this);
+          return new Selection(created);
+        }
+        this.elements.forEach(function (element) {
+          var child = createElement(tagName);
+          child.__data__ = element.__data__;
+          element.appendChild(child);
+          created.push(child);
+        });
+        return new Selection(created);
+      };
+
+      Selection.prototype.attr = function (name, value) {
+        this.elements.forEach(function (element, index) {
+          var resolved = resolveValue(value, element, element.__data__, index);
+          if (resolved === null || resolved === undefined) element.removeAttribute(name);
+          else element.setAttribute(name, String(resolved));
+        });
+        return this;
+      };
+
+      Selection.prototype.style = function (name, value) {
+        this.elements.forEach(function (element, index) {
+          var resolved = resolveValue(value, element, element.__data__, index);
+          if (resolved === null || resolved === undefined) element.style.removeProperty(name);
+          else element.style[name] = String(resolved);
+        });
+        return this;
+      };
+
+      Selection.prototype.text = function (value) {
+        this.elements.forEach(function (element, index) {
+          element.textContent = String(resolveValue(value, element, element.__data__, index) || "");
+        });
+        return this;
+      };
+
+      Selection.prototype.classed = function (className, value) {
+        this.elements.forEach(function (element, index) {
+          element.classList.toggle(className, Boolean(resolveValue(value, element, element.__data__, index)));
+        });
+        return this;
+      };
+
+      Selection.prototype.on = function (eventName, handler) {
+        var domEventName = String(eventName).split(".")[0];
+        if (!domEventName) return this;
+        this.elements.forEach(function (element) {
+          element.addEventListener(domEventName, function (event) {
+            handler.call(element, event, element.__data__);
+          });
+        });
+        return this;
+      };
+
+      Selection.prototype.call = function (fn) {
+        if (typeof fn === "function") fn(this);
+        return this;
+      };
+
+      Selection.prototype.each = function (handler) {
+        this.elements.forEach(function (element, index) {
+          handler.call(element, element.__data__, index);
+        });
+        return this;
+      };
+
+      Selection.prototype.selectAll = function (selector) {
+        var found = [];
+        this.elements.forEach(function (element) {
+          found = found.concat(Array.from(element.querySelectorAll(selector)));
+        });
+        return new Selection(found, this.elements);
+      };
+
+      Selection.prototype.data = function (dataItems) {
+        this.enterData = dataItems || [];
+        return this;
+      };
+
+      Selection.prototype.enter = function () {
+        return new Selection([], this.parents, this.enterData || []);
+      };
+
+      function resolveLinks(links, nodes, idAccessor) {
+        var nodeById = new Map();
+        nodes.forEach(function (node) {
+          nodeById.set(idAccessor(node), node);
+        });
+        links.forEach(function (link) {
+          if (typeof link.source !== "object") link.source = nodeById.get(link.source) || { id: link.source, x: 0, y: 0 };
+          if (typeof link.target !== "object") link.target = nodeById.get(link.target) || { id: link.target, x: 0, y: 0 };
+        });
+      }
+
+      function forceSimulation(nodes) {
+        var tickHandler = null;
+        var idAccessor = function (node) { return node.id; };
+        nodes.forEach(function (node, index) {
+          if (typeof node.x !== "number") node.x = 160 + index * 120;
+          if (typeof node.y !== "number") node.y = 180 + (index % 2) * 90;
+        });
+        var api = {
+          force: function (name, forceValue) {
+            if (name === "link" && forceValue && forceValue._links) {
+              idAccessor = forceValue._idAccessor || idAccessor;
+              resolveLinks(forceValue._links, nodes, idAccessor);
+            }
+            return api;
+          },
+          alpha: function () { return api; },
+          alphaTarget: function () { return api; },
+          restart: function () {
+            if (tickHandler) tickHandler();
+            return api;
+          },
+          stop: function () { return api; },
+          on: function (eventName, handler) {
+            if (eventName === "tick") {
+              tickHandler = handler;
+              handler();
+            }
+            return api;
+          }
+        };
+        return api;
+      }
+
+      function forceLink(links) {
+        var api = {
+          _links: links || [],
+          _idAccessor: function (node) { return node.id; },
+          id: function (accessor) { api._idAccessor = accessor; return api; },
+          distance: function () { return api; },
+          strength: function () { return api; }
+        };
+        return api;
+      }
+
+      function chainableForce() {
+        return {
+          strength: function () { return this; },
+          radius: function () { return this; }
+        };
+      }
+
+      function zoomIdentity(x, y, k) {
+        return {
+          x: x || 0,
+          y: y || 0,
+          k: k || 1,
+          translate: function (nextX, nextY) { return zoomIdentity(nextX, nextY, this.k); },
+          scale: function (nextK) { return zoomIdentity(this.x, this.y, nextK); },
+          toString: function () { return "translate(" + this.x + "," + this.y + ") scale(" + this.k + ")"; }
+        };
+      }
+
+      function zoom() {
+        var behavior = function () {};
+        behavior.scaleExtent = function () { return behavior; };
+        behavior.on = function () { return behavior; };
+        behavior.transform = function () {};
+        return behavior;
+      }
+
+      function drag() {
+        var behavior = function () {};
+        behavior.on = function () { return behavior; };
+        return behavior;
+      }
+
+      return {
+        select: function (element) { return new Selection([element]); },
+        zoomIdentity: zoomIdentity(0, 0, 1),
+        zoom: zoom,
+        drag: drag,
+        forceSimulation: forceSimulation,
+        forceLink: forceLink,
+        forceManyBody: chainableForce,
+        forceCenter: function () { return chainableForce(); },
+        forceX: function () { return chainableForce(); },
+        forceY: function () { return chainableForce(); },
+        forceCollide: chainableForce
+      };
+    }
+    window.d3 = createD3Stub();
     window.bootstrap = {};
   })();
 `;
@@ -335,6 +549,92 @@ test("suggests and accepts known tags while typing", async ({ page }) => {
 
   await page.keyboard.press("Enter");
   await expect(editor).toHaveValue("#alpha");
+});
+
+test("saved graph remains interactive and filters only graph snapshot tags", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "graph_e2e",
+      title: "Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Graph E2E",
+      graphViewConfig: {
+        showTags: true,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: ["defined"] },
+          { id: "beta.md", label: "beta.md", fullPath: "beta.md", type: "file", status: "current", tags: [] },
+          { id: "tag:defined", label: "#defined", type: "tag", status: "current", tag: "defined" }
+        ],
+        links: [
+          { source: "alpha.md", target: "beta.md", type: "link", status: "current" },
+          { source: "alpha.md", target: "tag:defined", type: "tag", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha\n\n[[beta]]", fullPath: "alpha.md", status: "current", tags: ["defined"] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", fullPath: "beta.md", status: "current", tags: [] }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["ghost", "archive"], graphMagneticEnabled: true }));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node")).toHaveCount(3);
+
+  const tagOptions = await page.locator("#graph-selected-tag-filter option").allTextContents();
+  expect(tagOptions).toEqual(["All files", "#defined"]);
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+
+  const graphMenu = page.locator(".graph-tab-render .graph-context-menu:not(.hidden)");
+  await expect(graphMenu).toBeVisible();
+  await expect(graphMenu).toContainText("Turn magnetic forces off");
+  await expect(graphMenu).toContainText("Open in a new tab");
+
+  await graphMenu.getByText("Turn magnetic forces off").click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerGlobalState")).graphMagneticEnabled)).toBe(false);
+
+  await page.locator(".graph-tab-render").dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 260,
+    clientY: 260
+  });
+  await expect(page.locator(".graph-tab-render .graph-context-menu:not(.hidden)")).toContainText("Turn magnetic forces on");
 });
 
 test("renders recent files in the action menu", async ({ page }) => {

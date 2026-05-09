@@ -8053,17 +8053,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   mobileMenu.bindMobileMenu();
   
-  initTabs();
-  if (loadGlobalState().syncScrollingEnabled === false) toggleSyncScrolling();
-  updateSyncToggleButtons();
-  updateMobileStats();
-  updateStatusLine();
-  updateEditorLineNumbers();
-  renderEditorSyntaxHighlights();
-
-  // Initialize resizer - Story 1.3
-  initResizer();
-
   // View Mode Button Event Listeners - Story 1.1
   viewModeButtons.forEach(btn => {
     btn.addEventListener('click', function() {
@@ -8607,12 +8596,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   }
 
   function getGraphFilterTagNodeIds(graphSnapshot) {
-    const tagIds = new Set(getGraphSnapshotTagNodeIds(graphSnapshot));
-    getAllKnownAndReferencedTags().forEach((tag) => {
-      const tagId = normalizeGraphTagNodeId(tag);
-      if (tagId) tagIds.add(tagId);
-    });
-    return Array.from(tagIds).sort((a, b) => a.localeCompare(b));
+    return getGraphSnapshotTagNodeIds(graphSnapshot);
   }
 
   function getGraphTagLabelFromId(tagNodeId) {
@@ -9258,10 +9242,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     getGraphContextMenuTitle,
     getFolderMarkdownEntryForTab,
     getFileTagsFromContent,
+    normalizeFileTagList,
     normalizeTagName,
     addTagToContent,
     removeTagFromContent,
+    createTagsContextSubmenu,
+    renderTagsContextSubmenu,
     renderMarkdown,
+    openGraphNodeFileInPermanentTab,
     openSidebarFileInPermanentTab,
     findTabForSourceFile,
     switchTab,
@@ -9276,10 +9264,26 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     exportMarkdownContent,
     exportHtmlContent,
     exportPdfContent,
+    CONTEXT_MENU_ACTIONS,
     copyToClipboard,
+    refreshFolderTagCounts,
+    renameSidebarNodeOnDisk,
+    get copyShareUrlFromText() { return app.actions.copyShareUrlFromText; },
     deleteTag
   });
   const renderGraphView = graphRenderer.renderGraphView;
+
+  initTabs();
+  if (loadGlobalState().syncScrollingEnabled === false) toggleSyncScrolling();
+  updateSyncToggleButtons();
+  updateMobileStats();
+  updateStatusLine();
+  updateEditorLineNumbers();
+  renderEditorSyntaxHighlights();
+
+  // Initialize resizer - Story 1.3
+  initResizer();
+
   document.querySelectorAll(".save-current-file-button").forEach(function(button) {
     button.addEventListener("click", saveCurrentFileIfChanged);
   });
