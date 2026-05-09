@@ -1,0 +1,3 @@
+desktop-app/resources/js/*
+!desktop-app/resources/js/main.js
+!desktop-app/resources/js/neutralino.d.ts
