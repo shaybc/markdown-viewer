@@ -3788,14 +3788,16 @@ This is a fully client-side application. Your content never leaves your browser 
     if (Array.isArray(normalizedSnapshot.nodes)) {
       normalizedSnapshot.nodes = normalizedSnapshot.nodes.map((node) => ({
         ...node,
-        type: node?.type || "file"
+        type: node?.type || "file",
+        status: node?.status || "current"
       }));
     }
 
     if (Array.isArray(normalizedSnapshot.links)) {
       normalizedSnapshot.links = normalizedSnapshot.links.map((link) => ({
         ...link,
-        type: link?.type || "link"
+        type: link?.type || "link",
+        status: link?.status || "current"
       }));
     }
 
@@ -3937,6 +3939,117 @@ This is a fully client-side application. Your content never leaves your browser 
       counts.newTagRelations,
       counts.savedOnlyTagRelations
     ].some((count) => Number(count) > 0);
+  }
+
+  function buildCompareGraphSnapshot(savedSnapshot, currentSnapshot, comparison) {
+    const sourceCurrentSnapshot = currentSnapshot && typeof currentSnapshot === "object" ? currentSnapshot : {};
+    const sourceSavedSnapshot = savedSnapshot && typeof savedSnapshot === "object" ? savedSnapshot : {};
+    const nodes = [];
+    const links = [];
+    const files = [];
+    const nodesById = new Map();
+    const linksByKey = new Map();
+    const savedNodesById = new Map((Array.isArray(sourceSavedSnapshot.nodes) ? sourceSavedSnapshot.nodes : [])
+      .map((node) => [String(node?.id || "").trim(), node])
+      .filter(([id]) => id));
+    const savedFilesById = new Map(getGraphSnapshotFilesForComparison(sourceSavedSnapshot)
+      .map((file) => [String(file?.id || getGraphFileKey(file) || "").trim(), file])
+      .filter(([id]) => id));
+
+    const addNode = (node, status = "current") => {
+      const nodeId = String(node?.id || getGraphFileKey(node) || "").trim();
+      if (!nodeId || nodesById.has(nodeId)) return nodesById.get(nodeId) || null;
+      const type = node?.type || (String(nodeId).startsWith("tag:") ? "tag" : "file");
+      const nextNode = {
+        ...node,
+        id: nodeId,
+        type,
+        status
+      };
+      if (!nextNode.label) nextNode.label = type === "tag" ? getGraphTagLabelFromId(nodeId) : getGraphDisplayLabel(node?.path || node?.fullPath || nodeId);
+      nodesById.set(nodeId, nextNode);
+      nodes.push(nextNode);
+      return nextNode;
+    };
+
+    const addFile = (file, status = "current") => {
+      const fileId = String(file?.id || getGraphFileKey(file) || "").trim();
+      if (!fileId) return;
+      const node = savedNodesById.get(fileId) || file;
+      addNode({
+        ...node,
+        id: fileId,
+        type: "file",
+        label: node?.label || getGraphDisplayLabel(file?.path || file?.fullPath || fileId),
+        fullPath: node?.fullPath || file?.fullPath || file?.path || null,
+        tags: node?.tags || file?.tags || []
+      }, status);
+      files.push({
+        ...file,
+        id: fileId,
+        status
+      });
+    };
+
+    const ensureNodeForEndpoint = (endpointId, status = "saved-only") => {
+      const nodeId = String(endpointId || "").trim();
+      if (!nodeId || nodesById.has(nodeId)) return;
+      if (nodeId.startsWith("tag:")) {
+        addNode({ id: nodeId, label: getGraphTagLabelFromId(nodeId), type: "tag", tag: nodeId.replace(/^tag:/, "") }, status);
+        return;
+      }
+      const savedFile = savedFilesById.get(nodeId);
+      const savedNode = savedNodesById.get(nodeId);
+      addNode({
+        ...(savedNode || savedFile || {}),
+        id: nodeId,
+        type: "file",
+        label: savedNode?.label || getGraphDisplayLabel(savedFile?.path || savedFile?.fullPath || nodeId),
+        fullPath: savedNode?.fullPath || savedFile?.fullPath || savedFile?.path || null,
+        tags: savedNode?.tags || savedFile?.tags || []
+      }, status);
+      if (savedFile && !files.some((file) => file.id === nodeId)) files.push({ ...savedFile, id: nodeId, status });
+    };
+
+    const addLink = (link, status = "current") => {
+      const source = getGraphLinkEndpointKey(link?.source);
+      const target = getGraphLinkEndpointKey(link?.target);
+      if (!source || !target) return;
+      ensureNodeForEndpoint(source, status);
+      ensureNodeForEndpoint(target, status);
+      const type = link?.type || "link";
+      const key = `${source}->${target}:${type}`;
+      if (linksByKey.has(key)) return;
+      linksByKey.set(key, true);
+      links.push({
+        ...link,
+        source,
+        target,
+        type,
+        status
+      });
+    };
+
+    (Array.isArray(sourceCurrentSnapshot.nodes) ? sourceCurrentSnapshot.nodes : []).forEach((node) => addNode(node, "current"));
+    getGraphSnapshotFilesForComparison(sourceCurrentSnapshot).forEach((file) => addFile(file, "current"));
+    (Array.isArray(sourceCurrentSnapshot.links) ? sourceCurrentSnapshot.links : []).forEach((link) => addLink(link, "current"));
+
+    (comparison?.savedOnlyFiles || []).forEach((file) => addFile(file, "saved-only"));
+    (comparison?.savedOnlyLinks || []).forEach((link) => addLink(link, "saved-only"));
+    (comparison?.savedOnlyTagRelations || []).forEach((relationKey) => {
+      const relationMatch = String(relationKey || "").match(/^(.*)->(tag:[^:]+):tag$/);
+      if (!relationMatch) return;
+      addLink({ source: relationMatch[1], target: relationMatch[2], type: "tag" }, "saved-only");
+    });
+
+    return {
+      version: sourceCurrentSnapshot.version || 1,
+      folderName: sourceCurrentSnapshot.folderName || sourceSavedSnapshot.folderName || "Graph Comparison",
+      createdAt: Date.now(),
+      nodes,
+      links,
+      files
+    };
   }
 
   function isKeepSavedGraphMode(tab) {
@@ -4186,6 +4299,7 @@ This is a fully client-side application. Your content never leaves your browser 
     const tab = tabs.find((candidate) => candidate.id === staleComparison?.tabId) || getActiveGraphTab();
     if (tab?.type === "graph") {
       tab.keepSavedGraphMode = true;
+      delete tab.graphComparisonSnapshot;
       saveTabsToStorage(tabs);
       if (activeTabId === tab.id) updateSavedGraphModePill(tab);
     }
@@ -4203,6 +4317,7 @@ This is a fully client-side application. Your content never leaves your browser 
       savedLayout: tab.graphLayout,
       savedConfig: tab.graphViewConfig
     });
+    delete tab.graphComparisonSnapshot;
     tab.keepSavedGraphMode = false;
     markGraphTabAsChanged(tab);
     saveTabsToStorage(tabs);
@@ -4211,6 +4326,24 @@ This is a fully client-side application. Your content never leaves your browser 
       graphRenderCache.delete(tab.id);
       renderGraphView();
       showGraphUpdatedBanner();
+    }
+  }
+
+  function loadGraphComparisonFromStaleModal() {
+    const staleComparison = activeGraphStaleComparison;
+    if (!staleComparison?.currentSnapshot || !staleComparison?.savedSnapshot) return;
+    const tab = tabs.find((candidate) => candidate.id === staleComparison.tabId) || getActiveGraphTab();
+    if (!tab || tab.type !== "graph") return;
+
+    tab.graphComparisonSnapshot = buildCompareGraphSnapshot(
+      staleComparison.savedSnapshot,
+      staleComparison.currentSnapshot,
+      staleComparison.comparison
+    );
+    hideGraphStaleModal();
+    if (activeTabId === tab.id) {
+      graphRenderCache.delete(tab.id);
+      renderGraphView();
     }
   }
 
@@ -4450,13 +4583,14 @@ This is a fully client-side application. Your content never leaves your browser 
       const tags = getFileTagsFromContent(fileContent);
       const id = normalizeGraphNodeName(path);
       nodeIndex.set(id, path);
-      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path, type: "file", tags });
+      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path, type: "file", status: "current", tags });
       snapshotFiles.push({
         id,
         path,
         name,
         content: fileContent,
         fullPath: fileEntry.fullPath || null,
+        status: "current",
         tags
       });
     }
@@ -4475,13 +4609,14 @@ This is a fully client-side application. Your content never leaves your browser 
             id: tagNodeId,
             label: `#${normalizedTag}`,
             type: "tag",
+            status: "current",
             tag: normalizedTag
           });
         }
         const edgeKey = `${source}->${tagNodeId}:tag`;
         if (seenEdges.has(edgeKey)) return;
         seenEdges.add(edgeKey);
-        links.push({ source, target: tagNodeId, type: "tag" });
+        links.push({ source, target: tagNodeId, type: "tag", status: "current" });
       });
     }
 
@@ -4493,7 +4628,7 @@ This is a fully client-side application. Your content never leaves your browser 
         const edgeKey = `${source}->${target}:link`;
         if (seenEdges.has(edgeKey)) return;
         seenEdges.add(edgeKey);
-        links.push({ source, target, type: "link" });
+        links.push({ source, target, type: "link", status: "current" });
       });
     }
 
@@ -4513,8 +4648,8 @@ This is a fully client-side application. Your content never leaves your browser 
         version: snapshot?.version || 0,
         folderName: snapshot?.folderName || "",
         createdAt: snapshot?.createdAt || 0,
-        nodes: (snapshot?.nodes || []).map((node) => node.id),
-        links: (snapshot?.links || []).map((link) => `${link.source}->${link.target}:${link.type || "link"}`)
+        nodes: (snapshot?.nodes || []).map((node) => `${node.id}:${node.status || "current"}`),
+        links: (snapshot?.links || []).map((link) => `${link.source}->${link.target}:${link.type || "link"}:${link.status || "current"}`)
       },
       config: graphViewConfig || null
     });
@@ -11442,7 +11577,7 @@ ${body}`;
     }
 
     renderTagManagementList();
-    let graphSnapshot = activeTab.graphSnapshot || null;
+    let graphSnapshot = activeTab.graphComparisonSnapshot || activeTab.graphSnapshot || null;
     if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
     if (!graphSnapshot && folderMarkdownFiles.length && !isKeepSavedGraphMode(activeTab)) {
       const snapshotFiles = folderMarkdownFiles.slice();
@@ -11456,6 +11591,7 @@ ${body}`;
         return;
       }
       activeTab.graphSnapshot = graphSnapshot;
+      delete activeTab.graphComparisonSnapshot;
       if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
       saveTabsToStorage(tabs);
       graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
@@ -11502,14 +11638,17 @@ ${body}`;
     hideInactiveGraphRenders(activeTab.id);
     const nodes = (graphSnapshot.nodes || []).map((node) => ({
       ...node,
-      type: node?.type || "file"
+      type: node?.type || "file",
+      status: node?.status || "current"
     }));
     const links = (graphSnapshot.links || []).map((link) => ({
       ...link,
-      type: link?.type || "link"
+      type: link?.type || "link",
+      status: link?.status || "current"
     }));
     const getGraphNodeType = (nodeData) => nodeData?.type || "file";
     const getGraphLinkType = (linkData) => linkData?.type || "link";
+    const getGraphItemStatus = (itemData) => itemData?.status || "current";
     const isTagNode = (nodeData) => getGraphNodeType(nodeData) === "tag";
     const isTagLink = (linkData) => getGraphLinkType(linkData) === "tag";
     const isMarkdownLink = (linkData) => !isTagLink(linkData);
@@ -11784,13 +11923,13 @@ ${body}`;
     const labelLayer = graphLayer.append("g").attr("class", "graph-label-layer");
 
     const link = lineLayer.selectAll("line").data(links).enter().append("line")
-      .attr("class", (d) => `graph-link graph-link-${getGraphLinkType(d)}`)
+      .attr("class", (d) => `graph-link graph-link-${getGraphLinkType(d)} graph-link-status-${getGraphItemStatus(d)}`)
       .style("stroke-width", (d) => `${(isTagLink(d) ? 1 : graphViewConfig.linkThickness)}px`);
     const arrowhead = arrowheadLayer.selectAll("path").data(graphViewConfig.showArrows ? links.filter(isMarkdownLink) : []).enter().append("path")
-      .attr("class", "graph-arrowhead");
+      .attr("class", (d) => `graph-arrowhead graph-arrowhead-status-${getGraphItemStatus(d)}`);
     const node = nodeLayer.selectAll("circle").data(nodes).enter().append("circle")
       .attr("r", (d) => nodeRadius(d.id))
-      .attr("class", (d) => `graph-node graph-node-${getGraphNodeType(d)}`)
+      .attr("class", (d) => `graph-node graph-node-${getGraphNodeType(d)} graph-node-status-${getGraphItemStatus(d)}`)
       .style("fill", (d) => {
         if (isTagNode(d)) return null;
         return d.groupColor || null;
@@ -11825,7 +11964,7 @@ ${body}`;
     node.append("title").text((d) => graphTooltipPathsById.get(d.id) || d.fullPath || getGraphNodeLabel(d));
     label = labelLayer.selectAll("text").data(nodes).enter().append("text")
       .text(getGraphNodeLabel)
-      .attr("class", (d) => `graph-label graph-label-${getGraphNodeType(d)}`);
+      .attr("class", (d) => `graph-label graph-label-${getGraphNodeType(d)} graph-label-status-${getGraphItemStatus(d)}`);
 
     const contextMenu = document.createElement("div");
     contextMenu.className = "graph-context-menu hidden";
@@ -12050,7 +12189,7 @@ ${body}`;
     const getSnapshotFileForNode = (graphNode) => {
       if (!graphNode) return null;
       const activeGraphTab = getActiveGraphTab();
-      const snapshotFile = activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
+      const snapshotFile = snapshotFilesById.get(graphNode.id) || activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
       return snapshotFile || (isKeepSavedGraphMode(activeGraphTab) ? null : getFolderMarkdownEntryForNode(graphNode));
     };
 
@@ -13010,7 +13149,7 @@ ${body}`;
   graphStaleViewDetailsButton?.addEventListener("click", () => {
     setGraphStaleDetailsVisible(graphStaleDetails?.classList.contains("hidden"));
   });
-  graphStaleCompareButton?.addEventListener("click", () => setGraphStaleDetailsVisible(true));
+  graphStaleCompareButton?.addEventListener("click", loadGraphComparisonFromStaleModal);
   graphStaleModal?.addEventListener("click", (event) => {
     if (event.target === graphStaleModal) hideGraphStaleModal();
   });
