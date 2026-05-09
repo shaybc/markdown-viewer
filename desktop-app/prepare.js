@@ -3,7 +3,7 @@
 /**
  * prepare.js — Build script for the Neutralinojs desktop app.
  *
- * Copies shared browser-version files (script.js, styles.css, assets/)
+ * Copies shared browser-version files (js/, script.js, styles.css, assets/)
  * from web-app/ into desktop-app/resources/, and generates a
  * Neutralinojs-compatible index.html from web-app/index.html by
  * injecting the required Neutralinojs script tags and wrapper elements.
@@ -40,9 +40,12 @@ function copyDirSync(src, dest, exclude = []) {
 }
 
 
-/** script.js → resources/js/script.js */
+/** web-app/js/ → resources/js/ */
 const jsDest = path.join(RESOURCES_DIR, "js");
-fs.mkdirSync(jsDest, { recursive: true });
+copyDirSync(path.join(WEB_APP_DIR, "js"), jsDest);
+console.log("✓ Copied web-app/js/ → resources/js/");
+
+/** script.js → resources/js/script.js */
 fs.copyFileSync(
   path.join(WEB_APP_DIR, "script.js"),
   path.join(jsDest, "script.js"),

@@ -1,5 +1,9 @@
 document.addEventListener("DOMContentLoaded", function () {
   const app = createAppContext();
+
+  // Temporary migration helpers: keep the legacy local names available while
+  // boot/context ownership moves into app.dom and app.state. Prefer app.state
+  // for mutable state in newly migrated code so primitive values do not go stale.
   const { RENDER_DELAY, SCROLL_SYNC_DELAY } = app.constants;
   let {
     markdownRenderTimeout,
