@@ -26,12 +26,13 @@ a time into `web-app/js/`.
 | Clipboard copy helpers | `js/clipboard.js` | Moved |
 | Scroll synchronization | `js/scroll-sync.js` | Moved |
 | Unsaved-change tracking | `js/unsaved-changes.js` | Moved |
-| Recent files and folders | `js/recent/index.js` | Pending |
+| Recent files and folders | `js/recent/index.js` | Partial: storage, profile sync, handle cache, and menu rendering moved |
 | Keyboard shortcuts | `js/keyboard-shortcuts.js` | Moved |
-| Editor context menu | `js/editor/context-menu.js` | Pending |
-| Editor line/status UI | `js/editor/line-status.js` | Partial: line numbers, current-line highlight, and selection highlights moved |
-| Autocomplete | `js/editor/autocomplete.js` | Pending |
-| Markdown renderer configuration | `js/markdown/renderer-config.js` | Pending |
+| Editor context menu | `js/editor/context-menu.js` | Moved |
+| Editor line/status UI | `js/editor/line-status.js`, `js/editor/status-line.js` | Moved |
+| Autocomplete | `js/editor/autocomplete.js` | Moved |
+| Editor syntax highlighting | `js/editor/syntax-highlight.js` | Moved |
+| Markdown renderer configuration | `js/markdown/renderer-config.js` | Moved |
 | Markdown rendering | `js/markdown/rendering.js` | Pending |
 | Mermaid tools | `js/markdown/mermaid.js` | Pending |
 | Tabs | `js/tabs/index.js` | Pending |
@@ -40,11 +41,12 @@ a time into `web-app/js/`.
 | Graph extraction | `js/graph/extraction.js` | Pending |
 | Graph persistence and comparison | `js/graph/persistence.js` | Pending |
 | Graph rendering and interaction | `js/graph/rendering.js` | Pending |
-| Import: drag and drop | `js/import/drag-drop.js` | Pending |
+| Import: drag and drop | `js/import/drag-drop.js` | Partial: dropzone event wiring and active drag state moved |
 | Import: GitHub | `js/import/github.js` | Pending |
 | Export logic | `js/export/index.js` | Pending |
 | Save logic | `js/save/index.js` | Pending |
 | View mode and layout controls | `js/ui/view-layout.js` | Pending |
+| Mobile menu controls | `js/ui/mobile-menu.js` | Moved |
 | Modal and menu lifecycle | `js/ui/modal-menu.js` | Pending |
 | Tags | `js/tags/index.js` | Pending |
 | Rename and link maintenance | `js/rename-link-maintenance.js` | Pending |

@@ -172,6 +172,7 @@ test("renders typed markdown in the preview", async ({ page }) => {
   await expect(preview.getByRole("heading", { name: "Project Notes" })).toBeVisible();
   await expect(preview.locator("li", { hasText: "Alpha" })).toBeVisible();
   await expect(preview.locator("code", { hasText: "console.log" })).toBeVisible();
+  await expect(preview.locator("code.hljs.js", { hasText: "console.log" })).toBeVisible();
 });
 
 test("switches between editor, preview, and split views", async ({ page }) => {
@@ -208,6 +209,22 @@ test("toggles theme and persists it across reloads", async ({ page }) => {
 
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", expectedTheme);
+});
+
+test("opens and closes the mobile menu", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openApp(page);
+
+  await page.locator("#mobile-menu-toggle").click();
+  await expect(page.locator("#mobile-menu-panel")).toHaveClass(/active/);
+  await expect(page.locator("#mobile-menu-overlay")).toHaveClass(/active/);
+
+  await page.locator("#close-mobile-menu").click();
+  await expect(page.locator("#mobile-menu-panel")).not.toHaveClass(/active/);
+
+  await page.locator("#mobile-menu-toggle").click();
+  await page.locator("#mobile-menu-overlay").dispatchEvent("click");
+  await expect(page.locator("#mobile-menu-panel")).not.toHaveClass(/active/);
 });
 
 test("supports document keyboard shortcut for split-view sync scrolling", async ({ page }) => {
@@ -250,6 +267,97 @@ test("keeps editor line numbers in sync with typed content", async ({ page }) =>
   await expect(lineNumbers.nth(0)).toHaveText("1");
   await expect(lineNumbers.nth(1)).toHaveText("2");
   await expect(lineNumbers.nth(2)).toHaveText("3");
+});
+
+test("updates document statistics and focused editor position", async ({ page }) => {
+  await openApp(page);
+
+  const markdown = "Alpha beta\nGamma delta";
+  await page.locator("#markdown-editor").fill(markdown);
+
+  await expect(page.locator("#word-count")).toHaveText("4");
+  await expect(page.locator("#char-count")).toHaveText(String(markdown.length));
+  await expect(page.locator("#reading-time")).toHaveText("1");
+
+  await page.locator("#markdown-editor").evaluate((editor) => {
+    editor.focus();
+    editor.selectionStart = editor.value.length;
+    editor.selectionEnd = editor.value.length;
+    editor.dispatchEvent(new Event("keyup", { bubbles: true }));
+  });
+
+  await expect(page.locator("#editor-total-lines")).toHaveText("2");
+  await expect(page.locator("#editor-cursor-line")).toHaveText("2");
+  await expect(page.locator("#editor-cursor-column")).toHaveText("12");
+  await expect(page.locator("#editor-position-label")).toHaveText("Pos");
+  await expect(page.locator("#editor-position-value")).toHaveText(String(markdown.length + 1));
+});
+
+test("converts selected editor text from the context menu", async ({ page }) => {
+  await openApp(page);
+
+  const editor = page.locator("#markdown-editor");
+  await editor.fill("Context heading");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await editor.dispatchEvent("contextmenu", { button: 2, clientX: 160, clientY: 180 });
+
+  await expect(page.locator("#editor-context-menu")).toBeVisible();
+  await page.locator("#editor-context-menu [data-markdown-action='heading-1']").click();
+
+  await expect(editor).toHaveValue("# Context heading");
+});
+
+test("mirrors editor markdown syntax in the highlight overlay", async ({ page }) => {
+  await openApp(page);
+
+  await page.locator("#markdown-editor").fill("# Overlay Title\n\n- **Important** item");
+
+  await expect(page.locator("#editor-syntax-highlight .editor-md-marker")).toHaveText("#");
+  await expect(page.locator("#editor-syntax-highlight .editor-md-heading")).toContainText("Overlay Title");
+  await expect(page.locator("#editor-syntax-highlight .editor-md-list")).toHaveText("-");
+  await expect(page.locator("#editor-syntax-highlight .editor-md-strong")).toHaveText("**Important**");
+});
+
+test("suggests and accepts known tags while typing", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["alpha", "archive"] }));
+  });
+  await openApp(page);
+
+  const editor = page.locator("#markdown-editor");
+  await editor.fill("#alp");
+  await expect(page.locator("#link-autocomplete-layer")).toBeVisible();
+  await expect(page.locator("#link-autocomplete-layer .link-autocomplete-option").first()).toContainText("#alpha");
+
+  await page.keyboard.press("Enter");
+  await expect(editor).toHaveValue("#alpha");
+});
+
+test("renders recent files in the action menu", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("markdownViewerRecentFiles", JSON.stringify([
+      { name: "notes.md", label: "notes.md", path: "docs/notes.md", updatedAt: Date.now() }
+    ]));
+  });
+  await openApp(page);
+
+  await expect(page.locator(".recent-files-menu .recent-menu-item")).toHaveCount(1);
+  await expect(page.locator(".recent-files-menu .recent-menu-item")).toContainText("notes.md");
+});
+
+test("shows active dropzone state during drag", async ({ page }) => {
+  await openApp(page);
+
+  const dropzone = page.locator("#dropzone");
+  await dropzone.dispatchEvent("dragenter");
+  await expect(dropzone).toHaveClass(/active/);
+
+  await dropzone.dispatchEvent("dragleave");
+  await expect(dropzone).not.toHaveClass(/active/);
 });
 
 test("marks edited documents as unsaved", async ({ page }) => {

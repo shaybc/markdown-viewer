@@ -16,10 +16,18 @@ test("classic migration scripts load before the legacy monolith", () => {
     'src="js/app.js"',
     'src="js/platform/folder-picker.js"',
     'src="js/ui/theme-preferences.js"',
+    'src="js/ui/mobile-menu.js"',
+    'src="js/recent/index.js"',
     'src="js/clipboard.js"',
     'src="js/scroll-sync.js"',
     'src="js/unsaved-changes.js"',
     'src="js/editor/line-status.js"',
+    'src="js/editor/status-line.js"',
+    'src="js/editor/context-menu.js"',
+    'src="js/editor/autocomplete.js"',
+    'src="js/editor/syntax-highlight.js"',
+    'src="js/markdown/renderer-config.js"',
+    'src="js/import/drag-drop.js"',
     'src="js/share-url.js"',
     'src="js/keyboard-shortcuts.js"',
     'src="script.js"',
@@ -61,6 +69,32 @@ test("theme preference logic is registered from its extracted classic script", (
   assert.match(themeScript, /window\.registerMarkdownViewerThemePreferences\s*=/);
   assert.match(legacyScript, /window\.registerMarkdownViewerThemePreferences\(app,/);
   assert.doesNotMatch(legacyScript, /themeToggle\.addEventListener\("click"/);
+});
+
+test("mobile menu logic is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const mobileMenuScript = readWebFile("js/ui/mobile-menu.js");
+
+  assert.match(html, /src="js\/ui\/mobile-menu\.js"/);
+  assert.match(mobileMenuScript, /window\.registerMarkdownViewerMobileMenu\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerMobileMenu\(app,/);
+  assert.doesNotMatch(legacyScript, /function openMobileMenu/);
+  assert.doesNotMatch(legacyScript, /function closeMobileMenu/);
+  assert.doesNotMatch(legacyScript, /mobileMenuToggle\.addEventListener\("click"/);
+});
+
+test("recent item helpers are registered from their extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const recentScript = readWebFile("js/recent/index.js");
+
+  assert.match(html, /src="js\/recent\/index\.js"/);
+  assert.match(recentScript, /window\.registerMarkdownViewerRecentItems\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerRecentItems\(app,/);
+  assert.doesNotMatch(legacyScript, /function readRecentItemsFromLocalStorage/);
+  assert.doesNotMatch(legacyScript, /function renderRecentMenus/);
+  assert.doesNotMatch(legacyScript, /function scheduleGlobalProfileWrite/);
 });
 
 test("keyboard shortcuts are registered from their extracted classic script", () => {
@@ -123,6 +157,84 @@ test("editor line UI is registered from its extracted classic script", () => {
   assert.doesNotMatch(legacyScript, /function updateEditorLineNumbers/);
   assert.doesNotMatch(legacyScript, /function updateEditorSelectionHighlights/);
   assert.doesNotMatch(legacyScript, /let editorLineMeasure/);
+});
+
+test("status line logic is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const statusLineScript = readWebFile("js/editor/status-line.js");
+
+  assert.match(html, /src="js\/editor\/status-line\.js"/);
+  assert.match(statusLineScript, /window\.registerMarkdownViewerStatusLine\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerStatusLine\(app,/);
+  assert.doesNotMatch(legacyScript, /function updateDocumentStats/);
+  assert.doesNotMatch(legacyScript, /function updateStatusLine/);
+  assert.doesNotMatch(legacyScript, /function updateMobileStats/);
+});
+
+test("editor context menu is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const contextMenuScript = readWebFile("js/editor/context-menu.js");
+
+  assert.match(html, /src="js\/editor\/context-menu\.js"/);
+  assert.match(contextMenuScript, /window\.registerMarkdownViewerEditorContextMenu\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerEditorContextMenu\(app,/);
+  assert.doesNotMatch(legacyScript, /function renderEditorContextMenu/);
+  assert.doesNotMatch(legacyScript, /function replaceEditorSelectionPreservingUndo/);
+  assert.doesNotMatch(legacyScript, /const editorMarkdownActions/);
+});
+
+test("editor autocomplete is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const autocompleteScript = readWebFile("js/editor/autocomplete.js");
+
+  assert.match(html, /src="js\/editor\/autocomplete\.js"/);
+  assert.match(autocompleteScript, /window\.registerMarkdownViewerAutocomplete\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerAutocomplete\(app,/);
+  assert.doesNotMatch(legacyScript, /function getLinkAutocompleteLayer/);
+  assert.doesNotMatch(legacyScript, /function getLinkAutocompleteContext/);
+  assert.doesNotMatch(legacyScript, /function handleLinkAutocompleteKeydown/);
+});
+
+test("editor syntax highlighting is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const syntaxScript = readWebFile("js/editor/syntax-highlight.js");
+
+  assert.match(html, /src="js\/editor\/syntax-highlight\.js"/);
+  assert.match(syntaxScript, /window\.registerMarkdownViewerEditorSyntaxHighlight\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerEditorSyntaxHighlight\(app,/);
+  assert.doesNotMatch(legacyScript, /function renderEditorSyntaxHighlights/);
+  assert.doesNotMatch(legacyScript, /function renderMarkdownSyntaxLine/);
+  assert.doesNotMatch(legacyScript, /function renderInlineMarkdownSyntax/);
+});
+
+test("markdown renderer configuration is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const rendererConfigScript = readWebFile("js/markdown/renderer-config.js");
+
+  assert.match(html, /src="js\/markdown\/renderer-config\.js"/);
+  assert.match(rendererConfigScript, /window\.registerMarkdownViewerRendererConfig\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerRendererConfig\(app,/);
+  assert.doesNotMatch(legacyScript, /const markedOptions =/);
+  assert.doesNotMatch(legacyScript, /new marked\.Renderer\(\)/);
+  assert.doesNotMatch(legacyScript, /renderer\.code = function/);
+});
+
+test("drag and drop behavior is registered from its extracted classic script", () => {
+  const html = readWebFile("index.html");
+  const legacyScript = readWebFile("script.js");
+  const dragDropScript = readWebFile("js/import/drag-drop.js");
+
+  assert.match(html, /src="js\/import\/drag-drop\.js"/);
+  assert.match(dragDropScript, /window\.registerMarkdownViewerDragDrop\s*=/);
+  assert.match(legacyScript, /window\.registerMarkdownViewerDragDrop\(app,/);
+  assert.doesNotMatch(legacyScript, /function preventDefaults/);
+  assert.doesNotMatch(legacyScript, /function highlight\(\)/);
+  assert.doesNotMatch(legacyScript, /function unhighlight\(\)/);
 });
 
 test("folder open defaults to native directory picker when the browser supports it", () => {

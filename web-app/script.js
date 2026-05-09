@@ -88,8 +88,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const editorPositionValueElement = document.getElementById("editor-position-value");
   let previewHoveredLinkUrl = "";
 
-  let linkAutocompleteLayer = null;
-  let linkAutocompleteState = null;
   const clipboard = window.registerMarkdownViewerClipboard(app, {
     copyMarkdownButton,
     getMarkdownText: function() { return markdownEditor.value; }
@@ -166,799 +164,45 @@ document.addEventListener("DOMContentLoaded", function () {
     showUnsupportedFolderFiles: { get: () => showUnsupportedFolderFiles, set: (value) => { showUnsupportedFolderFiles = value; }, configurable: true },
     isFolderOpen: { get: () => isFolderOpen, set: (value) => { isFolderOpen = value; }, configurable: true },
     shownFolderInputFallbackNotice: { get: () => shownFolderInputFallbackNotice, set: (value) => { shownFolderInputFallbackNotice = value; }, configurable: true },
-    previewHoveredLinkUrl: { get: () => previewHoveredLinkUrl, set: (value) => { previewHoveredLinkUrl = value; }, configurable: true },
-    linkAutocompleteLayer: { get: () => linkAutocompleteLayer, set: (value) => { linkAutocompleteLayer = value; }, configurable: true },
-    linkAutocompleteState: { get: () => linkAutocompleteState, set: (value) => { linkAutocompleteState = value; }, configurable: true }
+    previewHoveredLinkUrl: { get: () => previewHoveredLinkUrl, set: (value) => { previewHoveredLinkUrl = value; }, configurable: true }
   });
 
-  function getLinkAutocompleteLayer() {
-    if (!linkAutocompleteLayer) {
-      linkAutocompleteLayer = document.createElement("div");
-      linkAutocompleteLayer.id = "link-autocomplete-layer";
-      linkAutocompleteLayer.className = "link-autocomplete-layer hidden";
-      linkAutocompleteLayer.setAttribute("role", "listbox");
-      linkAutocompleteLayer.setAttribute("aria-label", "Link suggestions");
-      document.body.appendChild(linkAutocompleteLayer);
-    }
-    return linkAutocompleteLayer;
-  }
-
-  function hideLinkAutocomplete() {
-    if (linkAutocompleteLayer) {
-      linkAutocompleteLayer.classList.add("hidden");
-      linkAutocompleteLayer.innerHTML = "";
-    }
-    linkAutocompleteState = null;
-    markdownEditor.removeAttribute("aria-activedescendant");
-  }
-
-  function isCursorInsideMarkdownCode(value, cursor, lineBefore) {
-    const beforeCursor = String(value || "").slice(0, cursor);
-    const fenceRegex = /^ {0,3}(```+|~~~+)/gm;
-    let fenceMatch;
-    let activeFence = null;
-
-    while ((fenceMatch = fenceRegex.exec(beforeCursor)) !== null) {
-      const marker = fenceMatch[1];
-      const markerChar = marker[0];
-      const markerLength = marker.length;
-
-      if (!activeFence) {
-        activeFence = { markerChar, markerLength };
-        continue;
-      }
-
-      if (markerChar === activeFence.markerChar && markerLength >= activeFence.markerLength) {
-        activeFence = null;
-      }
-    }
-
-    if (activeFence) return true;
-
-    const inlinePrefix = String(lineBefore || "");
-    const inlineCodeRegex = /`+/g;
-    let inlineMatch;
-    let openInlineFence = null;
-
-    while ((inlineMatch = inlineCodeRegex.exec(inlinePrefix)) !== null) {
-      const tickLength = inlineMatch[0].length;
-      if (openInlineFence === tickLength) {
-        openInlineFence = null;
-      } else if (!openInlineFence) {
-        openInlineFence = tickLength;
-      }
-    }
-
-    return !!openInlineFence;
-  }
-
-  function getFrontmatterBoundsForCursor(value, cursor) {
-    const source = String(value || "");
-    if (!source.startsWith("---")) return null;
-
-    const openingMatch = source.match(/^---[ \t]*(?:\r?\n|$)/);
-    if (!openingMatch) return null;
-
-    const contentStart = openingMatch[0].length;
-    const closingRegex = /^---[ \t]*(?:\r?\n|$)/gm;
-    closingRegex.lastIndex = contentStart;
-    const closingMatch = closingRegex.exec(source);
-    if (!closingMatch || cursor < contentStart || cursor > closingMatch.index) return null;
-
-    return {
-      contentStart,
-      contentEnd: closingMatch.index
-    };
-  }
-
-  function isCursorInFrontmatterTagsList(frontmatterText, relativeCursor) {
-    const beforeCursor = frontmatterText.slice(0, relativeCursor);
-    const lines = beforeCursor.split(/\r?\n/);
-
-    for (let index = lines.length - 2; index >= 0; index -= 1) {
-      const line = lines[index];
-      if (!line.trim() || /^\s*#/.test(line)) continue;
-
-      const tagsMatch = line.match(/^(\s*)tags\s*:\s*(?:#.*)?$/i);
-      if (tagsMatch) {
-        const tagsIndent = tagsMatch[1].length;
-        const currentLine = lines[lines.length - 1] || "";
-        const currentLineIndent = (currentLine.match(/^\s*/) || [""])[0].length;
-        return currentLineIndent >= tagsIndent;
-      }
-
-      if (/^\s*[\w.-]+\s*:/.test(line)) return false;
-    }
-
-    return false;
-  }
-
-  function getFrontmatterTagAutocompleteContext(value, cursor, lineStart, lineBefore) {
-    const frontmatterBounds = getFrontmatterBoundsForCursor(value, cursor);
-    if (!frontmatterBounds) return null;
-
-    const frontmatterText = String(value || "").slice(frontmatterBounds.contentStart, frontmatterBounds.contentEnd);
-    const relativeCursor = cursor - frontmatterBounds.contentStart;
-    const nextCharacter = String(value || "").charAt(cursor);
-    if (nextCharacter && /[\p{L}\p{N}_\/-]/u.test(nextCharacter)) return null;
-
-    const listItemMatch = lineBefore.match(/^(\s*-\s*)([\p{L}\p{N}_\/-]*)$/u);
-    if (listItemMatch && isCursorInFrontmatterTagsList(frontmatterText, relativeCursor)) {
-      const query = listItemMatch[2] || "";
-      if (!query) return null;
-      return {
-        type: "frontmatter-tag",
-        query,
-        replaceStart: lineStart + listItemMatch[1].length,
-        replaceEnd: cursor,
-        needsClosingSyntax: false
-      };
-    }
-
-    const inlineTagsMatch = lineBefore.match(/^(\s*tags\s*:\s*\[[^\]]*)([\p{L}\p{N}_\/-]*)$/iu);
-    if (inlineTagsMatch) {
-      const prefix = inlineTagsMatch[1];
-      const previousSeparator = Math.max(prefix.lastIndexOf(","), prefix.lastIndexOf("["));
-      const queryStartOffset = previousSeparator + 1 + prefix.slice(previousSeparator + 1).match(/^\s*/)[0].length;
-      const query = lineBefore.slice(queryStartOffset);
-      if (!query) return null;
-      return {
-        type: "frontmatter-tag",
-        query,
-        replaceStart: lineStart + queryStartOffset,
-        replaceEnd: cursor,
-        needsClosingSyntax: false
-      };
-    }
-
-    const scalarTagsMatch = lineBefore.match(/^(\s*tags\s*:\s*)([\p{L}\p{N}_\/-]*)$/iu);
-    if (scalarTagsMatch) {
-      const query = scalarTagsMatch[2] || "";
-      if (!query) return null;
-      return {
-        type: "frontmatter-tag",
-        query,
-        replaceStart: lineStart + scalarTagsMatch[1].length,
-        replaceEnd: cursor,
-        needsClosingSyntax: false
-      };
-    }
-
-    return null;
-  }
-
-  function getTagAutocompleteContext(value, cursor, lineStart, lineBefore) {
-    const frontmatterTagContext = getFrontmatterTagAutocompleteContext(value, cursor, lineStart, lineBefore);
-    if (frontmatterTagContext) return frontmatterTagContext;
-
-    if (isCursorInsideMarkdownCode(value, cursor, lineBefore)) return null;
-
-    const tagMatch = lineBefore.match(/(^|[^\p{L}\p{N}_\/-])#([\p{L}\p{N}][\p{L}\p{N}_\/-]*)$/u);
-    if (!tagMatch) return null;
-
-    const query = tagMatch[2] || "";
-    if (!query) return null;
-
-    const hashIndex = lineBefore.length - query.length - 1;
-    const replaceStart = lineStart + hashIndex;
-    const nextCharacter = String(value || "").charAt(cursor);
-
-    if (nextCharacter && /[\p{L}\p{N}_\/-]/u.test(nextCharacter)) return null;
-
-    return {
-      type: "tag",
-      query,
-      replaceStart,
-      replaceEnd: cursor,
-      needsClosingSyntax: false
-    };
-  }
-
-  function getLinkAutocompleteContext() {
-    if (document.activeElement !== markdownEditor) return null;
-    if (markdownEditor.selectionStart !== markdownEditor.selectionEnd) return null;
-
-    const cursor = markdownEditor.selectionStart;
-    const value = markdownEditor.value;
-    const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
-    const lineBefore = value.slice(lineStart, cursor);
-
-    if (lineBefore.endsWith("[[]]")) {
-      return {
-        type: "wiki",
-        query: "",
-        replaceStart: cursor - 2,
-        replaceEnd: cursor - 2,
-        needsClosingSyntax: false
-      };
-    }
-
-    if (lineBefore.endsWith("[]()")) {
-      return {
-        type: "markdown",
-        query: "",
-        replaceStart: cursor - 1,
-        replaceEnd: cursor - 1,
-        needsClosingSyntax: false
-      };
-    }
-
-    const wikiStart = lineBefore.lastIndexOf("[[");
-    if (wikiStart !== -1) {
-      const query = lineBefore.slice(wikiStart + 2);
-      if (!query.includes("]]")) {
-        const lineEnd = value.indexOf("\n", cursor);
-        const lineAfter = value.slice(cursor, lineEnd === -1 ? value.length : lineEnd);
-        const closingWikiOffset = lineAfter.indexOf("]]");
-        const hasClosingSyntax = closingWikiOffset !== -1;
-        return {
-          type: "wiki",
-          query,
-          replaceStart: lineStart + wikiStart + 2,
-          replaceEnd: hasClosingSyntax ? cursor + closingWikiOffset : cursor,
-          needsClosingSyntax: !hasClosingSyntax
-        };
-      }
-    }
-
-    const markdownStart = lineBefore.lastIndexOf("](");
-    if (markdownStart !== -1) {
-      const query = lineBefore.slice(markdownStart + 2);
-      const labelOpen = lineBefore.lastIndexOf("[", markdownStart);
-      if (labelOpen !== -1 && !query.includes(")")) {
-        const lineEnd = value.indexOf("\n", cursor);
-        const lineAfter = value.slice(cursor, lineEnd === -1 ? value.length : lineEnd);
-        const closingParenOffset = lineAfter.indexOf(")");
-        const hasClosingSyntax = closingParenOffset !== -1;
-        return {
-          type: "markdown",
-          query,
-          replaceStart: lineStart + markdownStart + 2,
-          replaceEnd: hasClosingSyntax ? cursor + closingParenOffset : cursor,
-          needsClosingSyntax: !hasClosingSyntax
-        };
-      }
-    }
-
-    return getTagAutocompleteContext(value, cursor, lineStart, lineBefore);
-  }
-
-  function getMarkdownLinkAutocompleteEntries() {
-    return (folderMarkdownFiles || [])
-      .map((entry) => {
-        const path = normalizeMarkdownLinkPath(entry.path || entry.fullPath || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
-        if (!path || !isMarkdownPath(path)) return null;
-        const name = entry.name || getFileName(path);
-        return { entry, name, path };
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base" }));
-  }
-
-  function getRootRelativeMarkdownLinkTarget(targetPath) {
-    const normalizedTarget = normalizeMarkdownLinkPath(targetPath);
-    return normalizedTarget ? `/${normalizedTarget}` : "";
-  }
-
-  function getActiveFolderGraphSnapshots() {
-    const activeGraphTab = getActiveGraphTab();
-    if (activeGraphTab?.graphSnapshot) return [activeGraphTab.graphSnapshot];
-
-    const activeFolderKey = String(activeFolderName || "").trim();
-    const matchingSnapshots = (tabs || [])
-      .filter((tab) => tab?.type === "graph" && tab.graphSnapshot)
-      .filter((tab) => !activeFolderKey || tab.folderName === activeFolderKey || tab.graphSnapshot?.folderName === activeFolderKey || tab.title === activeFolderKey)
-      .map((tab) => tab.graphSnapshot);
-
-    if (matchingSnapshots.length) return matchingSnapshots;
-
-    return (tabs || [])
-      .filter((tab) => tab?.type === "graph" && tab.graphSnapshot)
-      .map((tab) => tab.graphSnapshot);
-  }
-
-  function getGraphSnapshotAutocompleteTags() {
-    const tagSet = new Set();
-
-    getActiveFolderGraphSnapshots().forEach((graphSnapshot) => {
-      (graphSnapshot?.files || []).forEach((snapshotFile) => {
-        normalizeFileTagList(snapshotFile.tags || []).forEach((tag) => tagSet.add(tag));
-        extractMarkdownTags(snapshotFile.content || "").forEach((tag) => tagSet.add(tag));
-      });
-
-      (graphSnapshot?.nodes || []).forEach((node) => {
-        if ((node?.type || "file") !== "tag") return;
-        const normalizedTag = normalizeTagName(node.tag || node.label || String(node.id || "").replace(/^tag:/, ""));
-        if (normalizedTag) tagSet.add(normalizedTag);
-      });
-    });
-
-    return Array.from(tagSet);
-  }
-
-  function getTagAutocompleteEntries() {
-    return Array.from(new Set([
-      ...getGraphSnapshotAutocompleteTags(),
-      ...Array.from(folderTagCounts.keys()),
-      ...getKnownTags()
-    ]))
-      .filter(Boolean)
-      .map((tag) => ({ tag, name: `#${tag}` }))
-      .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { sensitivity: "base" }));
-  }
-
-  function getLinkAutocompleteInsertText(item) {
-    if (linkAutocompleteState?.type === "tag") return `#${item.tag}`;
-    if (linkAutocompleteState?.type === "frontmatter-tag") return item.tag;
-    return getRootRelativeMarkdownLinkTarget(item.path);
-  }
-
-  function getFilteredLinkAutocompleteItems(context) {
-    const query = String(context.query || "").trim().toLowerCase();
-
-    if (context.type === "tag" || context.type === "frontmatter-tag") {
-      const entries = getTagAutocompleteEntries();
-      return query
-        ? entries.filter((item) => item.tag.toLowerCase().includes(query))
-        : entries;
-    }
-
-    const entries = getMarkdownLinkAutocompleteEntries();
-    return query
-      ? entries.filter((item) => {
-          const nameWithoutExtension = item.name.replace(/\.(md|markdown)$/i, "").toLowerCase();
-          return item.name.toLowerCase().includes(query)
-            || item.path.toLowerCase().includes(query)
-            || nameWithoutExtension.includes(query);
-        })
-      : entries;
-  }
-
-  function getTextareaCaretClientPosition(textarea, position) {
-    const computedStyle = window.getComputedStyle(textarea);
-    const mirror = document.createElement("div");
-    mirror.className = "textarea-caret-mirror";
-    const properties = [
-      "boxSizing", "width", "height", "fontFamily", "fontSize", "fontWeight", "fontStyle",
-      "letterSpacing", "textTransform", "wordSpacing", "textIndent", "lineHeight", "paddingTop",
-      "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth",
-      "borderBottomWidth", "borderLeftWidth", "whiteSpace", "overflowWrap", "tabSize"
-    ];
-    properties.forEach((property) => { mirror.style[property] = computedStyle[property]; });
-    mirror.style.position = "absolute";
-    mirror.style.visibility = "hidden";
-    mirror.style.overflow = "hidden";
-    mirror.style.top = "0";
-    mirror.style.left = "-9999px";
-    mirror.style.whiteSpace = "pre-wrap";
-    mirror.style.overflowWrap = "break-word";
-    mirror.textContent = textarea.value.slice(0, position);
-    const marker = document.createElement("span");
-    marker.textContent = textarea.value.slice(position, position + 1) || "\u200b";
-    mirror.appendChild(marker);
-    document.body.appendChild(mirror);
-
-    const textareaRect = textarea.getBoundingClientRect();
-    const markerRect = marker.getBoundingClientRect();
-    const mirrorRect = mirror.getBoundingClientRect();
-    const top = textareaRect.top + (markerRect.top - mirrorRect.top) - textarea.scrollTop;
-    const left = textareaRect.left + (markerRect.left - mirrorRect.left) - textarea.scrollLeft;
-    mirror.remove();
-    return { top, left };
-  }
-
-  function positionLinkAutocompleteLayer() {
-    if (!linkAutocompleteState || !linkAutocompleteLayer || linkAutocompleteLayer.classList.contains("hidden")) return;
-    const caret = getTextareaCaretClientPosition(markdownEditor, markdownEditor.selectionStart);
-    const editorRect = markdownEditor.getBoundingClientRect();
-    const layerRect = linkAutocompleteLayer.getBoundingClientRect();
-    const lineHeight = getEditorLineHeight();
-    const viewportPadding = 8;
-    let top = caret.top + lineHeight + 4;
-    let left = caret.left;
-
-    if (top + layerRect.height > window.innerHeight - viewportPadding) {
-      top = Math.max(viewportPadding, caret.top - layerRect.height - 4);
-    }
-    left = Math.max(viewportPadding, Math.min(left, window.innerWidth - layerRect.width - viewportPadding));
-    top = Math.max(viewportPadding, Math.min(top, window.innerHeight - layerRect.height - viewportPadding));
-
-    linkAutocompleteLayer.style.top = `${top}px`;
-    linkAutocompleteLayer.style.left = `${Math.max(editorRect.left, left)}px`;
-  }
-
-  function scrollLinkAutocompleteSelectionIntoView() {
-    if (!linkAutocompleteLayer || !linkAutocompleteState?.items.length) return;
-    const activeOption = linkAutocompleteLayer.querySelector(".link-autocomplete-option.active");
-    if (!activeOption) return;
-
-    const optionTop = activeOption.offsetTop;
-    const optionBottom = optionTop + activeOption.offsetHeight;
-    const visibleTop = linkAutocompleteLayer.scrollTop;
-    const visibleBottom = visibleTop + linkAutocompleteLayer.clientHeight;
-
-    if (optionTop < visibleTop) {
-      linkAutocompleteLayer.scrollTop = optionTop;
-    } else if (optionBottom > visibleBottom) {
-      linkAutocompleteLayer.scrollTop = optionBottom - linkAutocompleteLayer.clientHeight;
-    }
-  }
-
-  function renderLinkAutocomplete() {
-    const context = getLinkAutocompleteContext();
-    if (!context) {
-      hideLinkAutocomplete();
-      return;
-    }
-
-    const items = getFilteredLinkAutocompleteItems(context);
-    const layer = getLinkAutocompleteLayer();
-    const selectedIndex = Math.min(Math.max(linkAutocompleteState?.selectedIndex || 0, 0), Math.max(items.length - 1, 0));
-    linkAutocompleteState = { ...context, items, selectedIndex };
-    layer.innerHTML = "";
-    layer.setAttribute("aria-label", context.type === "tag" || context.type === "frontmatter-tag" ? "Tag suggestions" : "Link suggestions");
-
-    if (context.type !== "tag" && context.type !== "frontmatter-tag" && (!isFolderOpen || !folderMarkdownFiles.length)) {
-      const empty = document.createElement("div");
-      empty.className = "link-autocomplete-empty";
-      empty.textContent = "Open a folder to link documents.";
-      layer.appendChild(empty);
-    } else if (!items.length) {
-      const empty = document.createElement("div");
-      empty.className = "link-autocomplete-empty";
-      empty.textContent = context.type === "tag" || context.type === "frontmatter-tag" ? "No matching tags." : "No matching Markdown documents.";
-      layer.appendChild(empty);
-    } else {
-      items.forEach((item, index) => {
-        const option = document.createElement("button");
-        option.type = "button";
-        option.id = `link-autocomplete-option-${index}`;
-        option.className = "link-autocomplete-option" + (index === selectedIndex ? " active" : "");
-        option.setAttribute("role", "option");
-        option.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
-        option.innerHTML = context.type === "tag" || context.type === "frontmatter-tag"
-          ? `<span class="link-autocomplete-name">${escapeHtml(item.name)}</span><span class="link-autocomplete-path">Tag</span>`
-          : `<span class="link-autocomplete-name">${escapeHtml(item.name.replace(/\.(md|markdown)$/i, ""))}</span><span class="link-autocomplete-path">${escapeHtml(item.path)}</span>`;
-        option.addEventListener("mousedown", (event) => {
-          event.preventDefault();
-          acceptLinkAutocomplete(index);
-        });
-        layer.appendChild(option);
-      });
-      markdownEditor.setAttribute("aria-activedescendant", `link-autocomplete-option-${selectedIndex}`);
-    }
-
-    layer.classList.remove("hidden");
-    requestAnimationFrame(() => {
-      positionLinkAutocompleteLayer();
-      scrollLinkAutocompleteSelectionIntoView();
-    });
-  }
-
-  function acceptLinkAutocomplete(index = linkAutocompleteState?.selectedIndex || 0) {
-    if (!linkAutocompleteState || !linkAutocompleteState.items.length) return false;
-    const state = linkAutocompleteState;
-    const item = state.items[index] || state.items[0];
-    const baseInsertText = getLinkAutocompleteInsertText(item);
-    const closingSyntax = state.type === "wiki" ? "]]" : state.type === "markdown" ? ")" : "";
-    const insertText = state.needsClosingSyntax && closingSyntax ? `${baseInsertText}${closingSyntax}` : baseInsertText;
-    const value = markdownEditor.value;
-    const closingSyntaxLength = closingSyntax
-      && (state.needsClosingSyntax || value.slice(state.replaceEnd, state.replaceEnd + closingSyntax.length) === closingSyntax)
-      ? closingSyntax.length
-      : 0;
-    markdownEditor.value = value.slice(0, state.replaceStart) + insertText + value.slice(state.replaceEnd);
-    const nextPosition = state.replaceStart + baseInsertText.length + closingSyntaxLength;
-    markdownEditor.selectionStart = markdownEditor.selectionEnd = nextPosition;
-    hideLinkAutocomplete();
-    markdownEditor.focus();
-    markdownEditor.dispatchEvent(new Event("input"));
-    return true;
-  }
-
-  function moveLinkAutocompleteSelection(delta) {
-    if (!linkAutocompleteState || !linkAutocompleteState.items.length) return false;
-    const itemCount = linkAutocompleteState.items.length;
-    linkAutocompleteState.selectedIndex = (linkAutocompleteState.selectedIndex + delta + itemCount) % itemCount;
-    renderLinkAutocomplete();
-    return true;
-  }
-
-  let editorContextMenu = null;
-  let editorContextMenuSelection = null;
-  const editorContextMenuUndoStack = [];
-  const editorContextMenuRedoStack = [];
-  const editorContextMenuUndoStackLimit = 50;
-
-  function rememberEditorContextMenuConversion(undoState) {
-    editorContextMenuUndoStack.push(undoState);
-    editorContextMenuRedoStack.length = 0;
-    if (editorContextMenuUndoStack.length > editorContextMenuUndoStackLimit) {
-      editorContextMenuUndoStack.shift();
-    }
-  }
-
-  function applyEditorContextMenuHistoryState(value, selectionStart, selectionEnd) {
-    markdownEditor.value = value;
-    markdownEditor.selectionStart = selectionStart;
-    markdownEditor.selectionEnd = selectionEnd;
-    markdownEditor.focus();
-    markdownEditor.dispatchEvent(new Event("input"));
-    updateEditorLineNumbers();
-    updateEditorSelectionHighlights();
-    updateStatusLine();
-    hideEditorContextMenu();
-  }
-
-  function undoEditorContextMenuConversion() {
-    const undoState = editorContextMenuUndoStack[editorContextMenuUndoStack.length - 1];
-    if (!undoState) return false;
-    if (undoState.tabId !== activeTabId || markdownEditor.value !== undoState.afterValue) return false;
-
-    editorContextMenuUndoStack.pop();
-    editorContextMenuRedoStack.push(undoState);
-    applyEditorContextMenuHistoryState(undoState.beforeValue, undoState.selectionStart, undoState.selectionEnd);
-    return true;
-  }
-
-  function redoEditorContextMenuConversion() {
-    const redoState = editorContextMenuRedoStack[editorContextMenuRedoStack.length - 1];
-    if (!redoState) return false;
-    if (redoState.tabId !== activeTabId || markdownEditor.value !== redoState.beforeValue) return false;
-
-    editorContextMenuRedoStack.pop();
-    editorContextMenuUndoStack.push(redoState);
-    applyEditorContextMenuHistoryState(redoState.afterValue, redoState.replacementStart, redoState.replacementEnd);
-    return true;
-  }
-
-  function replaceEditorSelectionPreservingUndo(start, end, replacement) {
-    const value = markdownEditor.value;
-    const nextValue = value.slice(0, start) + replacement + value.slice(end);
-    const replacementEnd = start + replacement.length;
-
-    markdownEditor.focus();
-    markdownEditor.selectionStart = start;
-    markdownEditor.selectionEnd = end;
-
-    if (document.queryCommandSupported && document.queryCommandSupported("insertText")) {
-      const inputCount = editorInputEventCount;
-      const inserted = document.execCommand("insertText", false, replacement);
-      if (inserted && markdownEditor.value === nextValue) {
-        markdownEditor.selectionStart = start;
-        markdownEditor.selectionEnd = replacementEnd;
-        if (editorInputEventCount === inputCount) {
-          markdownEditor.dispatchEvent(new Event("input"));
-        }
-        return true;
-      }
-    }
-
-    markdownEditor.value = nextValue;
-    markdownEditor.selectionStart = start;
-    markdownEditor.selectionEnd = replacementEnd;
-    rememberEditorContextMenuConversion({
-      tabId: activeTabId,
-      beforeValue: value,
-      afterValue: nextValue,
-      selectionStart: start,
-      selectionEnd: end,
-      replacementStart: start,
-      replacementEnd
-    });
-    markdownEditor.dispatchEvent(new Event("input"));
-    return false;
-  }
-
-  const editorMarkdownActions = [
-    { type: "heading-1", label: "Heading 1", icon: "bi-type-h1" },
-    { type: "heading-2", label: "Heading 2", icon: "bi-type-h2" },
-    { type: "heading-3", label: "Heading 3", icon: "bi-type-h3" },
-    { type: "fenced-code", label: "Fenced code", icon: "bi-code-square" },
-    { type: "inline-code", label: "Inline code", icon: "bi-code" },
-    { type: "link", label: "Link", icon: "bi-link-45deg" },
-    { type: "url", label: "URL", icon: "bi-globe" },
-    { type: "emphasis", label: "Emphasis", icon: "bi-type-italic" },
-    { type: "strong", label: "Strong emphasis", icon: "bi-type-bold" },
-    { type: "blockquote", label: "Blockquote", icon: "bi-blockquote-left" },
-    { type: "unordered-list", label: "Bulleted list", icon: "bi-list-ul" },
-    { type: "ordered-list", label: "Numbered list", icon: "bi-list-ol" },
-    { type: "task-list", label: "Task items", icon: "bi-check2-square" },
-    { type: "horizontal-rule", label: "Horizontal rule", icon: "bi-hr" },
-    { type: "table", label: "Table", icon: "bi-table" }
-  ];
-
-  function getEditorContextMenu() {
-    if (!editorContextMenu) {
-      editorContextMenu = document.createElement("div");
-      editorContextMenu.id = "editor-context-menu";
-      editorContextMenu.className = "editor-context-menu hidden";
-      editorContextMenu.setAttribute("role", "menu");
-      editorContextMenu.setAttribute("aria-label", "Convert selected Markdown text");
-      document.body.appendChild(editorContextMenu);
-    }
-    return editorContextMenu;
-  }
-
-  function hideEditorContextMenu() {
-    if (editorContextMenu) {
-      editorContextMenu.classList.add("hidden");
-    }
-  }
-
-  function positionEditorContextMenu(menu, clientX, clientY) {
-    menu.style.left = "0px";
-    menu.style.top = "0px";
-    menu.classList.remove("hidden");
-
-    const menuRect = menu.getBoundingClientRect();
-    const margin = 8;
-    const left = Math.min(Math.max(clientX, margin), window.innerWidth - menuRect.width - margin);
-    const top = Math.min(Math.max(clientY, margin), window.innerHeight - menuRect.height - margin);
-
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
-  }
-
-  function convertLines(text, callback) {
-    return text.split("\n").map(callback).join("\n");
-  }
-
-  function toggleLinePrefix(text, prefix) {
-    return convertLines(text, function(line) {
-      return line.trim() ? `${prefix}${line}` : line;
-    });
-  }
-
-  function convertSelectionToMarkdown(type, selectedText) {
-    const text = selectedText || "";
-    const trimmed = text.trim();
-
-    switch (type) {
-      case "heading-1":
-        return toggleLinePrefix(text, "# ");
-      case "heading-2":
-        return toggleLinePrefix(text, "## ");
-      case "heading-3":
-        return toggleLinePrefix(text, "### ");
-      case "fenced-code":
-        return `\`\`\`\n${text}\n\`\`\``;
-      case "inline-code":
-        return `\`${text.replace(/`/g, "\\`")}\``;
-      case "link":
-        return `[${text}](url)`;
-      case "url":
-        return `<${trimmed || text}>`;
-      case "emphasis":
-        return `*${text}*`;
-      case "strong":
-        return `**${text}**`;
-      case "blockquote":
-        return toggleLinePrefix(text, "> ");
-      case "unordered-list":
-        return toggleLinePrefix(text, "- ");
-      case "ordered-list":
-        return text.split("\n").map(function(line, index) {
-          return line.trim() ? `${index + 1}. ${line}` : line;
-        }).join("\n");
-      case "task-list":
-        return toggleLinePrefix(text, "- [ ] ");
-      case "horizontal-rule":
-        return text ? `${text}\n\n---` : "---";
-      case "table":
-        return convertSelectionToMarkdownTable(text);
-      default:
-        return text;
-    }
-  }
-
-  function splitTableRow(line) {
-    const trimmedLine = line.trim();
-    if (trimmedLine.includes("|")) {
-      return trimmedLine.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
-    }
-    if (trimmedLine.includes("\t")) {
-      return trimmedLine.split("\t").map((cell) => cell.trim());
-    }
-    if (trimmedLine.includes(",")) {
-      return trimmedLine.split(",").map((cell) => cell.trim());
-    }
-    return [trimmedLine];
-  }
-
-  function convertSelectionToMarkdownTable(text) {
-    const rows = text.split("\n").filter((line) => line.trim()).map(splitTableRow);
-    const columnCount = Math.max(1, ...rows.map((row) => row.length));
-    const normalizedRows = rows.length ? rows.map((row) => {
-      return Array.from({ length: columnCount }, (_, index) => row[index] || "");
-    }) : [Array.from({ length: columnCount }, () => "")];
-    const header = normalizedRows[0];
-    const bodyRows = normalizedRows.slice(1);
-    const separator = Array.from({ length: columnCount }, () => "---");
-    const tableRows = [header, separator, ...bodyRows];
-
-    return tableRows.map((row) => `| ${row.join(" | ")} |`).join("\n");
-  }
-
-  function replaceEditorSelectionWithMarkdown(type) {
-    if (!editorContextMenuSelection) return;
-
-    const { start, end } = editorContextMenuSelection;
-    const value = markdownEditor.value;
-    const selectedText = value.slice(start, end);
-    const replacement = convertSelectionToMarkdown(type, selectedText);
-
-    replaceEditorSelectionPreservingUndo(start, end, replacement);
-    hideEditorContextMenu();
-  }
-
-  function renderEditorContextMenu(clientX, clientY) {
-    const menu = getEditorContextMenu();
-    const selectedText = markdownEditor.value.slice(editorContextMenuSelection.start, editorContextMenuSelection.end);
-    const preview = selectedText.replace(/\s+/g, " ").trim();
-
-    menu.innerHTML = `
-      <div class="editor-context-menu-title">Convert selection</div>
-      ${preview ? `<div class="editor-context-menu-preview">${escapeHtml(preview.slice(0, 60))}${preview.length > 60 ? "…" : ""}</div>` : ""}
-      <div class="editor-context-menu-items">
-        ${editorMarkdownActions.map((action) => `
-          <button class="editor-context-menu-item" type="button" role="menuitem" data-markdown-action="${action.type}">
-            <i class="bi ${action.icon}" aria-hidden="true"></i>
-            <span>${escapeHtml(action.label)}</span>
-          </button>
-        `).join("")}
-      </div>
-    `;
-
-    menu.querySelectorAll("[data-markdown-action]").forEach(function(button) {
-      button.addEventListener("click", function() {
-        replaceEditorSelectionWithMarkdown(button.dataset.markdownAction);
-      });
-    });
-
-    positionEditorContextMenu(menu, clientX, clientY);
-  }
-
-  function handleEditorContextMenu(event) {
-    const selectionStart = markdownEditor.selectionStart;
-    const selectionEnd = markdownEditor.selectionEnd;
-
-    if (selectionStart === selectionEnd) {
-      hideEditorContextMenu();
-      return;
-    }
-
-    event.preventDefault();
-    hideLinkAutocomplete();
-    editorContextMenuSelection = { start: selectionStart, end: selectionEnd };
-    renderEditorContextMenu(event.clientX, event.clientY);
-  }
-
-  function handleLinkAutocompleteKeydown(event) {
-    if (!linkAutocompleteState || !linkAutocompleteLayer || linkAutocompleteLayer.classList.contains("hidden")) return false;
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      return moveLinkAutocompleteSelection(1);
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      return moveLinkAutocompleteSelection(-1);
-    }
-    if (event.key === "Enter" || event.key === "Tab") {
-      if (linkAutocompleteState.items.length) {
-        event.preventDefault();
-        return acceptLinkAutocomplete();
-      }
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      hideLinkAutocomplete();
-      return true;
-    }
-    return false;
-  }
-
-
+  const autocomplete = window.registerMarkdownViewerAutocomplete(app, {
+    markdownEditor,
+    escapeHtml,
+    extractMarkdownTags,
+    getActiveFolderName: function() { return activeFolderName; },
+    getActiveGraphTab: function() { return getActiveGraphTab(); },
+    getEditorLineHeight: function() { return getEditorLineHeight(); },
+    getFileName,
+    getFolderMarkdownFiles: function() { return folderMarkdownFiles; },
+    getFolderTagCounts: function() { return folderTagCounts; },
+    getIsFolderOpen: function() { return isFolderOpen; },
+    getKnownTags,
+    getTabs: function() { return tabs; },
+    isMarkdownPath,
+    normalizeFileTagList,
+    normalizeMarkdownLinkPath,
+    normalizeTagName
+  });
+  const hideLinkAutocomplete = autocomplete.hideLinkAutocomplete;
+  const renderLinkAutocomplete = autocomplete.renderLinkAutocomplete;
+  const positionLinkAutocompleteLayer = autocomplete.positionLinkAutocompleteLayer;
+  const handleLinkAutocompleteKeydown = autocomplete.handleLinkAutocompleteKeydown;
+  const editorContextMenu = window.registerMarkdownViewerEditorContextMenu(app, {
+    markdownEditor,
+    escapeHtml,
+    getActiveTabId: function() { return activeTabId; },
+    getEditorInputEventCount: function() { return editorInputEventCount; },
+    hideLinkAutocomplete,
+    updateEditorLineNumbers: function() { updateEditorLineNumbers(); },
+    updateEditorSelectionHighlights: function() { updateEditorSelectionHighlights(); },
+    updateStatusLine: function() { updateStatusLine(); }
+  });
+  const hideEditorContextMenu = editorContextMenu.hideEditorContextMenu;
+  const handleEditorContextMenu = editorContextMenu.handleEditorContextMenu;
+  const redoEditorContextMenuConversion = editorContextMenu.redoEditorContextMenuConversion;
+  const undoEditorContextMenuConversion = editorContextMenu.undoEditorContextMenuConversion;
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
   const viewModeButtons = document.querySelectorAll(".view-mode-btn");
@@ -977,468 +221,27 @@ document.addEventListener("DOMContentLoaded", function () {
   const syncEditorSelectionHighlightsScroll = editorLineStatus.syncEditorSelectionHighlightsScroll;
   const syncEditorLineNumberScroll = editorLineStatus.syncEditorLineNumberScroll;
 
-  const RECENT_FILES_KEY = "markdownViewerRecentFiles";
-  const RECENT_FOLDERS_KEY = "markdownViewerRecentFolders";
-  const RECENT_PROFILE_DIR = ".mdviewer";
-  const RECENT_PROFILE_FILE = "recent-items.json";
-  const GLOBAL_PROFILE_FILE = "preferences.json";
-  const RECENT_HANDLES_DB = "markdownViewerRecentHandles";
-  const RECENT_HANDLES_STORE = "handles";
-  const MAX_RECENT_ITEMS = 10;
-  const recentFileHandles = new Map();
-  const recentFolderHandles = new Map();
-  const recentItemsCache = {
-    [RECENT_FILES_KEY]: readRecentItemsFromLocalStorage(RECENT_FILES_KEY),
-    [RECENT_FOLDERS_KEY]: readRecentItemsFromLocalStorage(RECENT_FOLDERS_KEY)
-  };
-  let recentProfilePathPromise = null;
-  let recentProfileWriteTimer = null;
-  let globalProfilePathPromise = null;
-  let globalProfileWriteTimer = null;
-  let recentHandlesDbPromise = null;
-
-  function isNeutralinoRuntime() {
-    return typeof NL_VERSION !== "undefined" && typeof Neutralino !== "undefined";
-  }
-
-  function normalizeRecentItems(items) {
-    return Array.isArray(items) ? items.slice(0, MAX_RECENT_ITEMS) : [];
-  }
-
-  function readRecentItemsFromLocalStorage(storageKey) {
-    try {
-      const items = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      return normalizeRecentItems(items);
-    } catch (error) {
-      console.warn("Failed to read recent items:", error);
-      return [];
-    }
-  }
-
-  function writeRecentItemsToLocalStorage(storageKey, items) {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(normalizeRecentItems(items)));
-    } catch (error) {
-      console.warn("Failed to save recent items:", error);
-    }
-  }
-
-  function readRecentItems(storageKey) {
-    return normalizeRecentItems(recentItemsCache[storageKey] || []);
-  }
-
-  function writeRecentItems(storageKey, items) {
-    recentItemsCache[storageKey] = normalizeRecentItems(items);
-    writeRecentItemsToLocalStorage(storageKey, recentItemsCache[storageKey]);
-    scheduleRecentProfileWrite();
-  }
-
-  function getRecentItemKey(item) {
-    return String(item && (item.path || item.handleName || item.name || item.label) || "").toLowerCase();
-  }
-
-  function getRecentHandleStore(storageKey) {
-    return storageKey === RECENT_FOLDERS_KEY ? recentFolderHandles : recentFileHandles;
-  }
-
-  function getRecentHandleId(storageKey, key) {
-    return `${storageKey}:${key}`;
-  }
-
-  function openRecentHandlesDatabase() {
-    if (isNeutralinoRuntime() || !window.indexedDB) return Promise.resolve(null);
-
-    if (!recentHandlesDbPromise) {
-      recentHandlesDbPromise = new Promise((resolve) => {
-        const request = window.indexedDB.open(RECENT_HANDLES_DB, 1);
-
-        request.onupgradeneeded = function(event) {
-          const database = event.target.result;
-          if (!database.objectStoreNames.contains(RECENT_HANDLES_STORE)) {
-            database.createObjectStore(RECENT_HANDLES_STORE, { keyPath: "id" });
-          }
-        };
-
-        request.onsuccess = function(event) {
-          resolve(event.target.result);
-        };
-
-        request.onerror = function(event) {
-          console.warn("Failed to open recent handles database:", event.target.error);
-          resolve(null);
-        };
-
-        request.onblocked = function() {
-          console.warn("Opening the recent handles database was blocked by another tab.");
-          resolve(null);
-        };
-      });
-    }
-
-    return recentHandlesDbPromise;
-  }
-
-  async function persistRecentHandle(storageKey, key, handle) {
-    if (!handle || isNeutralinoRuntime()) return;
-
-    const database = await openRecentHandlesDatabase();
-    if (!database) return;
-
-    try {
-      await new Promise((resolve, reject) => {
-        const transaction = database.transaction(RECENT_HANDLES_STORE, "readwrite");
-        const store = transaction.objectStore(RECENT_HANDLES_STORE);
-        store.put({
-          id: getRecentHandleId(storageKey, key),
-          storageKey,
-          key,
-          handle,
-          updatedAt: Date.now()
-        });
-        transaction.oncomplete = resolve;
-        transaction.onerror = function(event) { reject(event.target.error); };
-        transaction.onabort = function(event) { reject(event.target.error); };
-      });
-    } catch (error) {
-      console.warn("Failed to save recent file-system handle:", error);
-    }
-  }
-
-  async function getPersistedRecentHandle(storageKey, key) {
-    const handleStore = getRecentHandleStore(storageKey);
-    const cachedHandle = handleStore.get(key);
-    if (cachedHandle) return cachedHandle;
-
-    const database = await openRecentHandlesDatabase();
-    if (!database) return null;
-
-    try {
-      const record = await new Promise((resolve, reject) => {
-        const transaction = database.transaction(RECENT_HANDLES_STORE, "readonly");
-        const request = transaction.objectStore(RECENT_HANDLES_STORE).get(getRecentHandleId(storageKey, key));
-        request.onsuccess = function(event) { resolve(event.target.result || null); };
-        request.onerror = function(event) { reject(event.target.error); };
-      });
-      if (record && record.handle) {
-        handleStore.set(key, record.handle);
-        return record.handle;
-      }
-    } catch (error) {
-      console.warn("Failed to read recent file-system handle:", error);
-    }
-
-    return null;
-  }
-
-  async function hydrateRecentHandlesFromIndexedDB() {
-    const database = await openRecentHandlesDatabase();
-    if (!database) return;
-
-    try {
-      const records = await new Promise((resolve, reject) => {
-        const transaction = database.transaction(RECENT_HANDLES_STORE, "readonly");
-        const request = transaction.objectStore(RECENT_HANDLES_STORE).getAll();
-        request.onsuccess = function(event) { resolve(event.target.result || []); };
-        request.onerror = function(event) { reject(event.target.error); };
-      });
-
-      records.forEach((record) => {
-        if (!record || !record.storageKey || !record.key || !record.handle) return;
-        getRecentHandleStore(record.storageKey).set(record.key, record.handle);
-      });
-    } catch (error) {
-      console.warn("Failed to hydrate recent file-system handles:", error);
-    }
-  }
-
-  async function ensureFileSystemHandlePermission(handle, mode = "read") {
-    if (!handle || typeof handle.queryPermission !== "function") return true;
-
-    const options = { mode };
-    try {
-      if (await handle.queryPermission(options) === "granted") return true;
-      if (typeof handle.requestPermission !== "function") return false;
-      return await handle.requestPermission(options) === "granted";
-    } catch (error) {
-      console.warn("Failed to verify file-system handle permission:", error);
-      return false;
-    }
-  }
-
-  function mergeRecentItems(...itemGroups) {
-    const mergedByKey = new Map();
-
-    itemGroups.flat().forEach((item) => {
-      const key = getRecentItemKey(item);
-      if (!key) return;
-
-      const existing = mergedByKey.get(key);
-      if (!existing || Number(item.updatedAt || 0) >= Number(existing.updatedAt || 0)) {
-        mergedByKey.set(key, item);
-      }
-    });
-
-    return Array.from(mergedByKey.values())
-      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
-      .slice(0, MAX_RECENT_ITEMS);
-  }
-
-  function getProfileSeparator(profileDir) {
-    return profileDir.includes("\\") ? "\\" : "/";
-  }
-
-  async function getUserProfileDir() {
-    if (!isNeutralinoRuntime() || !Neutralino.os || !Neutralino.os.getEnv) return null;
-
-    const envVars = NL_OS === "Windows" ? ["USERPROFILE", "HOME"] : ["HOME", "USERPROFILE"];
-    for (const envVar of envVars) {
-      try {
-        const value = await Neutralino.os.getEnv(envVar);
-        if (value) return value;
-      } catch (error) {
-        // Try the next platform-appropriate profile variable.
-      }
-    }
-
-    return null;
-  }
-
-  async function getProfileFilePath(fileName, cacheKey) {
-    if (!isNeutralinoRuntime()) return null;
-
-    if (!cacheKey.promise) {
-      cacheKey.promise = (async () => {
-        const profileDir = await getUserProfileDir();
-        if (!profileDir) return null;
-
-        const separator = getProfileSeparator(profileDir);
-        const dataDir = `${profileDir}${separator}${RECENT_PROFILE_DIR}`;
-        try {
-          if (Neutralino.filesystem && Neutralino.filesystem.createDirectory) {
-            await Neutralino.filesystem.createDirectory(dataDir);
-          }
-        } catch (error) {
-          // The directory may already exist; reads/writes below will report real failures.
-        }
-
-        return `${dataDir}${separator}${fileName}`;
-      })();
-    }
-
-    return cacheKey.promise;
-  }
-
-  async function getRecentProfilePath() {
-    return getProfileFilePath(RECENT_PROFILE_FILE, {
-      get promise() { return recentProfilePathPromise; },
-      set promise(value) { recentProfilePathPromise = value; }
-    });
-  }
-
-  async function getGlobalProfilePath() {
-    return getProfileFilePath(GLOBAL_PROFILE_FILE, {
-      get promise() { return globalProfilePathPromise; },
-      set promise(value) { globalProfilePathPromise = value; }
-    });
-  }
-
-  function getRecentProfilePayload() {
-    return {
-      version: 1,
-      updatedAt: Date.now(),
-      recentFiles: readRecentItems(RECENT_FILES_KEY),
-      recentFolders: readRecentItems(RECENT_FOLDERS_KEY)
-    };
-  }
-
-  async function writeRecentItemsToProfile() {
-    const profilePath = await getRecentProfilePath();
-    if (!profilePath) return;
-
-    try {
-      await Neutralino.filesystem.writeFile(profilePath, JSON.stringify(getRecentProfilePayload(), null, 2));
-    } catch (error) {
-      console.warn("Failed to save recent items to user profile:", error);
-    }
-  }
-
-  function scheduleRecentProfileWrite() {
-    if (!isNeutralinoRuntime()) return;
-
-    clearTimeout(recentProfileWriteTimer);
-    recentProfileWriteTimer = setTimeout(() => {
-      writeRecentItemsToProfile();
-    }, 100);
-  }
-
-  async function hydrateRecentItemsFromProfile() {
-    const profilePath = await getRecentProfilePath();
-    if (!profilePath) return;
-
-    try {
-      const rawProfileData = await Neutralino.filesystem.readFile(profilePath);
-      const profileData = JSON.parse(rawProfileData || "{}");
-      recentItemsCache[RECENT_FILES_KEY] = mergeRecentItems(
-        profileData.recentFiles || [],
-        recentItemsCache[RECENT_FILES_KEY]
-      );
-      recentItemsCache[RECENT_FOLDERS_KEY] = mergeRecentItems(
-        profileData.recentFolders || [],
-        recentItemsCache[RECENT_FOLDERS_KEY]
-      );
-      writeRecentItemsToLocalStorage(RECENT_FILES_KEY, recentItemsCache[RECENT_FILES_KEY]);
-      writeRecentItemsToLocalStorage(RECENT_FOLDERS_KEY, recentItemsCache[RECENT_FOLDERS_KEY]);
-      renderRecentMenus();
-      scheduleRecentProfileWrite();
-    } catch (error) {
-      // First launch is expected to have no profile data file yet. Seed it from localStorage.
-      scheduleRecentProfileWrite();
-    }
-  }
-
-  function getGlobalProfilePayload() {
-    return {
-      version: 1,
-      updatedAt: Date.now(),
-      state: loadGlobalState()
-    };
-  }
-
-  async function writeGlobalStateToProfile() {
-    const profilePath = await getGlobalProfilePath();
-    if (!profilePath) return;
-
-    try {
-      await Neutralino.filesystem.writeFile(profilePath, JSON.stringify(getGlobalProfilePayload(), null, 2));
-    } catch (error) {
-      console.warn("Failed to save preferences to user profile:", error);
-    }
-  }
-
-  function scheduleGlobalProfileWrite() {
-    if (!isNeutralinoRuntime()) return;
-
-    clearTimeout(globalProfileWriteTimer);
-    globalProfileWriteTimer = setTimeout(() => {
-      writeGlobalStateToProfile();
-    }, 100);
-  }
-
-  async function hydrateGlobalStateFromProfile() {
-    const profilePath = await getGlobalProfilePath();
-    if (!profilePath) return;
-
-    try {
-      const rawProfileData = await Neutralino.filesystem.readFile(profilePath);
-      const profileData = JSON.parse(rawProfileData || "{}");
-      if (profileData && profileData.state && typeof profileData.state === "object") {
-        localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify({ ...loadGlobalState(), ...profileData.state }));
-        applyGlobalPreferences(loadGlobalState());
-      }
-      scheduleGlobalProfileWrite();
-    } catch (error) {
-      // First launch is expected to have no profile data file yet. Seed it from localStorage.
-      scheduleGlobalProfileWrite();
-    }
-  }
-
-  function createRecentEntry(entry) {
-    const path = entry && entry.path ? String(entry.path) : null;
-    const handleName = entry && entry.handle && entry.handle.name ? entry.handle.name : null;
-    const name = entry && entry.name ? String(entry.name) : (path ? getFileName(path) : handleName);
-    const label = entry && entry.label ? String(entry.label) : (name || path || handleName || "Untitled");
-    return {
-      name: name || label,
-      label,
-      path,
-      handleName,
-      updatedAt: Date.now()
-    };
-  }
-
-  function rememberRecentItem(storageKey, entry, handleStore) {
-    const recentEntry = createRecentEntry(entry);
-    const key = getRecentItemKey(recentEntry);
-    if (!key) return;
-
-    if (entry && entry.handle) {
-      handleStore.set(key, entry.handle);
-      persistRecentHandle(storageKey, key, entry.handle);
-    }
-
-    const items = readRecentItems(storageKey).filter((item) => getRecentItemKey(item) !== key);
-    items.unshift(recentEntry);
-    writeRecentItems(storageKey, items);
-    renderRecentMenus();
-  }
-
-  function rememberRecentFile(entry) {
-    rememberRecentItem(RECENT_FILES_KEY, entry, recentFileHandles);
-  }
-
-  function rememberRecentFolder(entry) {
-    rememberRecentItem(RECENT_FOLDERS_KEY, entry, recentFolderHandles);
-  }
-
-  function getRecentSubmenuMarkup(kind, iconClass, title) {
-    return `
-      <div class="dropdown-submenu action-menu-submenu recent-${kind}-submenu">
-        <button class="dropdown-item action-menu-item dropdown-toggle" type="button" aria-haspopup="true" aria-expanded="false">
-          <i class="bi ${iconClass} me-2"></i> ${title}
-        </button>
-        <div class="dropdown-menu action-submenu recent-${kind}-menu" aria-label="${title}"></div>
-      </div>`;
-  }
-
-  function ensureRecentMenuContainers() {
-    document.querySelectorAll(".action-menu").forEach((menu) => {
-      const openFolderButton = menu.querySelector("#import-from-folder");
-      if (!openFolderButton || menu.querySelector(".recent-files-submenu")) return;
-
-      openFolderButton.insertAdjacentHTML("afterend", getRecentSubmenuMarkup("folders", "bi-clock-history", "Recent folders"));
-      openFolderButton.insertAdjacentHTML("afterend", getRecentSubmenuMarkup("files", "bi-clock-history", "Recent files"));
-    });
-    renderRecentMenus();
-  }
-
-  function renderRecentMenu(menu, items, emptyText, itemType) {
-    menu.innerHTML = "";
-
-    if (!items.length) {
-      const emptyItem = document.createElement("button");
-      emptyItem.type = "button";
-      emptyItem.className = "dropdown-item action-menu-item recent-empty-item";
-      emptyItem.disabled = true;
-      emptyItem.textContent = emptyText;
-      menu.appendChild(emptyItem);
-      return;
-    }
-
-    items.slice(0, MAX_RECENT_ITEMS).forEach((item) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "dropdown-item action-menu-item recent-menu-item";
-      button.dataset.recentType = itemType;
-      button.dataset.recentKey = getRecentItemKey(item);
-      button.title = item.path || item.label || item.name;
-      button.innerHTML = `<span class="recent-menu-label">${escapeHtml(item.label || item.name || item.path || "Untitled")}</span>`;
-      menu.appendChild(button);
-    });
-  }
-
-  function renderRecentMenus() {
-    const recentFiles = readRecentItems(RECENT_FILES_KEY);
-    const recentFolders = readRecentItems(RECENT_FOLDERS_KEY);
-
-    document.querySelectorAll(".recent-files-menu").forEach((menu) => {
-      renderRecentMenu(menu, recentFiles, "No recent files", "file");
-    });
-
-    document.querySelectorAll(".recent-folders-menu").forEach((menu) => {
-      renderRecentMenu(menu, recentFolders, "No recent folders", "folder");
-    });
-  }
-
+  const recentItems = window.registerMarkdownViewerRecentItems(app, {
+    applyGlobalPreferences,
+    escapeHtml,
+    getFileName,
+    globalStateKey: "markdownViewerGlobalState",
+    loadGlobalState: function() { return loadGlobalState(); }
+  });
+  const isNeutralinoRuntime = recentItems.isNeutralinoRuntime;
+  const readRecentItems = recentItems.readRecentItems;
+  const getRecentItemKey = recentItems.getRecentItemKey;
+  const getPersistedRecentHandle = recentItems.getPersistedRecentHandle;
+  const ensureFileSystemHandlePermission = recentItems.ensureFileSystemHandlePermission;
+  const rememberRecentFile = recentItems.rememberRecentFile;
+  const rememberRecentFolder = recentItems.rememberRecentFolder;
+  const ensureRecentMenuContainers = recentItems.ensureRecentMenuContainers;
+  const hydrateRecentItemsFromProfile = recentItems.hydrateRecentItemsFromProfile;
+  const hydrateGlobalStateFromProfile = recentItems.hydrateGlobalStateFromProfile;
+  const hydrateRecentHandlesFromIndexedDB = recentItems.hydrateRecentHandlesFromIndexedDB;
+  const scheduleGlobalProfileWrite = recentItems.scheduleGlobalProfileWrite;
+  const RECENT_FILES_KEY = recentItems.keys.files;
+  const RECENT_FOLDERS_KEY = recentItems.keys.folders;
   async function openRecentFile(key) {
     const item = readRecentItems(RECENT_FILES_KEY).find((recentItem) => getRecentItemKey(recentItem) === key);
     if (!item) return;
@@ -2774,56 +1577,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
   themePreferences.initializeTheme();
 
-  const initMermaid = () => {
-    const currentTheme = document.documentElement.getAttribute("data-theme");
-    const mermaidTheme = currentTheme === "dark" ? "dark" : "default";
-    
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: mermaidTheme,
-      securityLevel: 'loose',
-      flowchart: { useMaxWidth: true, htmlLabels: true },
-      fontSize: 16
-    });
-  };
-
-  try {
-    initMermaid();
-  } catch (e) {
-    console.warn("Mermaid initialization failed:", e);
-  }
-
-  const markedOptions = {
-    gfm: true,
-    breaks: false,
-    pedantic: false,
-    sanitize: false,
-    smartypants: false,
-    xhtml: false,
-    headerIds: true,
-    mangle: false,
-  };
-
-  const renderer = new marked.Renderer();
-  renderer.code = function (code, language) {
-    const normalizedLanguage = (language || "").trim().split(/\s+/)[0].toLowerCase();
-
-    if (normalizedLanguage === 'mermaid') {
-      const uniqueId = 'mermaid-diagram-' + Math.random().toString(36).substr(2, 9);
-      return `<div class="mermaid-container"><div class="mermaid" id="${uniqueId}">${code}</div></div>`;
-    }
-    
-    const validLanguage = hljs.getLanguage(normalizedLanguage) ? normalizedLanguage : "plaintext";
-    const highlightedCode = hljs.highlight(code, {
-      language: validLanguage,
-    }).value;
-    return `<pre><code class="hljs ${validLanguage}">${highlightedCode}</code></pre>`;
-  };
-
-  marked.setOptions({
-    ...markedOptions,
-    renderer: renderer,
+  const rendererConfig = window.registerMarkdownViewerRendererConfig(app, {
+    marked,
+    hljs,
+    mermaid
   });
+  rendererConfig.initialize();
+  const initMermaid = rendererConfig.initMermaid;
 
   const GITHUB_ALERT_META = {
     note: {
@@ -2960,115 +1720,13 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
 
-  function rangesOverlap(existingRanges, start, end) {
-    return existingRanges.some(function(range) {
-      return start < range.end && end > range.start;
-    });
-  }
-
-  function addInlineSyntaxRanges(line, regex, className, ranges) {
-    let match;
-    regex.lastIndex = 0;
-    while ((match = regex.exec(line)) !== null) {
-      const start = match.index;
-      const end = start + match[0].length;
-      if (end > start && !rangesOverlap(ranges, start, end)) {
-        ranges.push({ start, end, className });
-      }
-      if (match[0] === "") regex.lastIndex += 1;
-    }
-  }
-
-  function renderInlineMarkdownSyntax(line) {
-    if (!line) return "";
-
-    const ranges = [];
-    addInlineSyntaxRanges(line, /`+[^`\n]*`+/g, "editor-md-code", ranges);
-    addInlineSyntaxRanges(line, /!?\[[^\]\n]+\]\([^\)\n]+\)/g, "editor-md-link", ranges);
-    addInlineSyntaxRanges(line, /https?:\/\/[^\s<>)]+/g, "editor-md-url", ranges);
-    addInlineSyntaxRanges(line, /(\*\*|__)(?=\S)(.+?\S)\1/g, "editor-md-strong", ranges);
-    addInlineSyntaxRanges(line, /(^|[^*_])(\*|_)(?=\S)([^*_\n]+?\S)\2(?!\2)/g, "editor-md-emphasis", ranges);
-
-    ranges.sort(function(a, b) {
-      return a.start - b.start || b.end - a.end;
-    });
-
-    let markup = "";
-    let cursor = 0;
-    ranges.forEach(function(range) {
-      if (range.start < cursor) return;
-      markup += escapeHtml(line.slice(cursor, range.start));
-      markup += `<span class="${range.className}">${escapeHtml(line.slice(range.start, range.end))}</span>`;
-      cursor = range.end;
-    });
-    markup += escapeHtml(line.slice(cursor));
-    return markup;
-  }
-
-  function renderMarkdownSyntaxLine(line, state) {
-    const fenceMatch = line.match(/^(\s*)(`{3,}|~{3,})(.*)$/);
-    if (fenceMatch) {
-      state.inFence = !state.inFence;
-      return `${escapeHtml(fenceMatch[1])}<span class="editor-md-marker">${escapeHtml(fenceMatch[2])}</span><span class="editor-md-code">${escapeHtml(fenceMatch[3])}</span>`;
-    }
-
-    if (state.inFence) {
-      return `<span class="editor-md-code">${escapeHtml(line)}</span>`;
-    }
-
-    const headingMatch = line.match(/^(\s*)(#{1,6})(\s+.*)$/);
-    if (headingMatch) {
-      return `${escapeHtml(headingMatch[1])}<span class="editor-md-marker">${escapeHtml(headingMatch[2])}</span><span class="editor-md-heading">${renderInlineMarkdownSyntax(headingMatch[3])}</span>`;
-    }
-
-    const hrMatch = line.match(/^(\s{0,3})([-*_])(?:\s*\2){2,}\s*$/);
-    if (hrMatch) {
-      return `<span class="editor-md-hr">${escapeHtml(line)}</span>`;
-    }
-
-    const quoteMatch = line.match(/^(\s*>+\s?)(.*)$/);
-    if (quoteMatch) {
-      return `<span class="editor-md-quote">${escapeHtml(quoteMatch[1])}</span>${renderInlineMarkdownSyntax(quoteMatch[2])}`;
-    }
-
-    const listMatch = line.match(/^(\s*)([-+*]|\d+[.)])(\s+)(\[[ xX]\]\s+)?(.*)$/);
-    if (listMatch) {
-      const taskMarkup = listMatch[4]
-        ? `<span class="editor-md-task">${escapeHtml(listMatch[4])}</span>`
-        : "";
-      return `${escapeHtml(listMatch[1])}<span class="editor-md-list">${escapeHtml(listMatch[2])}</span>${escapeHtml(listMatch[3])}${taskMarkup}${renderInlineMarkdownSyntax(listMatch[5])}`;
-    }
-
-    if (/^\s*\|.*\|\s*$/.test(line) || /^\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+$/.test(line)) {
-      return `<span class="editor-md-table">${renderInlineMarkdownSyntax(line)}</span>`;
-    }
-
-    return renderInlineMarkdownSyntax(line);
-  }
-
-  function renderEditorSyntaxHighlights() {
-    if (!editorSyntaxHighlight || !markdownEditor) return;
-
-    const state = { inFence: false };
-    const lines = markdownEditor.value.split("\n");
-    const markup = lines.map(function(line, index) {
-      const renderedLine = renderMarkdownSyntaxLine(line, state) || " ";
-      return renderedLine + (index < lines.length - 1 ? "\n" : "");
-    }).join("");
-
-    editorSyntaxHighlight.innerHTML = `<div class="editor-syntax-highlight-inner">${markup}</div>`;
-    markdownEditor.classList.add("syntax-highlight-enabled");
-    syncEditorSyntaxHighlightScroll();
-  }
-
-  function syncEditorSyntaxHighlightScroll() {
-    if (!editorSyntaxHighlight) return;
-
-    const inner = editorSyntaxHighlight.querySelector(".editor-syntax-highlight-inner");
-    if (!inner) return;
-
-    inner.style.transform = `translate(${-markdownEditor.scrollLeft}px, ${-markdownEditor.scrollTop}px)`;
-  }
+  const editorSyntaxHighlighter = window.registerMarkdownViewerEditorSyntaxHighlight(app, {
+    markdownEditor,
+    editorSyntaxHighlight,
+    escapeHtml
+  });
+  const renderEditorSyntaxHighlights = editorSyntaxHighlighter.renderEditorSyntaxHighlights;
+  const syncEditorSyntaxHighlightScroll = editorSyntaxHighlighter.syncEditorSyntaxHighlightScroll;
 
   function getWikiLinkParts(rawLink) {
     const value = String(rawLink || "").trim();
@@ -5589,80 +4247,6 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
 
     exportMd.click();
-  }
-
-  function getEditorLineColumn(text, position) {
-    const safePosition = Math.max(0, Math.min(position, text.length));
-    const beforeCursor = text.slice(0, safePosition);
-    const line = beforeCursor.split("\n").length;
-    const lastLineBreak = beforeCursor.lastIndexOf("\n");
-    const column = safePosition - lastLineBreak;
-
-    return { line, column };
-  }
-
-  function getSelectionLineCount(text, selectionStart, selectionEnd) {
-    if (selectionStart === selectionEnd) return 0;
-    return text.slice(selectionStart, selectionEnd).split("\n").length;
-  }
-
-  function updateEditorTextpadStatus(activeTab) {
-    if (!editorTextpadStatusElement) return;
-
-    const shouldShowEditorStatus = !!activeTab && activeTab.type !== "graph" && document.activeElement === markdownEditor;
-    editorTextpadStatusElement.classList.toggle("hidden", !shouldShowEditorStatus);
-    if (!shouldShowEditorStatus) return;
-
-    const text = markdownEditor.value;
-    const selectionStart = Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
-    const selectionEnd = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
-    const hasSelection = selectionStart !== selectionEnd;
-    const cursorPosition = hasSelection ? selectionEnd : selectionStart;
-    const cursorLocation = getEditorLineColumn(text, cursorPosition);
-    const totalLines = text.length ? text.split("\n").length : 1;
-
-    if (editorTotalLengthElement) editorTotalLengthElement.textContent = text.length.toLocaleString();
-    if (editorTotalLinesElement) editorTotalLinesElement.textContent = totalLines.toLocaleString();
-    if (editorCursorLineElement) editorCursorLineElement.textContent = cursorLocation.line.toLocaleString();
-    if (editorCursorColumnElement) editorCursorColumnElement.textContent = cursorLocation.column.toLocaleString();
-
-    if (editorPositionLabelElement) editorPositionLabelElement.textContent = hasSelection ? "Sel" : "Pos";
-    if (editorPositionValueElement) {
-      editorPositionValueElement.textContent = hasSelection
-        ? `${(selectionEnd - selectionStart).toLocaleString()} | ${getSelectionLineCount(text, selectionStart, selectionEnd).toLocaleString()}`
-        : (cursorPosition + 1).toLocaleString();
-    }
-  }
-
-  function updateStatusLine(options = {}) {
-    const activeTab = tabs.find((tab) => tab.id === activeTabId);
-    const activeGraphTab = activeTab && activeTab.type === "graph" ? activeTab : null;
-    const visiblePointCount = typeof options.visiblePointCount === "number"
-      ? options.visiblePointCount
-      : (typeof activeGraphTab?.visiblePointCount === "number" ? activeGraphTab.visiblePointCount : 0);
-    const graphZoomScale = typeof options.graphZoomScale === "number"
-      ? options.graphZoomScale
-      : (typeof activeGraphTab?.graphZoomScale === "number"
-        ? activeGraphTab.graphZoomScale
-        : getGraphZoomScaleFromLayout(activeGraphTab?.graphLayout));
-
-    if (statusTipElement) {
-      statusTipElement.textContent = previewHoveredLinkUrl || (activeGraphTab
-        ? "Tip: hold ctrl / shift to see out / back links"
-        : "Tip: drag in text files, use split preview, or open a folder to build a graph.");
-    }
-
-    if (graphZoomStatusElement && graphZoomPercentElement) {
-      graphZoomPercentElement.textContent = formatGraphZoomPercent(graphZoomScale);
-      graphZoomStatusElement.classList.toggle("hidden", !activeGraphTab);
-    }
-
-    if (graphPointsStatusElement && graphPointsCountElement) {
-      graphPointsCountElement.textContent = visiblePointCount.toLocaleString();
-      graphPointsStatusElement.classList.toggle("hidden", !activeGraphTab);
-    }
-
-    updateEditorTextpadStatus(activeTab);
   }
 
   function restoreViewMode(mode) {
@@ -10017,19 +8601,6 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     markdownRenderTimeout = setTimeout(renderMarkdown, RENDER_DELAY);
   }
 
-  function updateDocumentStats() {
-    const text = markdownEditor.value;
-
-    const charCount = text.length;
-    charCountElement.textContent = charCount.toLocaleString();
-
-    const wordCount = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-    wordCountElement.textContent = wordCount.toLocaleString();
-
-    const readingTimeMinutes = Math.ceil(wordCount / 200);
-    readingTimeElement.textContent = readingTimeMinutes;
-  }
-
   const scrollSync = window.registerMarkdownViewerScrollSync(app, {
     delay: SCROLL_SYNC_DELAY,
     editorPane,
@@ -10383,59 +8954,66 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     scheduleEditorLineNumbersUpdate();
   }
 
-  function openMobileMenu() {
-    mobileMenuPanel.classList.add("active");
-    mobileMenuOverlay.classList.add("active");
-  }
-  function closeMobileMenu() {
-    mobileMenuPanel.classList.remove("active");
-    mobileMenuOverlay.classList.remove("active");
-  }
-  mobileMenuToggle.addEventListener("click", openMobileMenu);
-  mobileCloseMenu.addEventListener("click", closeMobileMenu);
-  mobileMenuOverlay.addEventListener("click", closeMobileMenu);
-
-  function updateMobileStats() {
-    if (mobileCharCount) mobileCharCount.textContent = charCountElement.textContent;
-    if (mobileWordCount) mobileWordCount.textContent = wordCountElement.textContent;
-    if (mobileReadingTime) mobileReadingTime.textContent = readingTimeElement.textContent;
-  }
-
-  const origUpdateStats = updateDocumentStats;
-  updateDocumentStats = function() {
-    origUpdateStats();
-    updateMobileStats();
-    updateStatusLine();
-  };
-
-  mobileImportBtn.addEventListener("click", () => openDocumentFileFromPicker());
-  mobileImportGithubBtn.addEventListener("click", () => {
-    closeMobileMenu();
-    openGitHubImportModal();
+  const mobileMenu = window.registerMarkdownViewerMobileMenu(app, {
+    mobileMenuToggle,
+    mobileMenuPanel,
+    mobileMenuOverlay,
+    mobileCloseMenu,
+    mobileImportBtn,
+    mobileImportGithubBtn,
+    mobileExportMd,
+    mobileExportHtml,
+    mobileExportPdf,
+    mobileCopyMarkdown,
+    mobileThemeToggle,
+    mobileNewTabBtn: document.getElementById("mobile-new-tab-btn"),
+    mobileTabResetBtn: document.getElementById("mobile-tab-reset-btn"),
+    copyMarkdownButton,
+    exportMd,
+    exportHtml,
+    exportPdf,
+    newTab,
+    openDocumentFileFromPicker,
+    openGitHubImportModal,
+    resetAllTabs,
+    themeToggle
   });
-  mobileExportMd.addEventListener("click", () => exportMd.click());
-  mobileExportHtml.addEventListener("click", () => exportHtml.click());
-  mobileExportPdf.addEventListener("click", () => exportPdf.click());
-  mobileCopyMarkdown.addEventListener("click", () => copyMarkdownButton.click());
-  mobileThemeToggle.addEventListener("click", () => {
-    themeToggle.click();
+  const closeMobileMenu = mobileMenu.closeMobileMenu;
+
+  const statusLine = window.registerMarkdownViewerStatusLine(app, {
+    markdownEditor,
+    readingTimeElement,
+    wordCountElement,
+    charCountElement,
+    mobileReadingTime,
+    mobileWordCount,
+    mobileCharCount,
+    statusTipElement,
+    graphZoomStatusElement,
+    graphZoomPercentElement,
+    graphPointsStatusElement,
+    graphPointsCountElement,
+    editorTextpadStatusElement,
+    editorTotalLengthElement,
+    editorTotalLinesElement,
+    editorCursorLineElement,
+    editorCursorColumnElement,
+    editorPositionLabelElement,
+    editorPositionValueElement,
+    formatGraphZoomPercent,
+    getActiveTab: function() {
+      return tabs.find((tab) => tab.id === activeTabId);
+    },
+    getGraphZoomScaleFromLayout,
+    getPreviewHoveredLinkUrl: function() {
+      return previewHoveredLinkUrl;
+    }
   });
+  const updateDocumentStats = statusLine.updateDocumentStats;
+  const updateMobileStats = statusLine.updateMobileStats;
+  const updateStatusLine = statusLine.updateStatusLine;
 
-  const mobileNewTabBtn = document.getElementById("mobile-new-tab-btn");
-  if (mobileNewTabBtn) {
-    mobileNewTabBtn.addEventListener("click", function() {
-      newTab();
-      closeMobileMenu();
-    });
-  }
-
-  const mobileTabResetBtn = document.getElementById("mobile-tab-reset-btn");
-  if (mobileTabResetBtn) {
-    mobileTabResetBtn.addEventListener("click", function() {
-      closeMobileMenu();
-      resetAllTabs();
-    });
-  }
+  mobileMenu.bindMobileMenu();
   
   initTabs();
   if (loadGlobalState().syncScrollingEnabled === false) toggleSyncScrolling();
@@ -10538,7 +9116,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   });
   markdownEditor.addEventListener("blur", function() {
     window.setTimeout(function() {
-      if (!linkAutocompleteLayer || !linkAutocompleteLayer.matches(":hover")) hideLinkAutocomplete();
+      if (!autocomplete.isLayerHovered()) hideLinkAutocomplete();
       updateEditorSelectionHighlights();
       updateStatusLine();
     }, 0);
@@ -14381,35 +12959,10 @@ ${body}`;
     shareButton
   });
 
-  const dropEvents = ["dragenter", "dragover", "dragleave", "drop"];
-
-  dropEvents.forEach((eventName) => {
-    dropzone.addEventListener(eventName, preventDefaults, false);
-    document.body.addEventListener(eventName, preventDefaults, false);
-  });
-
-  function preventDefaults(e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  ["dragenter", "dragover"].forEach((eventName) => {
-    dropzone.addEventListener(eventName, highlight, false);
-  });
-
-  ["dragleave", "drop"].forEach((eventName) => {
-    dropzone.addEventListener(eventName, unhighlight, false);
-  });
-
-  function highlight() {
-    dropzone.classList.add("active");
-  }
-
-  function unhighlight() {
-    dropzone.classList.remove("active");
-  }
-
-  dropzone.addEventListener("drop", handleDrop, false);
+  window.registerMarkdownViewerDragDrop(app, {
+    dropzone,
+    handleDrop
+  }).bindDropzone();
   dropzone.addEventListener("click", function (e) {
     if (e.target !== closeDropzoneBtn && !closeDropzoneBtn.contains(e.target)) {
       openDocumentFileFromPicker();
