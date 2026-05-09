@@ -4270,6 +4270,10 @@ This is a fully client-side application. Your content never leaves your browser 
     pill.innerHTML = "";
     if (!isGraphTab) return;
 
+    pill.classList.toggle("compare-mode", isCompareMode);
+    pill.classList.toggle("saved-mode", isSavedMode && !isCompareMode);
+    pill.classList.toggle("current-folder-mode", !isSavedMode && !isCompareMode);
+
     const label = document.createElement("span");
     label.textContent = isCompareMode ? "Compare" : (isSavedMode ? "Saved graph" : "Current folder");
     pill.appendChild(label);

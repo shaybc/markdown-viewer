@@ -1273,7 +1273,11 @@ body {
   top: 1rem;
   width: auto;
   max-height: none;
-  border-radius: 999px;
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .graph-view-toolbar.collapsed .graph-filter-panel-heading {
@@ -1304,6 +1308,17 @@ body {
 
 .graph-view-toolbar.collapsed .graph-filter-expanded-icon {
   display: none;
+}
+
+.graph-view-toolbar.collapsed .saved-graph-mode-pill.current-folder-mode {
+  display: none;
+}
+
+.graph-view-toolbar.collapsed .saved-graph-mode-pill {
+  align-self: flex-end;
+  max-width: min(12rem, calc(100vw - 2rem));
+  margin-top: 0.35rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
 }
 
 .graph-file-search-filter,
