@@ -43,6 +43,8 @@ function copyDirSync(src, dest, exclude = []) {
 /** script.js → resources/js/script.js */
 const jsDest = path.join(RESOURCES_DIR, "js");
 fs.mkdirSync(jsDest, { recursive: true });
+copyDirSync(path.join(WEB_APP_DIR, "js"), jsDest);
+console.log("✓ Copied js/ -> resources/js/");
 fs.copyFileSync(
   path.join(WEB_APP_DIR, "script.js"),
   path.join(jsDest, "script.js"),

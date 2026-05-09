@@ -1,4 +1,19 @@
 document.addEventListener("DOMContentLoaded", function () {
+  const app = window.markdownViewerApp || (window.markdownViewerApp = window.createMarkdownViewerApp
+    ? window.createMarkdownViewerApp()
+    : {
+        constants: {},
+        dom: {},
+        state: {},
+        actions: {},
+        services: {},
+        modules: {},
+        registerModule: function registerModule(name, moduleApi) {
+          if (!name) return;
+          this.modules[name] = moduleApi || {};
+        }
+      });
+
   let markdownRenderTimeout = null;
   const RENDER_DELAY = 100;
   let syncScrollingEnabled = true;
@@ -75,6 +90,86 @@ document.addEventListener("DOMContentLoaded", function () {
 
   let linkAutocompleteLayer = null;
   let linkAutocompleteState = null;
+  const clipboard = window.registerMarkdownViewerClipboard(app, {
+    copyMarkdownButton,
+    getMarkdownText: function() { return markdownEditor.value; }
+  });
+  const copyToClipboard = clipboard.copyToClipboard;
+  const showCopiedMessage = clipboard.showCopiedMessage;
+
+  Object.assign(app.constants, {
+    RENDER_DELAY,
+    SCROLL_SYNC_DELAY
+  });
+
+  Object.assign(app.dom, {
+    markdownEditor,
+    editorLineNumbers,
+    editorCurrentLine,
+    editorSelectionHighlights,
+    editorSyntaxHighlight,
+    markdownPreview,
+    themeToggle,
+    restoreDefaultsButtons,
+    importFromFileButtons,
+    newDocumentButtons,
+    importFromGithubButton,
+    importFromFolderButton,
+    folderTreeFilterInput,
+    createTagButton,
+    deleteTagButton,
+    tagManagementSearch,
+    tagManagementList,
+    folderTreeFilterToggleButtons,
+    folderTreeExpandToggleButtons,
+    folderTreeRoot,
+    fileInput,
+    folderInput,
+    exportMd,
+    exportHtml,
+    exportPdf,
+    copyMarkdownButton,
+    dropzone,
+    closeDropzoneBtn,
+    syncToggleButtons,
+    editorPane,
+    previewPane,
+    readingTimeElement,
+    wordCountElement,
+    charCountElement,
+    statusTipElement,
+    graphZoomStatusElement,
+    graphZoomPercentElement,
+    graphPointsStatusElement,
+    graphPointsCountElement,
+    editorTextpadStatusElement,
+    editorTotalLengthElement,
+    editorTotalLinesElement,
+    editorCursorLineElement,
+    editorCursorColumnElement,
+    editorPositionLabelElement,
+    editorPositionValueElement
+  });
+
+  Object.defineProperties(app.state, {
+    markdownRenderTimeout: { get: () => markdownRenderTimeout, set: (value) => { markdownRenderTimeout = value; }, configurable: true },
+    syncScrollingEnabled: { get: () => syncScrollingEnabled, set: (value) => { syncScrollingEnabled = value; }, configurable: true },
+    isEditorScrolling: { get: () => isEditorScrolling, set: (value) => { isEditorScrolling = value; }, configurable: true },
+    isPreviewScrolling: { get: () => isPreviewScrolling, set: (value) => { isPreviewScrolling = value; }, configurable: true },
+    scrollSyncTimeout: { get: () => scrollSyncTimeout, set: (value) => { scrollSyncTimeout = value; }, configurable: true },
+    currentViewMode: { get: () => currentViewMode, set: (value) => { currentViewMode = value; }, configurable: true },
+    autoSelectFileEnabled: { get: () => autoSelectFileEnabled, set: (value) => { autoSelectFileEnabled = value; }, configurable: true },
+    currentFolderTreeNodes: { get: () => currentFolderTreeNodes, set: (value) => { currentFolderTreeNodes = value; }, configurable: true },
+    folderTreeFilterText: { get: () => folderTreeFilterText, set: (value) => { folderTreeFilterText = value; }, configurable: true },
+    selectedFolderTreeTags: { get: () => selectedFolderTreeTags, set: (value) => { selectedFolderTreeTags = value; }, configurable: true },
+    currentFolderSortMode: { get: () => currentFolderSortMode, set: (value) => { currentFolderSortMode = value; }, configurable: true },
+    showUnsupportedFolderFiles: { get: () => showUnsupportedFolderFiles, set: (value) => { showUnsupportedFolderFiles = value; }, configurable: true },
+    isFolderOpen: { get: () => isFolderOpen, set: (value) => { isFolderOpen = value; }, configurable: true },
+    shownFolderInputFallbackNotice: { get: () => shownFolderInputFallbackNotice, set: (value) => { shownFolderInputFallbackNotice = value; }, configurable: true },
+    previewHoveredLinkUrl: { get: () => previewHoveredLinkUrl, set: (value) => { previewHoveredLinkUrl = value; }, configurable: true },
+    linkAutocompleteLayer: { get: () => linkAutocompleteLayer, set: (value) => { linkAutocompleteLayer = value; }, configurable: true },
+    linkAutocompleteState: { get: () => linkAutocompleteState, set: (value) => { linkAutocompleteState = value; }, configurable: true }
+  });
 
   function getLinkAutocompleteLayer() {
     if (!linkAutocompleteLayer) {
@@ -867,205 +962,20 @@ document.addEventListener("DOMContentLoaded", function () {
   // View Mode Elements - Story 1.1
   const contentContainer = document.querySelector(".content-container");
   const viewModeButtons = document.querySelectorAll(".view-mode-btn");
-
-  function supportsNativeDirectoryPicker() {
-    return typeof window.showDirectoryPicker === "function";
-  }
-
-  function getFolderPickerFallbackMessage() {
-    return "Browsers open folders with a read-only folder picker. Files stay on this device, but saving writes a downloaded copy unless you use the desktop app.";
-  }
-
-  let editorLineMeasure = null;
-  let editorLineNumberResizeFrame = null;
-  const editorCurrentLineMetrics = { top: 0, height: 0 };
-
-  function getEditorLineHeight(computedStyle) {
-    const style = computedStyle || window.getComputedStyle(markdownEditor);
-    const parsedLineHeight = parseFloat(style.lineHeight);
-    if (!Number.isNaN(parsedLineHeight)) return parsedLineHeight;
-    const parsedFontSize = parseFloat(style.fontSize);
-    return Number.isNaN(parsedFontSize) ? 21 : parsedFontSize * 1.5;
-  }
-
-  function getEditorLineMeasure() {
-    if (!editorLineMeasure) {
-      editorLineMeasure = document.createElement("textarea");
-      editorLineMeasure.className = "editor-line-measure";
-      editorLineMeasure.setAttribute("aria-hidden", "true");
-      editorLineMeasure.setAttribute("tabindex", "-1");
-      editorLineMeasure.setAttribute("wrap", "soft");
-      document.body.appendChild(editorLineMeasure);
-    }
-
-    return editorLineMeasure;
-  }
-
-  function syncEditorLineMeasureStyles(measure, computedStyle) {
-    const stylesToCopy = [
-      "fontFamily",
-      "fontSize",
-      "fontWeight",
-      "fontStyle",
-      "lineHeight",
-      "letterSpacing",
-      "textTransform",
-      "textIndent",
-      "textRendering",
-      "wordSpacing",
-      "paddingTop",
-      "paddingRight",
-      "paddingBottom",
-      "paddingLeft",
-      "borderTopWidth",
-      "borderRightWidth",
-      "borderBottomWidth",
-      "borderLeftWidth",
-      "boxSizing",
-      "tabSize"
-    ];
-
-    stylesToCopy.forEach(function(property) {
-      measure.style[property] = computedStyle[property];
-    });
-    measure.style.width = `${markdownEditor.clientWidth}px`;
-  }
-
-  function getEditorWrappedLineHeights(lines, computedStyle, lineHeight) {
-    const measure = getEditorLineMeasure();
-    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
-    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
-    const verticalPadding = paddingTop + paddingBottom;
-
-    syncEditorLineMeasureStyles(measure, computedStyle);
-
-    return lines.map(function(line) {
-      measure.value = line || " ";
-      return Math.max(lineHeight, Math.ceil(measure.scrollHeight - verticalPadding));
-    });
-  }
-
-  function getCurrentEditorLine() {
-    return markdownEditor.value.slice(0, markdownEditor.selectionStart || 0).split("\n").length;
-  }
-
-  function updateEditorCurrentLineHighlight(activeLine, wrappedLineHeights, computedStyle) {
-    if (!editorCurrentLine) return;
-
-    const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
-    const activeLineIndex = Math.max(0, activeLine - 1);
-    const top = paddingTop + wrappedLineHeights.slice(0, activeLineIndex).reduce(function(total, height) {
-      return total + height;
-    }, 0);
-    const height = wrappedLineHeights[activeLineIndex] || getEditorLineHeight(computedStyle);
-
-    editorCurrentLineMetrics.top = top;
-    editorCurrentLineMetrics.height = height;
-    editorCurrentLine.style.height = `${height}px`;
-    editorCurrentLine.classList.add("visible");
-    syncEditorCurrentLineScroll();
-  }
-
-  function updateEditorLineNumbers() {
-    const lines = markdownEditor.value.split("\n");
-    const activeLine = getCurrentEditorLine();
-    const computedStyle = window.getComputedStyle(markdownEditor);
-    const lineHeight = getEditorLineHeight(computedStyle);
-    const wrappedLineHeights = getEditorWrappedLineHeights(lines, computedStyle, lineHeight);
-
-    if (editorLineNumbers) {
-      const lineNumbersMarkup = lines.map(function(_line, index) {
-        const lineNumber = index + 1;
-        const activeClass = lineNumber === activeLine ? " active" : "";
-        return `<span class="editor-line-number${activeClass}" style="height:${wrappedLineHeights[index]}px">${lineNumber}</span>`;
-      }).join("");
-
-      editorLineNumbers.innerHTML = `<div class="editor-line-numbers-inner" style="transform: translateY(-${markdownEditor.scrollTop}px);">${lineNumbersMarkup}</div>`;
-    }
-
-    updateEditorCurrentLineHighlight(activeLine, wrappedLineHeights, computedStyle);
-  }
-
-  function scheduleEditorLineNumbersUpdate() {
-    if (editorLineNumberResizeFrame) return;
-
-    editorLineNumberResizeFrame = window.requestAnimationFrame(function() {
-      editorLineNumberResizeFrame = null;
-      updateEditorLineNumbers();
-    });
-  }
-
-  function updateEditorSelectionHighlights() {
-    if (!editorSelectionHighlights) return;
-
-    const text = markdownEditor.value;
-    const selectionStart = Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
-    const selectionEnd = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
-    const selectedText = text.slice(selectionStart, selectionEnd);
-
-    if (!selectedText || selectedText.trim() === "") {
-      editorSelectionHighlights.innerHTML = "";
-      return;
-    }
-
-    let markup = "";
-    let searchFrom = 0;
-    let matchIndex = text.indexOf(selectedText, searchFrom);
-
-    while (matchIndex !== -1) {
-      markup += escapeHtml(text.slice(searchFrom, matchIndex));
-      markup += `<span class="editor-selection-match">${escapeHtml(selectedText)}</span>`;
-      searchFrom = matchIndex + selectedText.length;
-      matchIndex = text.indexOf(selectedText, searchFrom);
-    }
-
-    markup += escapeHtml(text.slice(searchFrom));
-    editorSelectionHighlights.innerHTML = `<div class="editor-selection-highlights-inner">${markup}</div>`;
-    syncEditorSelectionHighlightsScroll();
-  }
-
-  function syncEditorSelectionHighlightsScroll() {
-    if (!editorSelectionHighlights) return;
-
-    const inner = editorSelectionHighlights.querySelector(".editor-selection-highlights-inner");
-    if (!inner) return;
-
-    inner.style.transform = `translate(${-markdownEditor.scrollLeft}px, ${-markdownEditor.scrollTop}px)`;
-  }
-
-  function syncEditorCurrentLineScroll() {
-    if (!editorCurrentLine) return;
-    editorCurrentLine.style.transform = `translateY(${editorCurrentLineMetrics.top - markdownEditor.scrollTop}px)`;
-  }
-
-  function syncEditorLineNumberScroll() {
-    if (editorLineNumbers) {
-      const inner = editorLineNumbers.querySelector(".editor-line-numbers-inner");
-      if (inner) {
-        inner.style.transform = `translateY(-${markdownEditor.scrollTop}px)`;
-      }
-    }
-    syncEditorCurrentLineScroll();
-  }
-
-  function shouldUseNativeDirectoryPicker(event) {
-    if (typeof NL_VERSION !== "undefined") return true;
-    // Chrome/Edge show an unavoidable "view and copy files" permission prompt for
-    // showDirectoryPicker(). Prefer the standard folder input in browsers so opening a
-    // folder feels like a normal local selection. Power users can hold Alt while
-    // clicking Open folder to opt into File System Access handles for in-place saves.
-    return !!(event && event.altKey && supportsNativeDirectoryPicker());
-  }
-
-  function updateFolderImportHint() {
-    if (typeof NL_VERSION !== "undefined") return;
-
-    document.querySelectorAll("#import-from-folder").forEach(function(button) {
-      button.title = `${getFolderPickerFallbackMessage()} Hold Alt while clicking to request Chrome/Edge folder-write access.`;
-      button.setAttribute("aria-label", "Open folder using browser read-only folder picker");
-    });
-  }
-
+  const folderPicker = window.registerMarkdownViewerFolderPicker(app);
+  const editorLineStatus = window.registerMarkdownViewerEditorLineStatus(app, {
+    markdownEditor,
+    editorLineNumbers,
+    editorCurrentLine,
+    editorSelectionHighlights,
+    escapeHtml
+  });
+  const getEditorLineHeight = editorLineStatus.getEditorLineHeight;
+  const updateEditorLineNumbers = editorLineStatus.updateEditorLineNumbers;
+  const scheduleEditorLineNumbersUpdate = editorLineStatus.scheduleEditorLineNumbersUpdate;
+  const updateEditorSelectionHighlights = editorLineStatus.updateEditorSelectionHighlights;
+  const syncEditorSelectionHighlightsScroll = editorLineStatus.syncEditorSelectionHighlightsScroll;
+  const syncEditorLineNumberScroll = editorLineStatus.syncEditorLineNumberScroll;
 
   const RECENT_FILES_KEY = "markdownViewerRecentFiles";
   const RECENT_FOLDERS_KEY = "markdownViewerRecentFolders";
@@ -1714,7 +1624,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const toggleAutoSelectFileButtons = document.querySelectorAll(".toggle-auto-select-file");
   const folderTreeSortMenuButtons = document.querySelectorAll(".folder-tree-sort-menu-button");
   const folderTreeSortOptionButtons = document.querySelectorAll(".folder-tree-sort-option");
-  updateFolderImportHint();
+  folderPicker.updateFolderImportHint();
   updateFolderTreeToolbarState();
   toggleAutoSelectFileButtons.forEach(function(button) {
     button.addEventListener("click", function() {
@@ -1880,6 +1790,19 @@ document.addEventListener("DOMContentLoaded", function () {
     syncScrollingEnabled: true,
     viewMode: "split"
   });
+  const themePreferences = window.registerMarkdownViewerThemePreferences(app, {
+    defaultState: DEFAULT_GLOBAL_STATE,
+    mobileThemeToggle,
+    renderMarkdown: function() { renderMarkdown(); },
+    scheduleGlobalProfileWrite: function() { scheduleGlobalProfileWrite(); },
+    storageKey: GLOBAL_STATE_KEY,
+    themeToggle
+  });
+  const loadGlobalState = themePreferences.loadGlobalState;
+  const saveGlobalState = themePreferences.saveGlobalState;
+  const getDefaultGlobalState = themePreferences.getDefaultGlobalState;
+  const updateThemeButtonLabels = themePreferences.updateThemeButtonLabels;
+
   currentFolderSortMode = getValidFolderSortMode(loadGlobalState().folderSortMode || currentFolderSortMode);
   editorWidthPercent = getClampedEditorWidthPercent(loadGlobalState().editorWidthPercent);
   const graphSettings = {
@@ -1890,33 +1813,6 @@ document.addEventListener("DOMContentLoaded", function () {
   updateAutoSelectFileButtons();
   updateUnsupportedFileToggleButtons();
   applySavedLayoutPreferences(loadGlobalState());
-
-  function loadGlobalState() {
-    try { return JSON.parse(localStorage.getItem(GLOBAL_STATE_KEY)) || {}; }
-    catch { return {}; }
-  }
-
-  function saveGlobalState(patch) {
-    try {
-      localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify({ ...loadGlobalState(), ...patch }));
-      scheduleGlobalProfileWrite();
-    } catch (error) {
-      console.warn("Failed to save preferences:", error);
-    }
-  }
-
-  function getDefaultThemePreference() {
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  }
-
-  function getDefaultGlobalState() {
-    return {
-      ...DEFAULT_GLOBAL_STATE,
-      theme: getDefaultThemePreference()
-    };
-  }
 
   function resetSidebarDropzoneLayoutToDefault() {
     if (sidebarDropzonePanel) {
@@ -2876,23 +2772,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Check dark mode preference first for proper initialization
-  const prefersDarkMode =
-    window.matchMedia &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const savedTheme = loadGlobalState().theme;
-  const initialTheme = savedTheme ?? (prefersDarkMode ? "dark" : "light");
-
-  document.documentElement.setAttribute("data-theme", initialTheme);
-
-  function updateThemeButtonLabels(theme) {
-    const nextThemeLabel = theme === "dark" ? "Light" : "Dark";
-    const icon = theme === "dark" ? "bi-sun" : "bi-moon";
-    themeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel} Mode`;
-    mobileThemeToggle.innerHTML = `<i class="bi ${icon} me-2"></i> ${nextThemeLabel} Mode`;
-  }
-
-  updateThemeButtonLabels(initialTheme);
+  themePreferences.initializeTheme();
 
   const initMermaid = () => {
     const currentTheme = document.documentElement.getAttribute("data-theme");
@@ -5117,20 +4997,11 @@ Markdown content is processed client-side in your browser and sanitized before p
     localStorage.setItem(UNTITLED_COUNTER_KEY, String(val));
   }
 
-  function normalizeEditorContent(content) {
-    // Textareas normalize CRLF/CR line endings to LF, so compare and store
-    // tab contents the same way to avoid false unsaved markers after switching tabs.
-    return String(content || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  }
-
-  function tabHasUnsavedChanges(tab, currentContent) {
-    if (!tab) return false;
-    if (tab.type === "graph") {
-      return isFileBackedGraphTab(tab) && tab.graphHasUnsavedChanges === true;
-    }
-    const contentToCompare = currentContent === undefined ? tab.content : currentContent;
-    return normalizeEditorContent(tab.savedContent) !== normalizeEditorContent(contentToCompare);
-  }
+  const unsavedChanges = window.registerMarkdownViewerUnsavedChanges(app, {
+    isFileBackedGraphTab
+  });
+  const normalizeEditorContent = unsavedChanges.normalizeEditorContent;
+  const tabHasUnsavedChanges = unsavedChanges.tabHasUnsavedChanges;
 
   function nextUntitledTitle() {
     untitledCounter += 1;
@@ -5608,21 +5479,9 @@ Markdown content is processed client-side in your browser and sanitized before p
     });
   }
 
-  function confirmDiscardUnsavedChangesBeforeExit() {
-    const unsavedTabs = getUnsavedTabs();
-    if (!unsavedTabs.length) return true;
-
-    const pluralSuffix = unsavedTabs.length === 1 ? "" : "s";
-    return window.confirm(
-      `You have unsaved changes in ${unsavedTabs.length} open tab${pluralSuffix}. ` +
-      "Exit without saving? Your changes will be lost."
-    );
-  }
-
-  window.markdownViewerHasUnsavedChanges = function() {
-    return getUnsavedTabs().length > 0;
-  };
-  window.markdownViewerConfirmDiscardUnsavedBeforeExit = confirmDiscardUnsavedChangesBeforeExit;
+  const confirmDiscardUnsavedChangesBeforeExit = unsavedChanges.bindWindowExitGuards({
+    getUnsavedTabs
+  });
 
   function updateSaveCurrentFileButtons() {
     const graphTab = getActiveGraphTab();
@@ -9350,10 +9209,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     return;
   }
 
-  // Browser: use the read-only input by default to avoid Chrome/Edge's
-  // unavoidable "view and copy files" permission prompt. Holding Alt opts into
-  // File System Access handles for users who want in-place saves.
-  if (shouldUseNativeDirectoryPicker(event)) {
+  if (folderPicker.shouldUseNativeDirectoryPicker(event)) {
     try {
       const dirHandle = await window.showDirectoryPicker();
       activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
@@ -9372,7 +9228,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
 
   if (folderInput) {
     if (!shownFolderInputFallbackNotice) {
-      console.info(getFolderPickerFallbackMessage());
+      console.info(folderPicker.getFolderPickerFallbackMessage());
       shownFolderInputFallbackNotice = true;
     }
     folderInput.click();
@@ -10174,77 +10030,15 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     readingTimeElement.textContent = readingTimeMinutes;
   }
 
-  function syncEditorToPreview() {
-    if (!syncScrollingEnabled || isPreviewScrolling) return;
-
-    isEditorScrolling = true;
-    clearTimeout(scrollSyncTimeout);
-
-    scrollSyncTimeout = setTimeout(() => {
-      const editorScrollRatio =
-        editorPane.scrollTop /
-        (editorPane.scrollHeight - editorPane.clientHeight);
-      const previewScrollPosition =
-        (previewPane.scrollHeight - previewPane.clientHeight) *
-        editorScrollRatio;
-
-      if (!isNaN(previewScrollPosition) && isFinite(previewScrollPosition)) {
-        previewPane.scrollTop = previewScrollPosition;
-      }
-
-      setTimeout(() => {
-        isEditorScrolling = false;
-      }, 50);
-    }, SCROLL_SYNC_DELAY);
-  }
-
-  function syncPreviewToEditor() {
-    if (!syncScrollingEnabled || isEditorScrolling) return;
-
-    isPreviewScrolling = true;
-    clearTimeout(scrollSyncTimeout);
-
-    scrollSyncTimeout = setTimeout(() => {
-      const previewScrollRatio =
-        previewPane.scrollTop /
-        (previewPane.scrollHeight - previewPane.clientHeight);
-      const editorScrollPosition =
-        (editorPane.scrollHeight - editorPane.clientHeight) *
-        previewScrollRatio;
-
-      if (!isNaN(editorScrollPosition) && isFinite(editorScrollPosition)) {
-        editorPane.scrollTop = editorScrollPosition;
-      }
-
-      setTimeout(() => {
-        isPreviewScrolling = false;
-      }, 50);
-    }, SCROLL_SYNC_DELAY);
-  }
-
-  function updateSyncToggleButtons() {
-    syncToggleButtons.forEach((button) => {
-      if (syncScrollingEnabled) {
-        button.innerHTML = '<i class="bi bi-link-45deg"></i> <span>Sync Off</span>';
-        button.classList.add("sync-disabled");
-        button.classList.remove("sync-enabled");
-        button.classList.add("border-primary");
-        button.setAttribute("aria-label", "Turn sync scrolling off");
-      } else {
-        button.innerHTML = '<i class="bi bi-link"></i> <span>Sync On</span>';
-        button.classList.add("sync-enabled");
-        button.classList.remove("sync-disabled");
-        button.classList.remove("border-primary");
-        button.setAttribute("aria-label", "Turn sync scrolling on");
-      }
-    });
-  }
-
-  function toggleSyncScrolling() {
-    syncScrollingEnabled = !syncScrollingEnabled;
-    updateSyncToggleButtons();
-    saveGlobalState({ syncScrollingEnabled });
-  }
+  const scrollSync = window.registerMarkdownViewerScrollSync(app, {
+    delay: SCROLL_SYNC_DELAY,
+    editorPane,
+    previewPane,
+    saveGlobalState,
+    syncToggleButtons
+  });
+  const updateSyncToggleButtons = scrollSync.updateSyncToggleButtons;
+  const toggleSyncScrolling = scrollSync.toggleSyncScrolling;
 
   // View Mode Functions - Story 1.1 & 1.2
   function updateViewModeButtons(mode) {
@@ -10783,23 +10577,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     window.addEventListener("resize", scheduleEditorLineNumbersUpdate);
   }
 
-  editorPane.addEventListener("scroll", syncEditorToPreview);
-  previewPane.addEventListener("scroll", syncPreviewToEditor);
-  syncToggleButtons.forEach((button) => {
-    button.addEventListener("click", toggleSyncScrolling);
-  });
-  themeToggle.addEventListener("click", function () {
-    const theme =
-      document.documentElement.getAttribute("data-theme") === "dark"
-        ? "light"
-        : "dark";
-    document.documentElement.setAttribute("data-theme", theme);
-    saveGlobalState({ theme });
-
-    updateThemeButtonLabels(theme);
-    
-    renderMarkdown();
-  });
+  scrollSync.bindScrollSync();
+  themePreferences.bindThemeToggle();
 
   restoreDefaultsButtons.forEach(function(button) {
     button.addEventListener("click", function(e) {
@@ -14591,144 +14370,16 @@ ${body}`;
     }
   });
 
-  copyMarkdownButton.addEventListener("click", function () {
-    try {
-      const markdownText = markdownEditor.value;
-      copyToClipboard(markdownText);
-    } catch (e) {
-      console.error("Copy failed:", e);
-      alert("Failed to copy Markdown: " + e.message);
-    }
+  clipboard.bindCopyMarkdownButton();
+
+  window.registerMarkdownViewerShareUrl(app, {
+    markdownEditor,
+    mobileShareButton,
+    renderEditorSyntaxHighlights,
+    renderMarkdown,
+    saveCurrentTabState,
+    shareButton
   });
-
-  async function copyToClipboard(text) {
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-        showCopiedMessage();
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        const successful = document.execCommand("copy");
-        document.body.removeChild(textArea);
-        if (successful) {
-          showCopiedMessage();
-        } else {
-          throw new Error("Copy command was unsuccessful");
-        }
-      }
-    } catch (err) {
-      console.error("Copy failed:", err);
-      alert("Failed to copy HTML: " + err.message);
-    }
-  }
-
-  function showCopiedMessage() {
-    const originalText = copyMarkdownButton.innerHTML;
-    copyMarkdownButton.innerHTML = '<i class="bi bi-check-lg"></i> Copied!';
-
-    setTimeout(() => {
-      copyMarkdownButton.innerHTML = originalText;
-    }, 2000);
-  }
-
-  // ============================================
-  // Share via URL (pako compression + base64url)
-  // ============================================
-
-  const MAX_SHARE_URL_LENGTH = 32000;
-
-  function encodeMarkdownForShare(text) {
-    const compressed = pako.deflate(new TextEncoder().encode(text));
-    const chunkSize = 0x8000;
-    let binary = '';
-    for (let i = 0; i < compressed.length; i += chunkSize) {
-      binary += String.fromCharCode.apply(null, compressed.subarray(i, i + chunkSize));
-    }
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-
-  function decodeMarkdownFromShare(encoded) {
-    const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    const binary = atob(base64);
-    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-    return new TextDecoder().decode(pako.inflate(bytes));
-  }
-
-  function copyShareUrlFromText(markdownText, btn) {
-    let encoded;
-    try {
-      encoded = encodeMarkdownForShare(markdownText || "");
-    } catch (e) {
-      console.error("Share encoding failed:", e);
-      alert("Failed to encode content for sharing: " + e.message);
-      return;
-    }
-
-    const shareUrl = window.location.origin + window.location.pathname + '#share=' + encoded;
-    const tooLarge = shareUrl.length > MAX_SHARE_URL_LENGTH;
-
-    const originalHTML = btn.innerHTML;
-    const copiedHTML = '<i class="bi bi-check-lg"></i> Copied!';
-
-    function onCopied() {
-      if (!tooLarge) {
-        window.location.hash = 'share=' + encoded;
-      }
-      btn.innerHTML = copiedHTML;
-      setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
-    }
-
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(shareUrl).then(onCopied).catch(() => {
-        // clipboard.writeText failed; nothing further to do in secure context
-      });
-    } else {
-      try {
-        const tempInput = document.createElement("textarea");
-        tempInput.value = shareUrl;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand("copy");
-        document.body.removeChild(tempInput);
-        onCopied();
-      } catch (_) {
-        // copy failed silently
-      }
-    }
-  }
-
-  function copyShareUrl(btn) {
-    copyShareUrlFromText(markdownEditor.value, btn);
-  }
-
-  shareButton.addEventListener("click", function () { copyShareUrl(shareButton); });
-  mobileShareButton.addEventListener("click", function () { copyShareUrl(mobileShareButton); });
-
-  function loadFromShareHash() {
-    if (typeof pako === 'undefined') return;
-    const hash = window.location.hash;
-    if (!hash.startsWith('#share=')) return;
-    const encoded = hash.slice('#share='.length);
-    if (!encoded) return;
-    try {
-      const decoded = decodeMarkdownFromShare(encoded);
-      markdownEditor.value = decoded;
-      renderEditorSyntaxHighlights();
-      renderMarkdown();
-      saveCurrentTabState();
-    } catch (e) {
-      console.error("Failed to load shared content:", e);
-      alert("The shared URL could not be decoded. It may be corrupted or incomplete.");
-    }
-  }
-
-  loadFromShareHash();
 
   const dropEvents = ["dragenter", "dragover", "dragleave", "drop"];
 
@@ -14812,44 +14463,18 @@ ${body}`;
     }
   }
 
-  document.addEventListener("keydown", function (e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-      e.preventDefault();
-      saveCurrentFileIfChanged();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "c") {
-      const activeEl = document.activeElement;
-      const isTextControl = activeEl && (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT");
-      const hasSelection = window.getSelection && window.getSelection().toString().trim().length > 0;
-      const editorHasSelection = markdownEditor.selectionStart !== markdownEditor.selectionEnd;
-      if (!isTextControl && !hasSelection && !editorHasSelection) {
-        e.preventDefault();
-        copyMarkdownButton.click();
-      }
-    }
-    // Story 1.2: Only allow sync toggle shortcut when in split view
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "S") {
-      e.preventDefault();
-      if (currentViewMode === 'split') {
-        toggleSyncScrolling();
-      }
-    }
-    // New tab
-    if ((e.ctrlKey || e.metaKey) && e.key === "t") {
-      e.preventDefault();
-      newTab();
-    }
-    // Close tab
-    if ((e.ctrlKey || e.metaKey) && e.key === "w") {
-      e.preventDefault();
-      closeTab(activeTabId);
-    }
-    // Close modal overlays with Escape
-    if (e.key === "Escape") {
-      closeMermaidModal();
-      closeGraphComparisonDetailsModal();
-      hideGraphStaleModal();
-    }
+  window.registerMarkdownViewerKeyboardShortcuts(app, {
+    closeGraphComparisonDetailsModal,
+    closeMermaidModal,
+    closeTab,
+    copyMarkdownButton,
+    getActiveTabId: function() { return activeTabId; },
+    getCurrentViewMode: function() { return currentViewMode; },
+    hideGraphStaleModal,
+    markdownEditor,
+    newTab,
+    saveCurrentFileIfChanged,
+    toggleSyncScrolling
   });
 
   document.getElementById('tab-reset-btn').addEventListener('click', function() {
