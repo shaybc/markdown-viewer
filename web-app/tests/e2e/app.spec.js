@@ -1451,6 +1451,19 @@ test("keeps open folder graph views in sync with saved and deleted files", async
   await expect(page.locator(".graph-node-file")).toHaveCount(1);
   await expect(page.locator(".graph-label-file")).toContainText("alpha");
 
+  await page.locator(".graph-node-file").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-tab-render .graph-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Reveal in TreeView" }).click();
+  const revealedTreeFile = page.locator(".folder-tree-file", { hasText: "alpha.md" });
+  await expect(revealedTreeFile).toHaveClass(/auto-selected/);
+  await expect(revealedTreeFile).toHaveAttribute("aria-current", "page");
+  await expect.poll(() => page.evaluate(() => document.activeElement?.classList.contains("folder-tree-file"))).toBe(true);
+
   await page.locator(".tab-new-btn").click();
   await page.locator(".view-mode-btn[data-mode='split']").click();
   await page.locator("#markdown-editor").fill("# Beta");

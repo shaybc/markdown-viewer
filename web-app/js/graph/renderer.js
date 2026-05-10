@@ -554,6 +554,12 @@
       "Open the file's folder in the system file explorer and select this file when supported."
     );
     revealFileBtn.classList.add("hidden");
+    const revealTreeViewBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.revealInTreeView.label,
+      CONTEXT_MENU_ACTIONS.revealInTreeView.icon,
+      "Select, scroll to, and focus this file in the folder tree."
+    );
+    revealTreeViewBtn.classList.add("hidden");
     const renameFileBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.rename.label,
       CONTEXT_MENU_ACTIONS.rename.icon,
@@ -707,6 +713,7 @@
     contextMenu.appendChild(openFileBtn);
     contextMenu.appendChild(openDefaultAppBtn);
     contextMenu.appendChild(revealFileBtn);
+    contextMenu.appendChild(revealTreeViewBtn);
     contextMenu.appendChild(renameFileBtn);
     contextMenu.appendChild(tagsSubmenu);
     contextMenu.appendChild(copySubmenu);
@@ -791,6 +798,46 @@
         if (resolvedPath) return resolvedPath;
       }
       return null;
+    };
+
+    const getTreeRevealTabForNode = (graphNode) => {
+      const snapshotFile = getSnapshotFileForNode(graphNode);
+      const sourcePath = snapshotFile?.fullPath || snapshotFile?.path || graphNode?.fullPath || graphNode?.label || graphNode?.id || "";
+      const sourceName = snapshotFile?.name || getFileName(sourcePath || graphNode?.id || "");
+      return {
+        sourceFilePath: sourcePath,
+        sourceFileName: sourceName,
+        title: sourceName
+      };
+    };
+
+    const revealGraphNodeInTreeView = (graphNode) => {
+      if (!graphNode || graphNode.type === "tag") return false;
+      const treeButton = findFolderTreeFileButtonForTab?.(getTreeRevealTabForNode(graphNode));
+      if (!treeButton) return false;
+
+      if (typeof setSidebarVisible === "function") setSidebarVisible(true);
+      if (folderTreeRoot) {
+        folderTreeRoot.querySelectorAll(".folder-tree-file.auto-selected").forEach((button) => {
+          button.classList.remove("auto-selected");
+          button.removeAttribute("aria-current");
+        });
+      }
+
+      treeButton.closest("details")?.querySelectorAll("details").forEach((details) => {
+        details.open = true;
+      });
+      let ancestor = treeButton.parentElement;
+      while (ancestor) {
+        if (ancestor.tagName === "DETAILS") ancestor.open = true;
+        ancestor = ancestor.parentElement;
+      }
+
+      treeButton.classList.add("auto-selected");
+      treeButton.setAttribute("aria-current", "page");
+      treeButton.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      treeButton.focus({ preventScroll: true });
+      return true;
     };
 
     const readGraphNodeContent = async (graphNode) => {
@@ -1112,6 +1159,7 @@
       openFileBtn,
       openDefaultAppBtn,
       revealFileBtn,
+      revealTreeViewBtn,
       renameFileBtn,
       copySubmenu,
       sharePointBtn,
@@ -1171,7 +1219,7 @@
       setNodeContextItemsHidden(false);
       const isFileNode = (d.type || "file") !== "tag";
       const keepSavedMode = isKeepSavedGraphMode(activeTab);
-      [openFileBtn, openDefaultAppBtn, revealFileBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, fullNetworkBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, sharePointBtn, localGraphBtn, fullLocalGraphBtn, fullNetworkBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
       [renameFileBtn, deleteFileBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode || keepSavedMode));
       tagsSubmenu.classList.toggle("hidden", !isFileNode || keepSavedMode);
       if (isFileNode) {
@@ -1256,6 +1304,16 @@
       } catch (error) {
         console.error("Failed to reveal file:", error);
         alert("Unable to reveal this file in the file explorer.");
+      }
+    });
+
+    revealTreeViewBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      if (!revealGraphNodeInTreeView(targetNode)) {
+        alert("Unable to find this file in the tree view.");
       }
     });
 
