@@ -451,6 +451,14 @@ test("opens help and about from the action menu", async ({ page }) => {
 
   await page.locator("#desktopActionMenu").click();
   await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
+  await page.locator(".help-menu-submenu .open-welcome-page").click();
+
+  await expect(page.locator(".view-mode-btn[data-mode='preview']")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Welcome to MD-Editor" })).toBeVisible();
+  await expect(page.locator("#tab-list .tab-item.active")).toContainText("Welcome to MD-Editor");
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".help-menu-submenu > .dropdown-toggle").hover();
   await page.locator(".help-menu-submenu .open-help-home").click();
 
   await expect(page.locator(".view-mode-btn[data-mode='preview']")).toHaveAttribute("aria-pressed", "true");
@@ -604,7 +612,9 @@ test("suggests and accepts known tags while typing", async ({ page }) => {
   await openApp(page);
 
   const editor = page.locator("#markdown-editor");
-  await editor.fill("#alp");
+  await editor.fill("");
+  await editor.focus();
+  await page.keyboard.type("#alp");
   await expect(page.locator("#link-autocomplete-layer")).toBeVisible();
   await expect(page.locator("#link-autocomplete-layer .link-autocomplete-option").first()).toContainText("#alpha");
 

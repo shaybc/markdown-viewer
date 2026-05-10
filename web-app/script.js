@@ -786,6 +786,7 @@
   const mobileCopyMarkdown  = document.getElementById("mobile-copy-markdown");
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
   const mobileOpenGraphView = document.getElementById("mobile-open-graph-view");
+  const welcomePageButtons = document.querySelectorAll(".open-welcome-page");
   const helpHomeButtons = document.querySelectorAll(".open-help-home");
   const aboutDialogButtons = document.querySelectorAll(".show-about-dialog");
   const aboutModal = document.getElementById("about-modal");
@@ -1652,6 +1653,10 @@ Markdown content is processed client-side in your browser and sanitized before p
       console.error("Failed to open help:", error);
       alert("Unable to open the help file.");
     }
+  }
+
+  function openWelcomePage() {
+    newTab(sampleMarkdown, "Welcome to MD-Editor", { viewMode: "preview" });
   }
 
   function showAboutDialog() {
@@ -2727,6 +2732,16 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     button.addEventListener("click", function(e) {
       e.preventDefault();
       newTab();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
+
+  welcomePageButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      openWelcomePage();
       if (button.classList.contains("mobile-menu-item")) {
         closeMobileMenu();
       }
