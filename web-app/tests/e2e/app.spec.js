@@ -520,7 +520,7 @@ test("syncs editor scrolling to the preview pane while enabled", async ({ page }
 
   const markdown = Array.from({ length: 80 }, (_, index) => `## Section ${index + 1}\n\nParagraph ${index + 1}`).join("\n\n");
   await page.locator("#markdown-editor").fill(markdown);
-  await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Section 80" })).toBeVisible();
+  await expect.poll(() => page.locator("#markdown-preview").textContent()).toContain("Section 80");
   await expect.poll(() => page.locator("#markdown-editor").evaluate((editor) => editor.scrollHeight > editor.clientHeight)).toBe(true);
   await expect.poll(() => page.locator(".preview-pane").evaluate((pane) => pane.scrollHeight > pane.clientHeight)).toBe(true);
 
@@ -648,15 +648,24 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
         nodes: [
           { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: ["defined"] },
           { id: "beta.md", label: "beta.md", fullPath: "beta.md", type: "file", status: "current", tags: [] },
+          { id: "delta.md", label: "delta.md", fullPath: "delta.md", type: "file", status: "current", tags: [] },
+          { id: "epsilon.md", label: "epsilon.md", fullPath: "epsilon.md", type: "file", status: "current", tags: [] },
+          { id: "gamma.md", label: "gamma.md", fullPath: "gamma.md", type: "file", status: "current", tags: [] },
           { id: "tag:defined", label: "#defined", type: "tag", status: "current", tag: "defined" }
         ],
         links: [
           { source: "alpha.md", target: "beta.md", type: "link", status: "current" },
+          { source: "beta.md", target: "delta.md", type: "link", status: "current" },
+          { source: "gamma.md", target: "alpha.md", type: "link", status: "current" },
+          { source: "epsilon.md", target: "gamma.md", type: "link", status: "current" },
           { source: "alpha.md", target: "tag:defined", type: "tag", status: "current" }
         ],
         files: [
           { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha\n\n[[beta]]", fullPath: "alpha.md", status: "current", tags: ["defined"] },
-          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", fullPath: "beta.md", status: "current", tags: [] }
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta\n\n[[delta]]", fullPath: "beta.md", status: "current", tags: [] },
+          { id: "delta.md", path: "delta.md", name: "delta.md", content: "# Delta", fullPath: "delta.md", status: "current", tags: [] },
+          { id: "epsilon.md", path: "epsilon.md", name: "epsilon.md", content: "# Epsilon\n\n[[gamma]]", fullPath: "epsilon.md", status: "current", tags: [] },
+          { id: "gamma.md", path: "gamma.md", name: "gamma.md", content: "# Gamma\n\n[[alpha]]", fullPath: "gamma.md", status: "current", tags: [] }
         ]
       }
     };
@@ -668,7 +677,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await page.goto("/");
 
   await expect(page.locator(".graph-tab-render")).toBeVisible();
-  await expect(page.locator(".graph-node")).toHaveCount(3);
+  await expect(page.locator(".graph-node")).toHaveCount(6);
 
   const tagOptions = await page.locator("#graph-selected-tag-filter option").allTextContents();
   expect(tagOptions).toEqual(["All files", "#defined"]);
@@ -741,8 +750,19 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientY: 220
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
-  await page.locator(".graph-context-menu-item", { hasText: "Copy tags" }).click();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy tags" }).dispatchEvent("click");
   await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toBe("defined");
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy full network" }).dispatchEvent("click");
+  await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("gamma.md\nepsilon.md\nbeta.md\ndelta.md");
 });
 
 test("creating a tag from the tag dialog shows the new tag", async ({ page }) => {

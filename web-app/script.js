@@ -2083,6 +2083,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     copyDependencies: { label: "Copy dependencies", icon: "bi bi-list-ul" },
     copyFullDependencies: { label: "Copy full dependencies", icon: "bi bi-bezier2" },
     copyBacklinks: { label: "Copy backlinks", icon: "bi bi-arrow-left-circle" },
+    copyFullNetwork: { label: "Copy full network", icon: "bi bi-diagram-3" },
     openFolder: { label: "Open folder", icon: "bi bi-folder2-open" }
   });
 

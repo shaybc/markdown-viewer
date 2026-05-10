@@ -635,7 +635,12 @@
       CONTEXT_MENU_ACTIONS.copyBacklinks.icon,
       "Copy file names that directly link to this point, one file name per line."
     );
-    [copyPathBtn, copyContentBtn, copyFrontmatterBtn, copyTagsBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn].forEach((button) => {
+    const copyFullNetworkBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.copyFullNetwork.label,
+      CONTEXT_MENU_ACTIONS.copyFullNetwork.icon,
+      "Copy recursive backlinks and recursive dependencies for this point, one file name per line."
+    );
+    [copyPathBtn, copyContentBtn, copyFrontmatterBtn, copyTagsBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn, copyFullNetworkBtn].forEach((button) => {
       copySubmenuPanel.appendChild(button);
     });
     copySubmenu.appendChild(copySubmenuBtn);
@@ -821,6 +826,26 @@
       .filter((l) => isMarkdownLink(l) && (l.target?.id || l.target) === nodeId)
       .map((l) => l.source?.id || l.source)
       .filter(Boolean);
+
+    const getFullBacklinkIds = (nodeId) => {
+      const backlinkIds = new Set();
+      const nodesToVisit = [...getBacklinkIds(nodeId)];
+      while (nodesToVisit.length) {
+        const currentNodeId = nodesToVisit.shift();
+        if (!currentNodeId || currentNodeId === nodeId || backlinkIds.has(currentNodeId)) continue;
+        backlinkIds.add(currentNodeId);
+        nodesToVisit.push(...getBacklinkIds(currentNodeId));
+      }
+      return Array.from(backlinkIds);
+    };
+
+    const getFullNetworkIds = (nodeId) => {
+      const networkIds = new Set();
+      getFullBacklinkIds(nodeId).forEach((id) => networkIds.add(id));
+      getFullOutgoingDependencyIds(nodeId).forEach((id) => networkIds.add(id));
+      networkIds.delete(nodeId);
+      return Array.from(networkIds);
+    };
 
     const copyNodeFileNameList = async (nodeIds) => {
       await copyGraphText(Array.from(new Set(nodeIds)).map(getNodeFileName).join("\n"));
@@ -1346,6 +1371,14 @@
       const nodeId = contextTargetNode.id;
       hideContextMenu();
       await copyNodeFileNameList(getBacklinkIds(nodeId));
+    });
+
+    copyFullNetworkBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const nodeId = contextTargetNode.id;
+      hideContextMenu();
+      await copyNodeFileNameList(getFullNetworkIds(nodeId));
     });
 
     hidePointBtn.addEventListener("click", () => {
