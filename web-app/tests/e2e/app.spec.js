@@ -1048,6 +1048,55 @@ test("opens files from a desktop folder tree", async ({ page }) => {
   await expect(page.locator("#markdown-editor")).toHaveValue(/Desktop Note/);
 });
 
+test("clicking a tag in the tag dialog filters the folder tree", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.NL_OS = "Windows";
+    const files = new Map([
+      ["tagged.md", "---\ntags: [project]\n---\n# Tagged"],
+      ["untagged.md", "# Untagged"]
+    ]);
+    const getName = (path) => String(path || "").split(/[\\/]/).pop();
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return Array.from(files.keys()).map((entry) => ({ entry, type: "FILE" }));
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          const name = getName(path);
+          if (files.has(name)) return files.get(name);
+          throw new Error("Unexpected read path: " + path);
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  const taggedFile = page.locator(".folder-tree-file[data-name='tagged.md']");
+  const untaggedFile = page.locator(".folder-tree-file[data-name='untagged.md']");
+  await expect(taggedFile).toBeVisible();
+  await expect(untaggedFile).toBeVisible();
+
+  const tagButton = page.locator("#tag-management-list .tag-management-list-item", { hasText: "#project" });
+  await expect(tagButton).toBeVisible();
+  await tagButton.evaluate((button) => button.click());
+
+  await expect(taggedFile).toBeVisible();
+  await expect(untaggedFile).toHaveCount(0);
+  await expect(tagButton).toHaveAttribute("aria-selected", "true");
+});
+
 test("keeps open folder graph views in sync with saved and deleted files", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "5.0.0";

@@ -1385,6 +1385,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     saveTabsToStorage,
     isNeutralinoRuntime,
     joinPath,
+    get toggleFolderTreeTagFilter() { return toggleFolderTreeTagFilter; },
     get renderFilteredFolderTree() { return renderFilteredFolderTree; },
     get renderLinkAutocomplete() { return renderLinkAutocomplete; },
     get renderEditorSyntaxHighlights() { return renderEditorSyntaxHighlights; },
