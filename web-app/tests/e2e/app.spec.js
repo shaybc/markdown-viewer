@@ -980,7 +980,7 @@ test("close all leaves the workspace without replacement tabs", async ({ page })
   await page.locator("#import-from-folder").click();
   await expect(page.locator(".folder-tree-file", { hasText: "folder-note.md" })).toBeVisible();
   await page.locator(".folder-tree-file", { hasText: "folder-note.md" }).evaluate((button) => {
-    button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   });
 
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(1);
