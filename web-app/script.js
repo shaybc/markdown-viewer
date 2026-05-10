@@ -1336,6 +1336,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     get saveAs() { return saveAs; },
     get refreshFolderFilesForGraphComparison() { return refreshFolderFilesForGraphComparison; },
+    get refreshOpenFolderGraphTabsFromFolderFiles() { return refreshOpenFolderGraphTabsFromFolderFiles; },
     alert
   });
   const openGraphView = graphDocuments.openGraphView;

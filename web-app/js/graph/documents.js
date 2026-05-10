@@ -7,6 +7,9 @@
       return;
     }
 
+    await refreshFolderFilesForGraphComparison?.();
+    await refreshOpenFolderGraphTabsFromFolderFiles?.();
+
     const folderName = activeFolderName || "Graph View";
     const graphScopeKey = getRootFolderGraphScopeKey();
     if (focusExistingFolderGraphTab(graphScopeKey, folderName)) return;

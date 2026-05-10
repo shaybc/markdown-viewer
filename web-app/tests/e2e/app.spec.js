@@ -926,6 +926,10 @@ test("desktop tree context menu can update file tags", async ({ page }) => {
   await openApp(page);
 
   await page.locator("#import-from-folder").click();
+  await page.locator(".open-graph-view").first().click();
+  await expect(page.locator(".graph-node-file")).toHaveCount(2);
+  await page.locator("#import-from-folder").click();
+
   await page.locator(".folder-tree-file", { hasText: "alpha.md" }).dispatchEvent("contextmenu", {
     bubbles: true,
     cancelable: true,
