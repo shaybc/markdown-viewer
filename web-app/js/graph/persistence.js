@@ -737,6 +737,10 @@
     graphComparisonDetailsModal.setAttribute("aria-hidden", "true");
   }
 
+  function openGraphStaleComparisonDetailsModal() {
+    openGraphComparisonDetailsModal(activeGraphStaleComparison?.detailsModel || activeGraphComparisonDetailsModel);
+  }
+
   function hideGraphStaleModal() {
     activeGraphStaleComparison = null;
     if (!graphStaleModal) return;
@@ -1363,6 +1367,7 @@
       renderGraphComparisonDetailsModel,
       openGraphComparisonDetailsModal,
       closeGraphComparisonDetailsModal,
+      openGraphStaleComparisonDetailsModal,
       hideGraphStaleModal,
       showGraphStaleModal,
       promptForStaleSavedGraphIfNeeded,

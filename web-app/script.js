@@ -1650,7 +1650,6 @@ Markdown content is processed client-side in your browser and sanitized before p
   let untitledCounter = 0;
   const graphRenderCache = new Map();
   let graphRenderRequestId = 0;
-  let activeGraphStaleComparison = null;
   const GRAPH_GROUP_QUERY_UPDATE_DELAY = 180;
   const GRAPH_GROUP_DEFAULT_COLORS = Object.freeze([
     "#7c3aed",
@@ -1779,6 +1778,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     renderGraphComparisonDetailsModel,
     openGraphComparisonDetailsModal,
     closeGraphComparisonDetailsModal,
+    openGraphStaleComparisonDetailsModal,
     hideGraphStaleModal,
     showGraphStaleModal,
     promptForStaleSavedGraphIfNeeded,
@@ -6751,9 +6751,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   graphStaleCloseButton?.addEventListener("click", keepSavedGraphFromStaleModal);
   graphStaleKeepButton?.addEventListener("click", keepSavedGraphFromStaleModal);
   graphStaleUpdateButton?.addEventListener("click", updateGraphFromStaleModal);
-  graphStaleViewDetailsButton?.addEventListener("click", () => {
-    openGraphComparisonDetailsModal(activeGraphStaleComparison?.detailsModel || activeGraphComparisonDetailsModel);
-  });
+  graphStaleViewDetailsButton?.addEventListener("click", openGraphStaleComparisonDetailsModal);
   graphStaleCompareButton?.addEventListener("click", loadGraphComparisonFromStaleModal);
   graphStaleModal?.addEventListener("click", (event) => {
     if (event.target === graphStaleModal) hideGraphStaleModal();
