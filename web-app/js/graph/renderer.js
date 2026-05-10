@@ -319,6 +319,14 @@
       outgoingAdjacency.get(l.source)?.add(l.target);
       outgoingDegree.set(l.source, (outgoingDegree.get(l.source) || 0) + 1);
     });
+    links.filter(isTagLink).forEach((l) => {
+      const sourceId = getLinkSourceId(l);
+      const targetId = getLinkTargetId(l);
+      if (sourceId && targetId) {
+        outgoingAdjacency.get(sourceId)?.add(targetId);
+        outgoingAdjacency.get(targetId)?.add(sourceId);
+      }
+    });
     const maxOutgoing = Math.max(1, ...Array.from(outgoingDegree.values()));
     const GRAPH_NODE_RADIUS_SCALE = graphViewConfig.nodeSize;
     const graphBaseNodeRadius = (nodeId) => {
@@ -1427,6 +1435,12 @@
       includeTagRelationships || isMarkdownLink(linkData)
     );
 
+    const isDirectHoverLink = (linkData, focusNodeId, includeTagRelationships = false) => {
+      if (!shouldIncludeLinkInHoverHighlight(linkData, includeTagRelationships)) return false;
+      if (getGraphLinkSourceId(linkData) === focusNodeId) return true;
+      return includeTagRelationships && isTagLink(linkData) && getGraphLinkTargetId(linkData) === focusNodeId;
+    };
+
     const getRecursiveOutgoingHighlight = (focusNodeId, includeTagRelationships = false) => {
       const highlightedNodes = new Set([focusNodeId]);
       const highlightedLinks = new Set();
@@ -1471,19 +1485,21 @@
       if (!focusNode) return;
       const focusNodeId = focusNode.id;
       const isBacklinkHighlight = Boolean(modifiers.ctrlKey);
-      // Alt is the explicit opt-in for including tag relationships in hover highlights.
-      const includeTagRelationships = Boolean(modifiers.altKey);
+      // Alt includes tag relationships for file nodes; tag nodes always show their direct file connections.
+      const includeTagRelationships = Boolean(modifiers.altKey || isTagNode(focusNode));
       const highlight = isBacklinkHighlight
         ? getBacklinkHighlight(focusNodeId, includeTagRelationships)
         : (modifiers.shiftKey
           ? getRecursiveOutgoingHighlight(focusNodeId, includeTagRelationships)
           : {
             highlightedNodes: outgoingAdjacency.get(focusNodeId) || new Set([focusNodeId]),
-            highlightedLinks: new Set(links.filter((l) => shouldIncludeLinkInHoverHighlight(l, includeTagRelationships) && getGraphLinkSourceId(l) === focusNodeId))
+            highlightedLinks: new Set(links.filter((l) => isDirectHoverLink(l, focusNodeId, includeTagRelationships)))
           });
       if (includeTagRelationships) {
         highlight.highlightedLinks.forEach((linkData) => {
+          const sourceNodeId = getGraphLinkSourceId(linkData);
           const targetNodeId = getGraphLinkTargetId(linkData);
+          if (sourceNodeId) highlight.highlightedNodes.add(sourceNodeId);
           if (targetNodeId) highlight.highlightedNodes.add(targetNodeId);
         });
       }

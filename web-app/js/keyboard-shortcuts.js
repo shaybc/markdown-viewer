@@ -8,14 +8,23 @@
   function registerKeyboardShortcuts(app, deps) {
     function handleDocumentKeydown(event) {
       var key = String(event.key || "");
+      var lowerKey = key.toLowerCase();
 
-      if (isPrimaryModifier(event) && key === "s") {
+      if (isPrimaryModifier(event) && event.shiftKey && lowerKey === "s") {
+        event.preventDefault();
+        if (deps.getCurrentViewMode() === "split") {
+          deps.toggleSyncScrolling();
+        }
+        return;
+      }
+
+      if (isPrimaryModifier(event) && lowerKey === "s") {
         event.preventDefault();
         deps.saveCurrentFileIfChanged();
         return;
       }
 
-      if (isPrimaryModifier(event) && key === "c") {
+      if (isPrimaryModifier(event) && lowerKey === "c") {
         var activeEl = document.activeElement;
         var isTextControl = activeEl && (activeEl.tagName === "TEXTAREA" || activeEl.tagName === "INPUT");
         var hasSelection = window.getSelection && window.getSelection().toString().trim().length > 0;
@@ -27,21 +36,13 @@
         }
       }
 
-      if (isPrimaryModifier(event) && event.shiftKey && key === "S") {
-        event.preventDefault();
-        if (deps.getCurrentViewMode() === "split") {
-          deps.toggleSyncScrolling();
-        }
-        return;
-      }
-
-      if (isPrimaryModifier(event) && key === "t") {
+      if (isPrimaryModifier(event) && lowerKey === "t") {
         event.preventDefault();
         deps.newTab();
         return;
       }
 
-      if (isPrimaryModifier(event) && key === "w") {
+      if (isPrimaryModifier(event) && lowerKey === "w") {
         event.preventDefault();
         deps.closeTab(deps.getActiveTabId());
         return;

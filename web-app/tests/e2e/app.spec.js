@@ -917,6 +917,220 @@ test("marks edited documents as unsaved", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.markdownViewerHasUnsavedChanges())).toBe(true);
 });
 
+test("saves folder-backed edits with Ctrl+S and the Save changes menu item", async ({ page }) => {
+  await openApp(page);
+
+  await page.evaluate(() => {
+    let fileContent = "# Folder Note\n\nOriginal";
+    const fileHandle = {
+      kind: "file",
+      name: "folder-note.md",
+      getFile: async () => new File([fileContent], "folder-note.md", { type: "text/markdown" }),
+      createWritable: async () => ({
+        write: async (content) => {
+          fileContent = String(content);
+          window.__lastWrittenFolderNote = fileContent;
+        },
+        close: async () => {}
+      })
+    };
+    window.__lastWrittenFolderNote = null;
+    window.showDirectoryPicker = async () => ({
+      kind: "directory",
+      name: "Test Folder",
+      values: async function* values() {
+        yield fileHandle;
+      }
+    });
+  });
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".folder-tree-file", { hasText: "folder-note.md" }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator("#markdown-editor")).toHaveValue(/Original/);
+
+  await page.locator("#markdown-editor").fill("# Folder Note\n\nSaved by shortcut.");
+  await page.keyboard.press("Control+S");
+  await expect.poll(() => page.evaluate(() => window.__lastWrittenFolderNote)).toBe("# Folder Note\n\nSaved by shortcut.");
+  await expect(page.locator("#tab-list .tab-item.active")).not.toHaveClass(/unsaved/);
+
+  await page.locator("#markdown-editor").fill("# Folder Note\n\nSaved by button.");
+  await page.locator(".save-current-file-button").first().click();
+  await expect.poll(() => page.evaluate(() => window.__lastWrittenFolderNote)).toBe("# Folder Note\n\nSaved by button.");
+  await expect(page.locator("#tab-list .tab-item.active")).not.toHaveClass(/unsaved/);
+});
+
+test("folder and graph Open in a new tab focus existing file tabs", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([{
+      id: "graph_e2e",
+      title: "Graph",
+      content: "",
+      savedContent: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Graph",
+      graphViewConfig: { mode: "all", showTags: true },
+      graphSnapshot: {
+        folderName: "Graph",
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", tags: ["defined"] },
+          { id: "tag:defined", label: "#defined", tag: "defined", type: "tag" }
+        ],
+        links: [{ source: "alpha.md", target: "tag:defined", type: "tag" }],
+        files: [{ id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha", tags: ["defined"] }]
+      }
+    }]));
+    localStorage.setItem("markdownViewerActiveTab", "graph_e2e");
+  });
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+
+  await page.locator(".graph-node-file").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 140,
+    clientY: 120
+  });
+  await page.locator(".graph-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open in a new tab" }).click();
+  await expect(page.locator("#tab-list .tab-item", { hasText: "alpha" })).toHaveCount(1);
+
+  await page.locator("#tab-list .tab-item", { hasText: "Graph" }).click();
+  await page.locator(".graph-node-file").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 140,
+    clientY: 120
+  });
+  await page.locator(".graph-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open in a new tab" }).click();
+  await expect(page.locator("#tab-list .tab-item", { hasText: "alpha" })).toHaveCount(1);
+
+  await page.evaluate(() => {
+    const markdownFile = new File(["# Folder Note"], "folder-note.md", { type: "text/markdown" });
+    const fileHandle = {
+      kind: "file",
+      name: "folder-note.md",
+      getFile: async () => markdownFile,
+      createWritable: async () => ({ write: async () => {}, close: async () => {} })
+    };
+    window.showDirectoryPicker = async () => ({
+      kind: "directory",
+      name: "Test Folder",
+      values: async function* values() {
+        yield fileHandle;
+      }
+    });
+  });
+  await page.locator("#import-from-folder").click();
+  const folderFile = page.locator(".folder-tree-file", { hasText: "folder-note.md" });
+  await folderFile.dispatchEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 90, clientY: 180 });
+  await page.locator(".sidebar-file-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open in a new tab" }).evaluate((button) => button.click());
+  await expect(page.locator("#tab-list .tab-item", { hasText: "folder-note" })).toHaveCount(1);
+  await folderFile.dispatchEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 90, clientY: 180 });
+  await page.locator(".sidebar-file-context-menu:not(.hidden) .graph-context-menu-item", { hasText: "Open in a new tab" }).evaluate((button) => button.click());
+  await expect(page.locator("#tab-list .tab-item", { hasText: "folder-note" })).toHaveCount(1);
+});
+
+test("closing the last tab leaves the workspace empty", async ({ page }) => {
+  await openApp(page);
+
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(1);
+  await page.locator("#tab-list .tab-item .tab-close-btn").click();
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
+  await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#markdown-editor")).not.toBeVisible();
+});
+
+test("renaming folder-backed files updates open tab titles", async ({ page }) => {
+  await openApp(page);
+
+  await page.evaluate(() => {
+    let fileName = "alpha.md";
+    const fileHandle = {
+      kind: "file",
+      get name() { return fileName; },
+      getFile: async () => new File(["# Alpha"], fileName, { type: "text/markdown" }),
+      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+      move: async (nextName) => {
+        fileName = nextName;
+      }
+    };
+    window.__renamedFileName = () => fileName;
+    window.showDirectoryPicker = async () => ({
+      kind: "directory",
+      name: "Test Folder",
+      values: async function* values() {
+        yield fileHandle;
+      }
+    });
+  });
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".folder-tree-file", { hasText: "alpha.md" }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator("#tab-list .tab-item", { hasText: "alpha" })).toHaveCount(1);
+
+  await page.locator("#tab-list .tab-item", { hasText: "alpha" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 120,
+    clientY: 80
+  });
+  await page.locator(".tab-context-menu-action[data-action='rename']").evaluate((button) => button.click());
+  await page.locator("#rename-modal-input").fill("renamed.md");
+  await page.locator("#rename-modal-confirm").click();
+
+  await expect.poll(() => page.evaluate(() => window.__renamedFileName())).toBe("renamed.md");
+  await expect(page.locator("#tab-list .tab-item", { hasText: "renamed" })).toHaveCount(1);
+  await expect(page.locator("#tab-list .tab-item", { hasText: "alpha" })).toHaveCount(0);
+});
+
+test("hovering a graph tag point highlights directly tagged files", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([{
+      id: "graph_hover_e2e",
+      title: "Graph",
+      content: "",
+      savedContent: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Graph",
+      graphViewConfig: { mode: "all", showTags: true },
+      graphSnapshot: {
+        folderName: "Graph",
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", type: "file", tags: ["defined"] },
+          { id: "beta.md", label: "beta.md", type: "file", tags: [] },
+          { id: "tag:defined", label: "#defined", tag: "defined", type: "tag" }
+        ],
+        links: [{ source: "alpha.md", target: "tag:defined", type: "tag" }],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha", tags: ["defined"] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", tags: [] }
+        ]
+      }
+    }]));
+    localStorage.setItem("markdownViewerActiveTab", "graph_hover_e2e");
+  });
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+
+  await page.locator(".graph-node-tag").dispatchEvent("mouseenter", { bubbles: true, cancelable: true });
+  await expect(page.locator(".graph-node-file").first()).not.toHaveClass(/dimmed/);
+  await expect(page.locator(".graph-link-tag")).not.toHaveClass(/dimmed/);
+});
+
 test("close all leaves the workspace without replacement tabs", async ({ page }) => {
   const seedTabs = () => {
     const tabs = [

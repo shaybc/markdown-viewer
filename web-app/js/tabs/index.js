@@ -588,7 +588,12 @@
       return;
     }
 
-    exportMd.click();
+    const tab = getActiveMarkdownTab();
+    if (!tab) return;
+    if (!(await saveMarkdownTabToSource(tab))) {
+      await saveMarkdownTabWithSaveDialog(tab);
+    }
+    updateSaveCurrentFileButtons();
   }
 
   function restoreViewMode(mode) {
@@ -710,6 +715,15 @@
     options = options || {};
     const isTemporary = options.temporary !== false;
     saveCurrentTabState();
+
+    if (!isTemporary) {
+      const existingTab = findTabForSourceFile(sourceFile);
+      if (existingTab) {
+        switchTab(existingTab.id);
+        pinTemporaryTab(existingTab.id);
+        return existingTab;
+      }
+    }
 
     let tab = isTemporary ? findTemporaryTab() : null;
     if (!tab && tabs.length >= 20) {
@@ -1001,30 +1015,17 @@
     }
     tabs.splice(idx, 1);
     if (tabs.length === 0) {
-      if (options.allowEmpty) {
-        activeTabId = null;
-        saveActiveTabId(null);
-        setGraphViewMode(false);
-        setNoOpenTabsMode(true);
-        markdownEditor.value = '';
-        restoreViewMode('split');
-        renderEditorSyntaxHighlights();
-        renderMarkdown();
-        saveTabsToStorage(tabs);
-        renderTabBar(tabs, activeTabId);
-        return;
-      }
-
-      const newTabAfterClose = createTab('', nextUntitledTitle());
-      tabs.push(newTabAfterClose);
-      activeTabId = newTabAfterClose.id;
+      activeTabId = null;
       saveActiveTabId(activeTabId);
       setGraphViewMode(false);
-      setNoOpenTabsMode(false);
+      setNoOpenTabsMode(true);
       markdownEditor.value = '';
       restoreViewMode('split');
       renderEditorSyntaxHighlights();
       renderMarkdown();
+      saveTabsToStorage(tabs);
+      renderTabBar(tabs, activeTabId);
+      return;
     } else if (activeTabId === tabId) {
       const newIdx = Math.max(0, idx - 1);
       activeTabId = tabs[newIdx].id;
