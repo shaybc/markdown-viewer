@@ -196,6 +196,20 @@
     updateActiveGraphViewConfig({ groups: graphViewConfig.groups.filter((group) => group.id !== groupId) });
   }
 
+  function moveGraphGroup(groupId, direction) {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab) return;
+    const graphViewConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
+    const currentIndex = graphViewConfig.groups.findIndex((group) => group.id === groupId);
+    if (currentIndex === -1) return;
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= graphViewConfig.groups.length) return;
+    const groups = graphViewConfig.groups.slice();
+    const [group] = groups.splice(currentIndex, 1);
+    groups.splice(nextIndex, 0, group);
+    updateActiveGraphViewConfig({ groups });
+  }
+
   const GRAPH_GROUP_QUERY_PREFIX_HELP = [
     { prefix: "path", label: "path:", description: "Match folders, path segments, or full paths." },
     { prefix: "file", label: "file:", description: "Match Markdown file names." },
@@ -533,6 +547,28 @@
       colorInput.setAttribute("aria-label", `Graph group ${index + 1} color`);
       colorInput.addEventListener("change", () => updateGraphGroup(group.id, { color: colorInput.value }));
 
+      const moveButtons = document.createElement("div");
+      moveButtons.className = "graph-group-move-buttons";
+
+      const moveUpButton = document.createElement("button");
+      moveUpButton.className = "tool-button graph-group-move-button graph-group-move-up-button";
+      moveUpButton.type = "button";
+      moveUpButton.title = "Move graph group up";
+      moveUpButton.disabled = !isGraphTab || index === 0;
+      moveUpButton.setAttribute("aria-label", `Move graph group ${index + 1} up`);
+      moveUpButton.innerHTML = '<i class="bi bi-chevron-up"></i>';
+      moveUpButton.addEventListener("click", () => moveGraphGroup(group.id, -1));
+
+      const moveDownButton = document.createElement("button");
+      moveDownButton.className = "tool-button graph-group-move-button graph-group-move-down-button";
+      moveDownButton.type = "button";
+      moveDownButton.title = "Move graph group down";
+      moveDownButton.disabled = !isGraphTab || index === graphViewConfig.groups.length - 1;
+      moveDownButton.setAttribute("aria-label", `Move graph group ${index + 1} down`);
+      moveDownButton.innerHTML = '<i class="bi bi-chevron-down"></i>';
+      moveDownButton.addEventListener("click", () => moveGraphGroup(group.id, 1));
+      moveButtons.append(moveUpButton, moveDownButton);
+
       const deleteButton = document.createElement("button");
       deleteButton.className = "tool-button graph-group-delete-button";
       deleteButton.type = "button";
@@ -542,7 +578,7 @@
       deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
       deleteButton.addEventListener("click", () => deleteGraphGroup(group.id));
 
-      row.append(enabledLabel, queryInput, colorInput, deleteButton);
+      row.append(enabledLabel, queryInput, colorInput, moveButtons, deleteButton);
       attachGraphGroupQuerySuggestions(row, queryInput, group, tab);
       graphGroupsList.appendChild(row);
     });
@@ -769,6 +805,8 @@
       [".graph-group-query-input", "Type a group query. Use prefixes such as path:, file:, tag:, text:, or line:."],
       [".graph-group-enabled-input", "Enable or disable this group color without deleting it."],
       [".graph-group-color-input", "Pick the color used for files that match this group query."],
+      [".graph-group-move-up-button", "Move this group earlier. Earlier groups take priority when multiple groups match the same file."],
+      [".graph-group-move-down-button", "Move this group later. Earlier groups take priority when multiple groups match the same file."],
       [".graph-group-delete-button", "Delete this color group from the graph filter settings."]
     ];
 

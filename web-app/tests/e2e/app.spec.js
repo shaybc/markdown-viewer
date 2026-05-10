@@ -757,6 +757,81 @@ test("creating a tag from the tag dialog shows the new tag", async ({ page }) =>
   await expect(page.locator(".sidebar-file-context-menu:not(.hidden) .tags-context-menu-item")).toHaveText(["#fresh tag"]);
 });
 
+test("graph group order can be rearranged and changes point priority", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "group_order_graph_e2e",
+      title: "Group Order Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Group Order Graph E2E",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [
+          { id: "first_group", query: "tag:shared", color: "#ff0000", enabled: true },
+          { id: "second_group", query: "file:alpha", color: "#0000ff", enabled: true }
+        ],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Group Order Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: ["shared"] }
+        ],
+        links: [],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [shared]\n---\n# Alpha", status: "current", tags: ["shared"] }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+  await page.goto("/");
+  await expect(page.locator("#graph-view-canvas")).toBeVisible();
+
+  const getAlphaGroupId = () => page.evaluate(() => {
+    const alpha = Array.from(document.querySelectorAll(".graph-node"))
+      .find((node) => node.__data__?.id === "alpha.md");
+    return alpha?.__data__?.groupId || "";
+  });
+
+  await expect.poll(getAlphaGroupId).toBe("first_group");
+
+  await page.locator("#graph-filter-panel-toggle").click();
+  await page.locator(".graph-collapsible-section", { hasText: "Groups" }).locator("summary").click();
+  await expect(page.locator(".graph-group-row")).toHaveCount(2);
+  await expect(page.locator(".graph-group-row").nth(0).locator(".graph-group-move-up-button")).toBeDisabled();
+  await expect(page.locator(".graph-group-row").nth(1).locator(".graph-group-move-down-button")).toBeDisabled();
+
+  await page.locator(".graph-group-row").nth(0).locator(".graph-group-move-down-button").click();
+
+  await expect(page.locator(".graph-group-row").nth(0).locator(".graph-group-query-input")).toHaveValue("file:alpha");
+  await expect(page.locator(".graph-group-row").nth(1).locator(".graph-group-query-input")).toHaveValue("tag:shared");
+  await expect.poll(getAlphaGroupId).toBe("second_group");
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return tabs[0]?.graphViewConfig?.groups?.map((group) => group.id);
+  })).toEqual(["second_group", "first_group"]);
+});
+
 test("desktop graph context menu can update file tags", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";
