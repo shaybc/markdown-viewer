@@ -730,6 +730,17 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientY: 220
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy frontmatter" }).click();
+  await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("---\ntags: [defined]\n---");
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
   await page.locator(".graph-context-menu-item", { hasText: "Copy tags" }).click();
   await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toBe("defined");
 });

@@ -610,6 +610,11 @@
       CONTEXT_MENU_ACTIONS.copyContent.icon,
       "Copy the entire Markdown content of this file to the clipboard."
     );
+    const copyFrontmatterBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.copyFrontmatter.label,
+      CONTEXT_MENU_ACTIONS.copyFrontmatter.icon,
+      "Copy this file's YAML frontmatter block to the clipboard."
+    );
     const copyTagsBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.copyTags.label,
       CONTEXT_MENU_ACTIONS.copyTags.icon,
@@ -630,7 +635,7 @@
       CONTEXT_MENU_ACTIONS.copyBacklinks.icon,
       "Copy file names that directly link to this point, one file name per line."
     );
-    [copyPathBtn, copyContentBtn, copyTagsBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn].forEach((button) => {
+    [copyPathBtn, copyContentBtn, copyFrontmatterBtn, copyTagsBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn].forEach((button) => {
       copySubmenuPanel.appendChild(button);
     });
     copySubmenu.appendChild(copySubmenuBtn);
@@ -715,6 +720,11 @@
     const getNodeClipboardTags = (graphNode) => {
       const snapshotFile = getSnapshotFileForNode(graphNode);
       return normalizeFileTagList(graphNode?.tags?.length ? graphNode.tags : snapshotFile?.tags || []).join("\n");
+    };
+
+    const getMarkdownFrontmatterText = (markdown) => {
+      const match = String(markdown || "").match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/);
+      return match ? match[0].trimEnd() : "";
     };
 
     const isAbsoluteFilesystemPath = (path) => {
@@ -1233,6 +1243,19 @@
       } catch (error) {
         console.error("Failed to copy content:", error);
         alert("Unable to copy this file content.");
+      }
+    });
+
+    copyFrontmatterBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        await copyGraphText(getMarkdownFrontmatterText(await readGraphNodeContent(targetNode)));
+      } catch (error) {
+        console.error("Failed to copy frontmatter:", error);
+        alert("Unable to copy this file's frontmatter.");
       }
     });
 
