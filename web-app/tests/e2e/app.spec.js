@@ -892,6 +892,37 @@ test("close all leaves the workspace without replacement tabs", async ({ page })
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs")))).toEqual([]);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("markdownViewerActiveTab"))).toBe(null);
 
+  await page.evaluate(() => {
+    const markdownFile = new File(["# Folder Note\n\nOpened after close all."], "folder-note.md", {
+      type: "text/markdown",
+      lastModified: Date.now()
+    });
+    const fileHandle = {
+      kind: "file",
+      name: "folder-note.md",
+      getFile: async () => markdownFile
+    };
+    window.showDirectoryPicker = async () => ({
+      kind: "directory",
+      name: "Test Folder",
+      values: async function* values() {
+        yield fileHandle;
+      }
+    });
+  });
+
+  await page.locator("#import-from-folder").click();
+  await expect(page.locator(".folder-tree-file", { hasText: "folder-note.md" })).toBeVisible();
+  await page.locator(".folder-tree-file", { hasText: "folder-note.md" }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  });
+
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(1);
+  await expect(page.locator(".content-container")).not.toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#markdown-editor")).toBeVisible();
+  await expect(page.locator("#markdown-editor")).toBeEditable();
+  await expect(page.locator("#markdown-editor")).toHaveValue(/Folder Note/);
+
   await page.evaluate(seedTabs);
   await page.reload();
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(2);

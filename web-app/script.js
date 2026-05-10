@@ -4083,6 +4083,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     activeTabId = tab.id;
     saveActiveTabId(activeTabId);
     setGraphViewMode(false);
+    setNoOpenTabsMode(false);
     markdownEditor.value = tab.content;
     restoreViewMode(tab.viewMode);
     renderEditorSyntaxHighlights();
