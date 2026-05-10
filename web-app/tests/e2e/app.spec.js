@@ -521,6 +521,7 @@ test("syncs editor scrolling to the preview pane while enabled", async ({ page }
   const markdown = Array.from({ length: 80 }, (_, index) => `## Section ${index + 1}\n\nParagraph ${index + 1}`).join("\n\n");
   await page.locator("#markdown-editor").fill(markdown);
   await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Section 80" })).toBeVisible();
+  await expect.poll(() => page.locator(".preview-pane").evaluate((pane) => pane.scrollHeight > pane.clientHeight)).toBe(true);
 
   await page.locator("#markdown-editor").evaluate((editor) => {
     editor.scrollTop = editor.scrollHeight;
@@ -719,6 +720,17 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
   await page.locator(".graph-context-menu-item", { hasText: "Copy content" }).click();
   await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toContain("# Alpha");
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy tags" }).click();
+  await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toBe("defined");
 });
 
 test("creating a tag from the tag dialog shows the new tag", async ({ page }) => {
@@ -961,7 +973,7 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
 
   const tagItems = page.locator(".graph-tab-render .tags-context-menu-item");
   await expect(tagItems).toHaveText(["#archive", "#defined", "#other"]);
-  await page.locator(".graph-context-menu-submenu", { hasText: "Tags" }).hover();
+  await page.locator(".graph-context-menu-submenu.tags-context-submenu").hover();
   await tagItems.filter({ hasText: "#other" }).evaluate((button) => button.click());
 
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);

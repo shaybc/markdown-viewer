@@ -610,6 +610,11 @@
       CONTEXT_MENU_ACTIONS.copyContent.icon,
       "Copy the entire Markdown content of this file to the clipboard."
     );
+    const copyTagsBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.copyTags.label,
+      CONTEXT_MENU_ACTIONS.copyTags.icon,
+      "Copy this file's frontmatter tags, one tag per line."
+    );
     const copyDependenciesBtn = createContextMenuButton(
       CONTEXT_MENU_ACTIONS.copyDependencies.label,
       CONTEXT_MENU_ACTIONS.copyDependencies.icon,
@@ -625,7 +630,7 @@
       CONTEXT_MENU_ACTIONS.copyBacklinks.icon,
       "Copy file names that directly link to this point, one file name per line."
     );
-    [copyPathBtn, copyContentBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn].forEach((button) => {
+    [copyPathBtn, copyContentBtn, copyTagsBtn, copyDependenciesBtn, copyFullDependenciesBtn, copyBacklinksBtn].forEach((button) => {
       copySubmenuPanel.appendChild(button);
     });
     copySubmenu.appendChild(copySubmenuBtn);
@@ -705,6 +710,11 @@
     const getNodeClipboardPath = (graphNode) => {
       const snapshotFile = getSnapshotFileForNode(graphNode);
       return snapshotFile?.fullPath || snapshotFile?.path || graphNode?.fullPath || graphNode?.label || graphNode?.id || "";
+    };
+
+    const getNodeClipboardTags = (graphNode) => {
+      const snapshotFile = getSnapshotFileForNode(graphNode);
+      return normalizeFileTagList(graphNode?.tags?.length ? graphNode.tags : snapshotFile?.tags || []).join("\n");
     };
 
     const isAbsoluteFilesystemPath = (path) => {
@@ -1223,6 +1233,19 @@
       } catch (error) {
         console.error("Failed to copy content:", error);
         alert("Unable to copy this file content.");
+      }
+    });
+
+    copyTagsBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!contextTargetNode) return;
+      const targetNode = contextTargetNode;
+      hideContextMenu();
+      try {
+        await copyGraphText(getNodeClipboardTags(targetNode));
+      } catch (error) {
+        console.error("Failed to copy tags:", error);
+        alert("Unable to copy this file's tags.");
       }
     });
 

@@ -2058,6 +2058,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     copy: { label: "Copy", icon: "bi bi-clipboard" },
     copyPath: { label: "Copy path", icon: "bi bi-file-earmark-text" },
     copyContent: { label: "Copy content", icon: "bi bi-file-text" },
+    copyTags: { label: "Copy tags", icon: "bi bi-tags" },
     share: { label: "Share", icon: "bi bi-share" },
     deleteFile: { label: "Delete file", icon: "bi bi-trash3" },
     deleteFolder: { label: "Delete folder", icon: "bi bi-trash3" },
