@@ -964,6 +964,8 @@
       if (openMarkdownTab) {
         const normalizedContent = normalizeEditorContent(nextContent);
         openMarkdownTab.content = normalizedContent;
+        openMarkdownTab.savedContent = normalizedContent;
+        openMarkdownTab.graphSyncedTags = snapshotFile.tags;
         if (openMarkdownTab.id === activeTabId) {
           markdownEditor.value = normalizedContent;
           renderEditorSyntaxHighlights();

@@ -772,8 +772,21 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
         ]
       }
     };
+    const openMarkdownTab = {
+      id: "alpha_markdown_tab",
+      title: "Alpha",
+      content: "---\ntags: [defined]\n---\n# Alpha",
+      savedContent: "---\ntags: [defined]\n---\n# Alpha",
+      scrollPos: 0,
+      viewMode: "split",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "markdown",
+      sourceFileName: "alpha.md",
+      sourceFilePath: "C:/vault/alpha.md"
+    };
     localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["ghost"], graphMagneticEnabled: true }));
-    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab, unrelatedGraphTab]));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab, unrelatedGraphTab, openMarkdownTab]));
     localStorage.setItem("markdownViewerActiveTab", graphTab.id);
   });
 
@@ -796,6 +809,19 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
   await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__writes[0].content)).toContain("other");
+  await expect.poll(() => page.evaluate(() => {
+    const tab = JSON.parse(localStorage.getItem("markdownViewerTabs")).find((entry) => entry.id === "alpha_markdown_tab");
+    return {
+      content: tab.content,
+      savedContent: tab.savedContent,
+      unsaved: tab.content !== tab.savedContent
+    };
+  })).toEqual({
+    content: "---\ntags: [defined, other]\n---\n# Alpha",
+    savedContent: "---\ntags: [defined, other]\n---\n# Alpha",
+    unsaved: false
+  });
+  await expect(page.locator("#tab-list .tab-item", { hasText: "Alpha" })).not.toHaveClass(/unsaved/);
   await expect(page.locator(".graph-link-tag")).toHaveCount(4);
   await expect.poll(() => page.evaluate(() => {
     const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs"));
@@ -819,6 +845,18 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
 
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
   await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(2);
+  await expect.poll(() => page.evaluate(() => {
+    const tab = JSON.parse(localStorage.getItem("markdownViewerTabs")).find((entry) => entry.id === "alpha_markdown_tab");
+    return {
+      content: tab.content,
+      savedContent: tab.savedContent,
+      unsaved: tab.content !== tab.savedContent
+    };
+  })).toEqual({
+    content: "---\ntags: [other]\n---\n# Alpha",
+    savedContent: "---\ntags: [other]\n---\n# Alpha",
+    unsaved: false
+  });
   await expect(page.locator(".graph-link-tag")).toHaveCount(3);
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -954,6 +992,14 @@ test("close all leaves the workspace without replacement tabs", async ({ page })
   await page.evaluate(seedTabs);
   await page.reload();
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(2);
+  await page.locator("#markdown-editor").fill("# A\n\nUnsaved");
+  await page.evaluate(() => {
+    window.__confirmMessages = [];
+    window.confirm = (message) => {
+      window.__confirmMessages.push(String(message));
+      return false;
+    };
+  });
 
   await page.locator("#tab-list .tab-item").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -964,6 +1010,31 @@ test("close all leaves the workspace without replacement tabs", async ({ page })
   });
   await page.locator(".tab-context-menu-action[data-action='close-all']").evaluate((button) => button.click());
 
+  await expect.poll(() => page.evaluate(() => window.__confirmMessages)).toEqual([
+    "You have unsaved changes. Are you sure you want to close this tab?"
+  ]);
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(2);
+  await expect(page.locator(".content-container")).not.toHaveClass(/no-open-tabs/);
+
+  await page.evaluate(() => {
+    window.__confirmMessages = [];
+    window.confirm = (message) => {
+      window.__confirmMessages.push(String(message));
+      return true;
+    };
+  });
+  await page.locator("#tab-list .tab-item").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 120,
+    clientY: 80
+  });
+  await page.locator(".tab-context-menu-action[data-action='close-all']").evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__confirmMessages)).toEqual([
+    "You have unsaved changes. Are you sure you want to close this tab?"
+  ]);
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
   await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
   await expect(page.locator("#markdown-editor")).not.toBeVisible();

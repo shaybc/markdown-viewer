@@ -4546,6 +4546,7 @@ Markdown content is processed client-side in your browser and sanitized before p
 
   function closeTabsByIds(tabIds, options) {
     if (options === undefined) options = {};
+    saveCurrentTabState();
     const idsToClose = Array.from(new Set(tabIds));
     const tabsToClose = idsToClose
       .map(function(tabId) { return tabs.find(function(tab) { return tab.id === tabId; }); })
