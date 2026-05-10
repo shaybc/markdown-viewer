@@ -561,6 +561,17 @@
       enabledSwitch.setAttribute("aria-hidden", "true");
       enabledLabel.append(moveHandle, enabledText, enabledInput, enabledSwitch);
 
+      const hideGroupButton = document.createElement("button");
+      hideGroupButton.className = "tool-button graph-group-hide-button";
+      hideGroupButton.type = "button";
+      hideGroupButton.disabled = !isGraphTab;
+      hideGroupButton.classList.toggle("active", group.hidden === true);
+      hideGroupButton.title = group.hidden === true ? "Show matching group points" : "Hide matching group points";
+      hideGroupButton.setAttribute("aria-label", `${group.hidden === true ? "Show" : "Hide"} graph group ${index + 1} points`);
+      hideGroupButton.setAttribute("aria-pressed", group.hidden === true ? "true" : "false");
+      hideGroupButton.innerHTML = `<i class="bi ${group.hidden === true ? "bi-eye" : "bi-eye-slash"}" aria-hidden="true"></i>`;
+      hideGroupButton.addEventListener("click", () => updateGraphGroup(group.id, { hidden: group.hidden !== true }));
+
       const queryInput = document.createElement("input");
       queryInput.className = "graph-group-query-input";
       queryInput.type = "text";
@@ -611,7 +622,7 @@
       deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
       deleteButton.addEventListener("click", () => deleteGraphGroup(group.id));
 
-      row.append(enabledLabel, queryInput, colorInput, deleteButton);
+      row.append(enabledLabel, hideGroupButton, queryInput, colorInput, deleteButton);
       attachGraphGroupQuerySuggestions(row, queryInput, group, tab);
       graphGroupsList.appendChild(row);
     });
@@ -686,7 +697,7 @@
       showTags: DEFAULT_GRAPH_VIEW_CONFIG.showTags,
       selectedTagIds: [],
       searchQuery: DEFAULT_GRAPH_VIEW_CONFIG.searchQuery,
-      groups: currentConfig.groups.map((group) => ({ ...group, enabled: false })),
+      groups: currentConfig.groups.map((group) => ({ ...group, enabled: false, hidden: false })),
       showArrows: DEFAULT_GRAPH_VIEW_CONFIG.showArrows,
       textFadeThreshold: DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold,
       nodeSize: DEFAULT_GRAPH_VIEW_CONFIG.nodeSize,

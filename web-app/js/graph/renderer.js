@@ -225,6 +225,30 @@
       links.push(...nonTagLinks);
     }
 
+    if (graphViewConfig && Array.isArray(graphViewConfig.groups) && graphViewConfig.groups.some((group) => group?.hidden === true)) {
+      const hiddenGroupNodeIds = new Set();
+      graphViewConfig.groups
+        .filter((group) => group?.hidden === true)
+        .forEach((group) => {
+          const parsedQuery = parseGraphGroupQuery(group.query);
+          nodes.forEach((nodeData) => {
+            if (isTagNode(nodeData) || hiddenGroupNodeIds.has(nodeData.id)) return;
+            const snapshotFile = snapshotFilesById.get(nodeData.id);
+            if (graphFileMatchesGroupQuery(nodeData, snapshotFile, parsedQuery, getGraphSearchOptions(nodeData, snapshotFile, parsedQuery))) {
+              hiddenGroupNodeIds.add(nodeData.id);
+            }
+          });
+        });
+      if (hiddenGroupNodeIds.size) {
+        const visibleNodes = nodes.filter((n) => !hiddenGroupNodeIds.has(n.id));
+        const visibleLinks = links.filter((l) => !hiddenGroupNodeIds.has(getLinkSourceId(l)) && !hiddenGroupNodeIds.has(getLinkTargetId(l)));
+        nodes.length = 0;
+        nodes.push(...visibleNodes);
+        links.length = 0;
+        links.push(...visibleLinks);
+      }
+    }
+
     if (graphViewConfig && Array.isArray(graphViewConfig.hiddenTagIds) && graphViewConfig.hiddenTagIds.length) {
       const hiddenTagIds = new Set(normalizeGraphTagNodeIds(graphViewConfig.hiddenTagIds));
       const visibleNodes = nodes.filter((n) => !hiddenTagIds.has(n.id));

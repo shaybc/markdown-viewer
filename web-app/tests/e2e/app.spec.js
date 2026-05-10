@@ -907,6 +907,84 @@ test("graph group order can be rearranged and changes point priority", async ({ 
   })).toEqual(["second_group", "first_group"]);
 });
 
+test("graph group hide button removes and restores matching points", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "group_hide_graph_e2e",
+      title: "Group Hide Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Group Hide Graph E2E",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [
+          { id: "shared_group", query: "tag:shared", color: "#ff0000", enabled: true, hidden: false }
+        ],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Group Hide Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: ["shared"] },
+          { id: "beta.md", label: "beta.md", fullPath: "beta.md", type: "file", status: "current", tags: [] }
+        ],
+        links: [
+          { source: "alpha.md", target: "beta.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [shared]\n---\n# Alpha", status: "current", tags: ["shared"] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", status: "current", tags: [] }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+  await page.goto("/");
+  await expect(page.locator("#graph-view-canvas")).toBeVisible();
+  await expect(page.locator(".graph-node")).toHaveCount(2);
+  await expect(page.locator(".graph-link")).toHaveCount(1);
+
+  await page.locator("#graph-filter-panel-toggle").click();
+  await page.locator(".graph-collapsible-section", { hasText: "Groups" }).locator("summary").click();
+  const hideButton = page.locator(".graph-group-row").first().locator(".graph-group-hide-button");
+  await expect(hideButton).toHaveAttribute("aria-pressed", "false");
+  await expect(hideButton.locator("i")).toHaveClass(/bi-eye-slash/);
+
+  await hideButton.click();
+  await expect(hideButton).toHaveAttribute("aria-pressed", "true");
+  await expect(hideButton.locator("i")).toHaveClass(/bi-eye/);
+  await expect(page.locator(".graph-node")).toHaveCount(1);
+  await expect(page.locator(".graph-link")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => {
+    const nodeIds = Array.from(document.querySelectorAll(".graph-node")).map((node) => node.__data__?.id).sort();
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return { nodeIds, hidden: tabs[0]?.graphViewConfig?.groups?.[0]?.hidden, hiddenNodeIds: tabs[0]?.graphViewConfig?.hiddenNodeIds };
+  })).toEqual({ nodeIds: ["beta.md"], hidden: true, hiddenNodeIds: [] });
+
+  await hideButton.click();
+  await expect(hideButton).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".graph-node")).toHaveCount(2);
+  await expect(page.locator(".graph-link")).toHaveCount(1);
+});
+
 test("desktop graph context menu can update file tags", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";

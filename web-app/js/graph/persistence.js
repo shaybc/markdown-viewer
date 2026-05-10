@@ -79,7 +79,8 @@
           id,
           query,
           color,
-          enabled: source.enabled !== false
+          enabled: source.enabled !== false,
+          hidden: source.hidden === true
         };
       });
   }
