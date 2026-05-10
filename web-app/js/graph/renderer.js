@@ -861,12 +861,64 @@
       }) || null;
     };
 
-    const rebuildActiveGraphSnapshotAfterTagChange = async (activeGraphTab) => {
-      if (!activeGraphTab?.graphSnapshot) return;
-      const currentSnapshot = activeGraphTab.graphSnapshot;
-      activeGraphTab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || activeGraphTab.folderName || activeGraphTab.title);
-      if (currentSnapshot.createdAt) activeGraphTab.graphSnapshot.createdAt = currentSnapshot.createdAt;
-      graphRenderCache.delete(activeGraphTab.id);
+    const getGraphSnapshotContextKey = (tab) => [
+      tab?.graphScopeKey,
+      tab?.graphSnapshot?.folderName,
+      tab?.folderName,
+      tab?.title
+    ].map((value) => String(value || "").trim().toLowerCase()).find(Boolean) || "";
+
+    const graphSnapshotFileMatches = (candidateFile, referenceFile, candidateTab, referenceTab) => {
+      if (!candidateFile || !referenceFile) return false;
+      const getFullPathKey = (file) => file.fullPath ? normalizeGraphNodeName(file.fullPath) : "";
+      const candidateFullPathKey = getFullPathKey(candidateFile);
+      const referenceFullPathKey = getFullPathKey(referenceFile);
+      if (candidateFullPathKey || referenceFullPathKey) {
+        return !!candidateFullPathKey && candidateFullPathKey === referenceFullPathKey;
+      }
+
+      const candidateContextKey = getGraphSnapshotContextKey(candidateTab);
+      const referenceContextKey = getGraphSnapshotContextKey(referenceTab);
+      if (candidateTab !== referenceTab && (!candidateContextKey || candidateContextKey !== referenceContextKey)) return false;
+
+      const getRelativeKeys = (file) => [
+        file.id,
+        file.path ? normalizeGraphNodeName(file.path) : null
+      ].filter(Boolean);
+      const candidateRelativeKeys = new Set(getRelativeKeys(candidateFile));
+      const referenceRelativeKeys = getRelativeKeys(referenceFile);
+      if (candidateRelativeKeys.size || referenceRelativeKeys.length) {
+        return referenceRelativeKeys.some((key) => candidateRelativeKeys.has(key));
+      }
+
+      return !!candidateFile.name && candidateFile.name === referenceFile.name;
+    };
+
+    const rebuildOpenGraphSnapshotsAfterTagChange = async (changedSnapshotFile) => {
+      if (!changedSnapshotFile) return false;
+      let changedActiveGraph = false;
+
+      for (const tab of tabs) {
+        if (tab?.type !== "graph" || !tab.graphSnapshot?.files || isKeepSavedGraphMode(tab)) continue;
+
+        let graphChanged = false;
+        tab.graphSnapshot.files.forEach((snapshotFile) => {
+          if (!graphSnapshotFileMatches(snapshotFile, changedSnapshotFile, tab, getActiveGraphTab())) return;
+          snapshotFile.content = changedSnapshotFile.content || "";
+          snapshotFile.tags = normalizeFileTagList(changedSnapshotFile.tags || getFileTagsFromContent(snapshotFile.content));
+          graphChanged = true;
+        });
+
+        if (!graphChanged) continue;
+        const currentSnapshot = tab.graphSnapshot;
+        tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
+        if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+        graphRenderCache.delete(tab.id);
+        markGraphTabAsChanged(tab);
+        changedActiveGraph = changedActiveGraph || tab.id === activeTabId;
+      }
+
+      return changedActiveGraph;
     };
 
     const updateGraphNodeTagContent = async (graphNode, tag, action) => {
@@ -898,6 +950,7 @@
 
       snapshotFile.content = nextContent;
       snapshotFile.tags = getFileTagsFromContent(nextContent);
+      if (!snapshotFile.fullPath && graphNode.fullPath) snapshotFile.fullPath = graphNode.fullPath;
       saveKnownTags([...getKnownTags(), ...snapshotFile.tags]);
 
       const folderEntry = getFolderMarkdownEntryForNode(graphNode);
@@ -919,8 +972,8 @@
         }
       }
 
-      await rebuildActiveGraphSnapshotAfterTagChange(activeGraphTab);
-      markGraphTabAsChanged(activeGraphTab);
+      const changedActiveGraph = await rebuildOpenGraphSnapshotsAfterTagChange(snapshotFile);
+      if (!changedActiveGraph) markGraphTabAsChanged(activeGraphTab);
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
       updateSaveCurrentFileButtons();
@@ -930,6 +983,7 @@
       renderLinkAutocomplete();
       simulation.stop();
       graphRenderWrapper.remove();
+      updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
       renderGraphView();
     };
 

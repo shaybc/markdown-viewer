@@ -684,7 +684,11 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
     window.alert = (message) => window.__alerts.push(String(message));
     window.Neutralino = {
       filesystem: {
-        readFile: async (path) => path.endsWith("alpha.md") ? "---\ntags: [defined]\n---\n# Alpha" : "---\ntags: [other]\n---\n# Beta",
+        readFile: async (path) => {
+          if (path === "C:/vault/alpha.md") return "---\ntags: [defined]\n---\n# Alpha";
+          if (path === "C:/vault/archive/alpha.md") return "---\ntags: [archive]\n---\n# Archived Alpha";
+          return "---\ntags: [other]\n---\n# Beta";
+        },
         writeFile: async (path, content) => {
           window.__writes.push({ path, content });
         },
@@ -705,6 +709,7 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
       isTemporary: false,
       type: "graph",
       folderName: "Desktop Graph E2E",
+      graphScopeKey: "root-folder:c:/vault",
       graphViewConfig: {
         showTags: true,
         hiddenTagIds: [],
@@ -728,26 +733,52 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
         nodes: [
           { id: "alpha.md", label: "alpha.md", fullPath: "C:/vault/alpha.md", type: "file", status: "current", tags: ["defined"] },
           { id: "beta.md", label: "beta.md", fullPath: "C:/vault/beta.md", type: "file", status: "current", tags: ["other"] },
+          { id: "archive/alpha.md", label: "alpha.md", fullPath: "C:/vault/archive/alpha.md", type: "file", status: "current", tags: ["archive"] },
+          { id: "tag:archive", label: "#archive", type: "tag", status: "current", tag: "archive" },
           { id: "tag:defined", label: "#defined", type: "tag", status: "current", tag: "defined" },
           { id: "tag:other", label: "#other", type: "tag", status: "current", tag: "other" }
         ],
         links: [
           { source: "alpha.md", target: "tag:defined", type: "tag", status: "current" },
-          { source: "beta.md", target: "tag:other", type: "tag", status: "current" }
+          { source: "beta.md", target: "tag:other", type: "tag", status: "current" },
+          { source: "archive/alpha.md", target: "tag:archive", type: "tag", status: "current" }
         ],
         files: [
-          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha", fullPath: "C:/vault/alpha.md", status: "current", tags: ["defined"] },
-          { id: "beta.md", path: "beta.md", name: "beta.md", content: "---\ntags: [other]\n---\n# Beta", fullPath: "C:/vault/beta.md", status: "current", tags: ["other"] }
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha", status: "current", tags: ["defined"] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "---\ntags: [other]\n---\n# Beta", fullPath: "C:/vault/beta.md", status: "current", tags: ["other"] },
+          { id: "archive/alpha.md", path: "archive/alpha.md", name: "alpha.md", content: "---\ntags: [archive]\n---\n# Archived Alpha", fullPath: "C:/vault/archive/alpha.md", status: "current", tags: ["archive"] }
+        ]
+      }
+    };
+    const unrelatedGraphTab = {
+      ...graphTab,
+      id: "unrelated_graph_e2e",
+      title: "Unrelated Graph E2E",
+      folderName: "Unrelated Graph E2E",
+      graphScopeKey: "root-folder:c:/other-vault",
+      graphSnapshot: {
+        version: 1,
+        folderName: "Unrelated Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", type: "file", status: "current", tags: ["unrelated"] },
+          { id: "tag:unrelated", label: "#unrelated", type: "tag", status: "current", tag: "unrelated" }
+        ],
+        links: [
+          { source: "alpha.md", target: "tag:unrelated", type: "tag", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [unrelated]\n---\n# Other Alpha", status: "current", tags: ["unrelated"] }
         ]
       }
     };
     localStorage.setItem("markdownViewerGlobalState", JSON.stringify({ knownTags: ["ghost"], graphMagneticEnabled: true }));
-    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab, unrelatedGraphTab]));
     localStorage.setItem("markdownViewerActiveTab", graphTab.id);
   });
 
   await page.goto("/");
-  await expect(page.locator(".graph-node")).toHaveCount(4);
+  await expect(page.locator(".graph-node")).toHaveCount(6);
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -758,13 +789,45 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
   });
 
   const tagItems = page.locator(".graph-tab-render .tags-context-menu-item");
-  await expect(tagItems).toHaveText(["#defined", "#other"]);
+  await expect(tagItems).toHaveText(["#archive", "#defined", "#other"]);
   await page.locator(".graph-context-menu-submenu", { hasText: "Tags" }).hover();
   await tagItems.filter({ hasText: "#other" }).evaluate((button) => button.click());
 
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
   await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__writes[0].content)).toContain("other");
+  await expect(page.locator(".graph-link-tag")).toHaveCount(4);
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs"));
+    const graphTab = tabs.find((tab) => tab.id === "desktop_graph_e2e");
+    const unrelatedGraphTab = tabs.find((tab) => tab.id === "unrelated_graph_e2e");
+    return {
+      archive: graphTab.graphSnapshot.files.find((file) => file.fullPath === "C:/vault/archive/alpha.md").tags,
+      unrelated: unrelatedGraphTab.graphSnapshot.files[0].tags
+    };
+  })).toEqual({ archive: ["archive"], unrelated: ["unrelated"] });
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await expect(page.locator(".graph-tab-render .tags-context-menu-item", { hasText: "#other" })).toHaveAttribute("aria-checked", "true");
+  await page.locator(".graph-tab-render .tags-context-menu-item", { hasText: "#defined" }).evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(2);
+  await expect(page.locator(".graph-link-tag")).toHaveCount(3);
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await expect(page.locator(".graph-tab-render .tags-context-menu-item")).toHaveText(["#archive", "#other"]);
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -852,8 +915,41 @@ test("close all leaves the workspace without replacement tabs", async ({ page })
   await page.locator("#tab-reset-btn").click();
   await page.locator("#reset-modal-confirm").click();
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
+  await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#markdown-editor")).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs")))).toEqual([]);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("markdownViewerActiveTab"))).toBe(null);
+
+  await page.evaluate(() => {
+    const markdownFile = new File(["# Folder Note\n\nOpened after close all."], "folder-note.md", {
+      type: "text/markdown",
+      lastModified: Date.now()
+    });
+    const fileHandle = {
+      kind: "file",
+      name: "folder-note.md",
+      getFile: async () => markdownFile
+    };
+    window.showDirectoryPicker = async () => ({
+      kind: "directory",
+      name: "Test Folder",
+      values: async function* values() {
+        yield fileHandle;
+      }
+    });
+  });
+
+  await page.locator("#import-from-folder").click();
+  await expect(page.locator(".folder-tree-file", { hasText: "folder-note.md" })).toBeVisible();
+  await page.locator(".folder-tree-file", { hasText: "folder-note.md" }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  });
+
+  await expect(page.locator("#tab-list .tab-item")).toHaveCount(1);
+  await expect(page.locator(".content-container")).not.toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#markdown-editor")).toBeVisible();
+  await expect(page.locator("#markdown-editor")).toBeEditable();
+  await expect(page.locator("#markdown-editor")).toHaveValue(/Folder Note/);
 
   await page.evaluate(seedTabs);
   await page.reload();
@@ -869,6 +965,8 @@ test("close all leaves the workspace without replacement tabs", async ({ page })
   await page.locator(".tab-context-menu-action[data-action='close-all']").evaluate((button) => button.click());
 
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
+  await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#markdown-editor")).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs")))).toEqual([]);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("markdownViewerActiveTab"))).toBe(null);
 });
