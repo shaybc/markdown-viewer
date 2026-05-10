@@ -401,6 +401,29 @@ test("renders typed markdown in the preview", async ({ page }) => {
   await expect(preview.locator("code.hljs.js", { hasText: "console.log" })).toBeVisible();
 });
 
+test("renders title-prefixed frontmatter as a preview table", async ({ page }) => {
+  await openApp(page);
+
+  await page.locator("#markdown-editor").fill([
+    "# Format Metadata",
+    "",
+    "---",
+    "tags: [format, xml]",
+    "---",
+    "",
+    "## Structure"
+  ].join("\n"));
+
+  const preview = page.locator("#markdown-preview");
+  await expect(preview.getByRole("heading", { name: "Format Metadata" })).toBeVisible();
+  await expect(preview.locator(".frontmatter-table")).toBeVisible();
+  await expect(preview.locator(".frontmatter-table th", { hasText: "tags" })).toBeVisible();
+  await expect(preview.locator(".frontmatter-table .fm-tag", { hasText: "format" })).toBeVisible();
+  await expect(preview.locator(".frontmatter-table .fm-tag", { hasText: "xml" })).toBeVisible();
+  await expect(preview.locator("p", { hasText: "tags: [format, xml]" })).toHaveCount(0);
+  await expect(preview.getByRole("heading", { name: "Structure" })).toBeVisible();
+});
+
 test("switches between editor, preview, and split views", async ({ page }) => {
   await openApp(page);
 

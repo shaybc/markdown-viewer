@@ -62,9 +62,10 @@
   function renderMarkdown() {
     updateEditorLineNumbers();
     try {
-      const { frontmatter, body } = parseFrontmatter(markdownEditor.value);
+      const { frontmatter, frontmatterPrefix, body } = parseFrontmatter(markdownEditor.value);
+      const prefixHtml = frontmatterPrefix ? marked.parse(frontmatterPrefix) : '';
       const tableHtml = frontmatter ? renderFrontmatterTable(frontmatter) : '';
-      const html = tableHtml + marked.parse(body);
+      const html = prefixHtml + tableHtml + marked.parse(body);
       const sanitizedHtml = DOMPurify.sanitize(html, {
         ADD_TAGS: ['mjx-container'],
         ADD_ATTR: ['id', 'class', 'style']

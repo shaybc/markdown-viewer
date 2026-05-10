@@ -4,14 +4,30 @@
 
     with (deps) {
   function parseFrontmatter(markdown) {
-    const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
-    if (!match) return { frontmatter: null, body: markdown };
+    const source = String(markdown || "");
+    const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
+    if (match) {
+      try {
+        const data = jsyaml.load(match[1]) || {};
+        return { frontmatter: data, frontmatterPrefix: "", body: source.slice(match[0].length) };
+      } catch (e) {
+        console.warn('Frontmatter YAML parse error:', e);
+        return { frontmatter: null, frontmatterPrefix: "", body: source };
+      }
+    }
+
+    const afterTitleMatch = source.match(/^(#{1,6}\s+[^\r\n]+(?:\r?\n[ \t]*)?\r?\n)---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
+    if (!afterTitleMatch) return { frontmatter: null, frontmatterPrefix: "", body: source };
     try {
-      const data = jsyaml.load(match[1]) || {};
-      return { frontmatter: data, body: markdown.slice(match[0].length) };
+      const data = jsyaml.load(afterTitleMatch[2]) || {};
+      return {
+        frontmatter: data,
+        frontmatterPrefix: afterTitleMatch[1],
+        body: source.slice(afterTitleMatch[0].length)
+      };
     } catch (e) {
       console.warn('Frontmatter YAML parse error:', e);
-      return { frontmatter: null, body: markdown };
+      return { frontmatter: null, frontmatterPrefix: "", body: source };
     }
   }
 
