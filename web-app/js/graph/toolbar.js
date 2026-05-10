@@ -196,18 +196,27 @@
     updateActiveGraphViewConfig({ groups: graphViewConfig.groups.filter((group) => group.id !== groupId) });
   }
 
+  function reorderGraphGroup(groupId, targetIndex) {
+    const activeGraphTab = getActiveGraphTab();
+    if (!activeGraphTab) return;
+    const graphViewConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
+    const currentIndex = graphViewConfig.groups.findIndex((group) => group.id === groupId);
+    if (currentIndex === -1) return;
+    const nextIndex = Math.max(0, Math.min(targetIndex, graphViewConfig.groups.length - 1));
+    if (nextIndex === currentIndex) return;
+    const groups = graphViewConfig.groups.slice();
+    const [group] = groups.splice(currentIndex, 1);
+    groups.splice(nextIndex, 0, group);
+    updateActiveGraphViewConfig({ groups });
+  }
+
   function moveGraphGroup(groupId, direction) {
     const activeGraphTab = getActiveGraphTab();
     if (!activeGraphTab) return;
     const graphViewConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
     const currentIndex = graphViewConfig.groups.findIndex((group) => group.id === groupId);
     if (currentIndex === -1) return;
-    const nextIndex = currentIndex + direction;
-    if (nextIndex < 0 || nextIndex >= graphViewConfig.groups.length) return;
-    const groups = graphViewConfig.groups.slice();
-    const [group] = groups.splice(currentIndex, 1);
-    groups.splice(nextIndex, 0, group);
-    updateActiveGraphViewConfig({ groups });
+    reorderGraphGroup(groupId, currentIndex + direction);
   }
 
   const GRAPH_GROUP_QUERY_PREFIX_HELP = [
@@ -487,10 +496,56 @@
     graphViewConfig.groups.forEach((group, index) => {
       const row = document.createElement("div");
       row.className = "graph-group-row";
+      row.dataset.groupId = group.id;
+      row.addEventListener("dragover", (event) => {
+        if (!isGraphTab) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        row.classList.add("graph-group-row-drag-over");
+      });
+      row.addEventListener("dragleave", () => {
+        row.classList.remove("graph-group-row-drag-over");
+      });
+      row.addEventListener("drop", (event) => {
+        if (!isGraphTab) return;
+        event.preventDefault();
+        row.classList.remove("graph-group-row-drag-over");
+        const sourceGroupId = event.dataTransfer.getData("text/plain");
+        if (!sourceGroupId || sourceGroupId === group.id) return;
+        reorderGraphGroup(sourceGroupId, index);
+      });
 
       const enabledLabel = document.createElement("label");
       enabledLabel.className = "graph-group-enabled graph-toggle-row";
       enabledLabel.title = "Enable or disable this graph group";
+
+      const moveHandle = document.createElement("button");
+      moveHandle.className = "tool-button graph-group-drag-handle";
+      moveHandle.type = "button";
+      moveHandle.title = "Drag to reorder graph group";
+      moveHandle.draggable = isGraphTab;
+      moveHandle.disabled = !isGraphTab;
+      moveHandle.setAttribute("aria-label", `Drag or use arrow keys to reorder graph group ${index + 1}`);
+      moveHandle.innerHTML = '<i class="bi bi-list" aria-hidden="true"></i>';
+      moveHandle.addEventListener("dragstart", (event) => {
+        if (!isGraphTab) return;
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", group.id);
+        row.classList.add("graph-group-row-dragging");
+      });
+      moveHandle.addEventListener("dragend", () => {
+        row.classList.remove("graph-group-row-dragging");
+        graphGroupsList.querySelectorAll(".graph-group-row-drag-over").forEach((item) => item.classList.remove("graph-group-row-drag-over"));
+      });
+      moveHandle.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          moveGraphGroup(group.id, -1);
+        } else if (event.key === "ArrowDown") {
+          event.preventDefault();
+          moveGraphGroup(group.id, 1);
+        }
+      });
 
       const enabledText = document.createElement("span");
       enabledText.textContent = `Group ${index + 1}`;
@@ -504,7 +559,7 @@
       const enabledSwitch = document.createElement("span");
       enabledSwitch.className = "graph-switch";
       enabledSwitch.setAttribute("aria-hidden", "true");
-      enabledLabel.append(enabledText, enabledInput, enabledSwitch);
+      enabledLabel.append(moveHandle, enabledText, enabledInput, enabledSwitch);
 
       const queryInput = document.createElement("input");
       queryInput.className = "graph-group-query-input";
@@ -547,28 +602,6 @@
       colorInput.setAttribute("aria-label", `Graph group ${index + 1} color`);
       colorInput.addEventListener("change", () => updateGraphGroup(group.id, { color: colorInput.value }));
 
-      const moveButtons = document.createElement("div");
-      moveButtons.className = "graph-group-move-buttons";
-
-      const moveUpButton = document.createElement("button");
-      moveUpButton.className = "tool-button graph-group-move-button graph-group-move-up-button";
-      moveUpButton.type = "button";
-      moveUpButton.title = "Move graph group up";
-      moveUpButton.disabled = !isGraphTab || index === 0;
-      moveUpButton.setAttribute("aria-label", `Move graph group ${index + 1} up`);
-      moveUpButton.innerHTML = '<i class="bi bi-chevron-up"></i>';
-      moveUpButton.addEventListener("click", () => moveGraphGroup(group.id, -1));
-
-      const moveDownButton = document.createElement("button");
-      moveDownButton.className = "tool-button graph-group-move-button graph-group-move-down-button";
-      moveDownButton.type = "button";
-      moveDownButton.title = "Move graph group down";
-      moveDownButton.disabled = !isGraphTab || index === graphViewConfig.groups.length - 1;
-      moveDownButton.setAttribute("aria-label", `Move graph group ${index + 1} down`);
-      moveDownButton.innerHTML = '<i class="bi bi-chevron-down"></i>';
-      moveDownButton.addEventListener("click", () => moveGraphGroup(group.id, 1));
-      moveButtons.append(moveUpButton, moveDownButton);
-
       const deleteButton = document.createElement("button");
       deleteButton.className = "tool-button graph-group-delete-button";
       deleteButton.type = "button";
@@ -578,7 +611,7 @@
       deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
       deleteButton.addEventListener("click", () => deleteGraphGroup(group.id));
 
-      row.append(enabledLabel, queryInput, colorInput, moveButtons, deleteButton);
+      row.append(enabledLabel, queryInput, colorInput, deleteButton);
       attachGraphGroupQuerySuggestions(row, queryInput, group, tab);
       graphGroupsList.appendChild(row);
     });
@@ -805,8 +838,7 @@
       [".graph-group-query-input", "Type a group query. Use prefixes such as path:, file:, tag:, text:, or line:."],
       [".graph-group-enabled-input", "Enable or disable this group color without deleting it."],
       [".graph-group-color-input", "Pick the color used for files that match this group query."],
-      [".graph-group-move-up-button", "Move this group earlier. Earlier groups take priority when multiple groups match the same file."],
-      [".graph-group-move-down-button", "Move this group later. Earlier groups take priority when multiple groups match the same file."],
+      [".graph-group-drag-handle", "Drag this handle to reorder groups. Earlier groups take priority when multiple groups match the same file."],
       [".graph-group-delete-button", "Delete this color group from the graph filter settings."]
     ];
 

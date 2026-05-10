@@ -521,10 +521,11 @@ test("syncs editor scrolling to the preview pane while enabled", async ({ page }
   const markdown = Array.from({ length: 80 }, (_, index) => `## Section ${index + 1}\n\nParagraph ${index + 1}`).join("\n\n");
   await page.locator("#markdown-editor").fill(markdown);
   await expect(page.locator("#markdown-preview").getByRole("heading", { name: "Section 80" })).toBeVisible();
+  await expect.poll(() => page.locator("#markdown-editor").evaluate((editor) => editor.scrollHeight > editor.clientHeight)).toBe(true);
   await expect.poll(() => page.locator(".preview-pane").evaluate((pane) => pane.scrollHeight > pane.clientHeight)).toBe(true);
 
   await page.locator("#markdown-editor").evaluate((editor) => {
-    editor.scrollTop = editor.scrollHeight;
+    editor.scrollTop = editor.scrollHeight - editor.clientHeight;
     editor.dispatchEvent(new Event("scroll", { bubbles: true }));
   });
 
@@ -830,10 +831,18 @@ test("graph group order can be rearranged and changes point priority", async ({ 
   await page.locator("#graph-filter-panel-toggle").click();
   await page.locator(".graph-collapsible-section", { hasText: "Groups" }).locator("summary").click();
   await expect(page.locator(".graph-group-row")).toHaveCount(2);
-  await expect(page.locator(".graph-group-row").nth(0).locator(".graph-group-move-up-button")).toBeDisabled();
-  await expect(page.locator(".graph-group-row").nth(1).locator(".graph-group-move-down-button")).toBeDisabled();
+  await expect(page.locator(".graph-group-row").nth(0).locator(".graph-group-drag-handle")).toBeVisible();
+  await expect(page.locator(".graph-group-row").nth(0).locator(".graph-group-drag-handle")).toHaveAttribute("draggable", "true");
 
-  await page.locator(".graph-group-row").nth(0).locator(".graph-group-move-down-button").click();
+  await page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll(".graph-group-row"));
+    const handle = rows[0]?.querySelector(".graph-group-drag-handle");
+    const dataTransfer = new DataTransfer();
+    handle?.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer }));
+    rows[1]?.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer }));
+    rows[1]?.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
+    handle?.dispatchEvent(new DragEvent("dragend", { bubbles: true, cancelable: true, dataTransfer }));
+  });
 
   await expect(page.locator(".graph-group-row").nth(0).locator(".graph-group-query-input")).toHaveValue("file:alpha");
   await expect(page.locator(".graph-group-row").nth(1).locator(".graph-group-query-input")).toHaveValue("tag:shared");
