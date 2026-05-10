@@ -884,6 +884,65 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
 });
 
+test("desktop tree context menu can update file tags", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.__writes = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    const files = new Map([
+      ["alpha.md", "---\ntags: [defined]\n---\n# Alpha"],
+      ["beta.md", "---\ntags: [other]\n---\n# Beta"]
+    ]);
+    const getName = (path) => String(path || "").split(/[\\/]/).pop();
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return Array.from(files.keys()).map((entry) => ({ entry, type: "FILE" }));
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          const name = getName(path);
+          if (files.has(name)) return files.get(name);
+          throw new Error("Unexpected read path: " + path);
+        },
+        writeFile: async (path, content) => {
+          files.set(getName(path), String(content));
+          window.__writes.push({ path, content: String(content) });
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await page.locator(".folder-tree-file", { hasText: "alpha.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 90,
+    clientY: 180
+  });
+
+  const treeMenu = page.locator(".sidebar-file-context-menu:not(.hidden)");
+  await expect(treeMenu.locator(".tags-context-menu-item")).toHaveText(["#defined", "#other"]);
+  await treeMenu.locator(".tags-context-menu-item", { hasText: "#other" }).evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__writes[0].content)).toContain("defined, other");
+});
+
 test("renders recent files in the action menu", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerRecentFiles", JSON.stringify([
