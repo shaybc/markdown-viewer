@@ -42,7 +42,7 @@
   function renderTagsContextSubmenu(submenuPanel, currentTags, onToggleTag) {
     if (!submenuPanel) return;
     const fileTags = new Set(normalizeFileTagList(currentTags || []));
-    const tags = Array.from(new Set([...getReferencedTags(), ...fileTags])).sort((a, b) => a.localeCompare(b));
+    const tags = Array.from(new Set([...getAvailableTags(), ...fileTags])).sort((a, b) => a.localeCompare(b));
     submenuPanel.innerHTML = "";
 
     if (!tags.length) {

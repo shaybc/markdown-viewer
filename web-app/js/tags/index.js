@@ -11,6 +11,14 @@
     saveGlobalState({ knownTags: normalizeFileTagList(tags).sort((a, b) => a.localeCompare(b)) });
   }
 
+  function getCreatedTags() {
+    return normalizeFileTagList(loadGlobalState().createdTags || []);
+  }
+
+  function saveCreatedTags(tags) {
+    saveGlobalState({ createdTags: normalizeFileTagList(tags).sort((a, b) => a.localeCompare(b)) });
+  }
+
   function addTagsToCountMap(counts, tags) {
     normalizeFileTagList(tags).forEach((tag) => {
       counts.set(tag, (counts.get(tag) || 0) + 1);
@@ -134,6 +142,12 @@
     return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
   }
 
+  function getAvailableTags() {
+    const tagSet = new Set(getCreatedTags());
+    getReferencedTagCounts().forEach((_count, tag) => tagSet.add(tag));
+    return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+  }
+
   function getReferencedTags() {
     return Array.from(getReferencedTagCounts().keys()).sort((a, b) => a.localeCompare(b));
   }
@@ -203,7 +217,7 @@
     tagManagementList.setAttribute("aria-multiselectable", "true");
     const query = String(tagManagementSearch?.value || "").trim().toLowerCase();
     const counts = getReferencedTagCounts();
-    const tagSource = query ? getAllKnownAndReferencedTags() : getReferencedTags();
+    const tagSource = query ? getAllKnownAndReferencedTags() : getAvailableTags();
     const tags = tagSource.filter((tag) => !query || tag.includes(query));
     tagManagementList.innerHTML = "";
 
@@ -243,7 +257,11 @@
     if (!tags.includes(normalizedTag)) {
       saveKnownTags([...tags, normalizedTag]);
     }
-    if (tagManagementSearch) tagManagementSearch.value = normalizedTag;
+    const createdTags = getCreatedTags();
+    if (!createdTags.includes(normalizedTag)) {
+      saveCreatedTags([...createdTags, normalizedTag]);
+    }
+    if (tagManagementSearch) tagManagementSearch.value = "";
     renderTagManagementList();
     const activeGraphTab = getActiveGraphTab();
     if (activeGraphTab) {
@@ -517,6 +535,7 @@
         getActiveGraphSnapshotTagCounts,
         getReferencedTagCounts,
         getAllKnownAndReferencedTags,
+        getAvailableTags,
         getReferencedTags,
         getGraphFileEntryNodeId,
         findFolderMarkdownEntryForGraphFile,

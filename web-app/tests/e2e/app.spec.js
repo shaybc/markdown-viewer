@@ -697,8 +697,17 @@ test("creating a tag from the tag dialog shows the new tag", async ({ page }) =>
   await expect(page.locator("#tag-management-list .tag-management-list-empty")).toBeVisible();
   await page.locator("#create-tag-button").evaluate((button) => button.click());
 
-  await expect(page.locator("#tag-management-search")).toHaveValue("fresh tag");
+  await expect(page.locator("#tag-management-search")).toHaveValue("");
   await expect(page.locator("#tag-management-list .tag-management-list-item")).toHaveText(["#fresh tag0"]);
+
+  await page.locator(".folder-tree-file", { hasText: "untagged.md" }).dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 90,
+    clientY: 180
+  });
+  await expect(page.locator(".sidebar-file-context-menu:not(.hidden) .tags-context-menu-item")).toHaveText(["#fresh tag"]);
 });
 
 test("desktop graph context menu can update file tags", async ({ page }) => {
