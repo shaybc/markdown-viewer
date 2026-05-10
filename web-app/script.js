@@ -177,11 +177,11 @@
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
     getFileName,
-    getActiveMarkdownTab,
-    findTabForSourceFile,
-    switchTab,
-    pinTemporaryTab,
-    openDocumentSourceFile,
+    get getActiveMarkdownTab() { return getActiveMarkdownTab; },
+    get findTabForSourceFile() { return findTabForSourceFile; },
+    get switchTab() { return switchTab; },
+    get pinTemporaryTab() { return pinTemporaryTab; },
+    get openDocumentSourceFile() { return openDocumentSourceFile; },
     joinPath,
     get updateStatusLine() { return updateStatusLine; }
   });
@@ -501,6 +501,85 @@
   const toggleAutoSelectFileButtons = document.querySelectorAll(".toggle-auto-select-file");
   const folderTreeSortMenuButtons = document.querySelectorAll(".folder-tree-sort-menu-button");
   const folderTreeSortOptionButtons = document.querySelectorAll(".folder-tree-sort-option");
+  const folderToolbar = window.registerMarkdownViewerFolderToolbar(app, {
+    get activeTabId() { return activeTabId; },
+    get tabs() { return tabs; },
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    get folderTreeRoot() { return folderTreeRoot; },
+    get folderTreeFilterInput() { return folderTreeFilterInput; },
+    get folderTreeFilterText() { return folderTreeFilterText; },
+    set folderTreeFilterText(value) { folderTreeFilterText = value; },
+    get selectedFolderTreeTags() { return selectedFolderTreeTags; },
+    set selectedFolderTreeTags(value) { selectedFolderTreeTags = value; },
+    get currentFolderTreeNodes() { return currentFolderTreeNodes; },
+    get showUnsupportedFolderFiles() { return showUnsupportedFolderFiles; },
+    set showUnsupportedFolderFiles(value) { showUnsupportedFolderFiles = value; },
+    get currentFolderSortMode() { return currentFolderSortMode; },
+    set currentFolderSortMode(value) { currentFolderSortMode = value; },
+    get autoSelectFileEnabled() { return autoSelectFileEnabled; },
+    set autoSelectFileEnabled(value) { autoSelectFileEnabled = value; },
+    get folderTreeExpandToggleButtons() { return folderTreeExpandToggleButtons; },
+    get folderTreeFilterToggleButtons() { return folderTreeFilterToggleButtons; },
+    get folderTreeSortMenuButtons() { return folderTreeSortMenuButtons; },
+    get folderTreeSortOptionButtons() { return folderTreeSortOptionButtons; },
+    get toggleAutoSelectFileButtons() { return toggleAutoSelectFileButtons; },
+    get createTagButton() { return createTagButton; },
+    get deleteTagButton() { return deleteTagButton; },
+    get tagManagementSearch() { return tagManagementSearch; },
+    get isFolderOpen() { return isFolderOpen; },
+    get activeFolderName() { return activeFolderName; },
+    get activeFolderPath() { return activeFolderPath; },
+    get activeFolderHandle() { return activeFolderHandle; },
+    getFolderMarkdownEntryForTab,
+    getFileName,
+    get normalizeFileTagList() { return normalizeFileTagList; },
+    get normalizeTagName() { return normalizeTagName; },
+    get getValidFolderSortMode() { return getValidFolderSortMode; },
+    get isSupportedFolderTreeDocumentNode() { return isSupportedFolderTreeDocumentNode; },
+    get getFolderTreeChildrenContainer() { return getFolderTreeChildrenContainer; },
+    get resetFolderTreeAnimation() { return resetFolderTreeAnimation; },
+    get renderFolderTree() { return renderFolderTree; },
+    get renderTagManagementList() { return renderTagManagementList; },
+    get saveGlobalState() { return saveGlobalState; },
+    get updateGraphTagToolbar() { return updateGraphTagToolbar; },
+    get getActiveGraphTab() { return getActiveGraphTab; },
+    get renderGraphView() { return renderGraphView; },
+    get closeMobileMenu() { return closeMobileMenu; },
+    get createTag() { return createTag; },
+    get deleteTag() { return deleteTag; }
+  });
+  const {
+    getComparableFilePath,
+    getTabTreeFileCandidates,
+    updateAutoSelectFileButtons,
+    hasCollapsedFolderTreeDetails,
+    updateFolderTreeExpandToggleButtons,
+    setAllFolderTreeDetails,
+    getUnsupportedFileToggleButtons,
+    getFolderTreeGraphViewButtons,
+    getFolderTreeGraphExportButtons,
+    getTagManagementMenuButtons,
+    getVisibleFolderTreeNodes,
+    getFolderTreeNodePathKey,
+    getFolderTreeNodeTags,
+    getTagFilteredFolderTreeNodes,
+    toggleFolderTreeTagFilter,
+    getFilteredFolderTreeNodes,
+    renderFilteredFolderTree,
+    updateFolderTreeFilterControls,
+    getFolderSortLabel,
+    updateFolderTreeSortControls,
+    updateUnsupportedFileToggleButtons,
+    updateFolderTreeGraphViewButtons,
+    updateFolderTreeGraphExportButtons,
+    updateTagManagementMenuButtons,
+    setShowUnsupportedFolderFiles,
+    updateFolderTreeToolbarState,
+    setAutoSelectFileEnabled,
+    findFolderTreeFileButtonForTab,
+    syncFolderTreeSelectionToActiveTab,
+    enhanceGitHubAlerts,
+  } = folderToolbar;
   folderPicker.updateFolderImportHint();
   updateFolderTreeToolbarState();
   toggleAutoSelectFileButtons.forEach(function(button) {
@@ -623,9 +702,9 @@
     DEFAULT_SIDEBAR_WIDTH,
     MIN_SIDEBAR_PANEL_HEIGHT,
     MIN_PANE_PERCENT,
-    getActiveTab,
-    isUnsupportedFileTab,
-    getAllowedViewModeForActiveTab,
+    get getActiveTab() { return getActiveTab; },
+    get isUnsupportedFileTab() { return isUnsupportedFileTab; },
+    get getAllowedViewModeForActiveTab() { return getAllowedViewModeForActiveTab; },
     get saveGlobalState() { return saveGlobalState; },
     renderMarkdown,
     scheduleEditorLineNumbersUpdate,
@@ -754,6 +833,15 @@
   const saveGlobalState = themePreferences.saveGlobalState;
   const getDefaultGlobalState = themePreferences.getDefaultGlobalState;
   const updateThemeButtonLabels = themePreferences.updateThemeButtonLabels;
+  themePreferences.initializeTheme();
+
+  const rendererConfig = window.registerMarkdownViewerRendererConfig(app, {
+    marked,
+    hljs,
+    mermaid
+  });
+  rendererConfig.initialize();
+  const initMermaid = rendererConfig.initMermaid;
 
   currentFolderSortMode = getValidFolderSortMode(loadGlobalState().folderSortMode || currentFolderSortMode);
   editorWidthPercent = getClampedEditorWidthPercent(loadGlobalState().editorWidthPercent);
@@ -1348,480 +1436,6 @@
     return true;
   }
 
-  function getComparableFilePath(path) {
-    return String(path || "").replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
-  }
-
-  if (createTagButton) {
-    createTagButton.addEventListener("click", () => {
-      const suggestedTag = tagManagementSearch?.value || "";
-      const tag = window.prompt("Create tag:", suggestedTag);
-      createTag(tag);
-    });
-  }
-
-  if (deleteTagButton) {
-    deleteTagButton.addEventListener("click", () => {
-      const suggestedTag = tagManagementSearch?.value || "";
-      const tag = window.prompt("Delete tag:", suggestedTag);
-      deleteTag(tag);
-    });
-  }
-
-  if (tagManagementSearch) {
-    tagManagementSearch.addEventListener("input", renderTagManagementList);
-    tagManagementSearch.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      createTag(tagManagementSearch.value);
-    });
-  }
-
-  function getTabTreeFileCandidates(tab) {
-    if (!tab || tab.type === "graph") return [];
-    return [tab.sourceFilePath, tab.sourceFileName, tab.title]
-      .filter(Boolean)
-      .map(getComparableFilePath);
-  }
-
-  function updateAutoSelectFileButtons() {
-    const label = autoSelectFileEnabled ? "Auto select file Off" : "Auto select file On";
-    const title = autoSelectFileEnabled ? "Disable Auto select file" : "Enable Auto select file";
-
-    toggleAutoSelectFileButtons.forEach(function(button) {
-      const labelElement = button.querySelector(".auto-select-file-label");
-      if (labelElement) {
-        labelElement.textContent = label;
-      } else {
-        button.textContent = label;
-      }
-      button.title = isFolderOpen ? title : "Open a folder to enable Auto select file";
-      button.setAttribute("aria-label", title);
-      button.setAttribute("aria-pressed", String(autoSelectFileEnabled));
-      if (button.classList.contains("folder-tree-tool-button")) {
-        button.disabled = !isFolderOpen;
-        button.setAttribute("aria-disabled", isFolderOpen ? "false" : "true");
-      }
-    });
-  }
-
-  function hasCollapsedFolderTreeDetails() {
-    return !!folderTreeRoot && Array.from(folderTreeRoot.querySelectorAll("details")).some(function(details) {
-      return !details.open;
-    });
-  }
-
-  function updateFolderTreeExpandToggleButtons() {
-    const hasFolder = !!isFolderOpen;
-    const shouldExpand = hasCollapsedFolderTreeDetails();
-    const title = !hasFolder
-      ? "Open a folder to expand or collapse folders"
-      : shouldExpand
-        ? "Expand all folders"
-        : "Collapse all folders";
-    const iconClass = shouldExpand ? "bi bi-arrows-expand" : "bi bi-arrows-collapse";
-
-    folderTreeExpandToggleButtons.forEach(function(button) {
-      const icon = button.querySelector("i");
-      if (icon) icon.className = iconClass;
-      button.disabled = !hasFolder;
-      button.title = title;
-      button.setAttribute("aria-label", title);
-      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
-    });
-  }
-
-  function setAllFolderTreeDetails(open) {
-    if (!folderTreeRoot) return;
-    folderTreeRoot.querySelectorAll("details").forEach(function(details) {
-      resetFolderTreeAnimation(details, getFolderTreeChildrenContainer(details));
-      details.open = open;
-    });
-    updateFolderTreeExpandToggleButtons();
-  }
-
-  function getUnsupportedFileToggleButtons() {
-    return document.querySelectorAll(".toggle-unsupported-files");
-  }
-
-  function getFolderTreeGraphViewButtons() {
-    return document.querySelectorAll(".folder-tree-tool-button.open-graph-view");
-  }
-
-  function getFolderTreeGraphExportButtons() {
-    return document.querySelectorAll(".export-folder-to-graph");
-  }
-
-  function getTagManagementMenuButtons() {
-    return document.querySelectorAll(".tag-management-menu-button");
-  }
-
-  function getVisibleFolderTreeNodes(nodes) {
-    return (nodes || []).reduce(function(visibleNodes, node) {
-      if (node.kind === "directory") {
-        const visibleChildren = getVisibleFolderTreeNodes(node.children || []);
-        visibleNodes.push({ ...node, children: visibleChildren });
-        return visibleNodes;
-      }
-
-      if (showUnsupportedFolderFiles || isSupportedFolderTreeDocumentNode(node)) {
-        visibleNodes.push(node);
-      }
-      return visibleNodes;
-    }, []);
-  }
-
-  function getFolderTreeNodePathKey(node) {
-    return getComparableFilePath(node?.fullPath || node?.path || node?.file?.webkitRelativePath || node?.file?.name || node?.name || "");
-  }
-
-  function getFolderTreeNodeTags(node) {
-    if (!node || node.kind !== "file") return [];
-    if (Array.isArray(node.tags)) return normalizeFileTagList(node.tags);
-    const nodePathKey = getFolderTreeNodePathKey(node);
-    const matchingEntry = (folderMarkdownFiles || []).find((entry) => {
-      const entryPathKey = getComparableFilePath(entry.fullPath || entry.path || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
-      return entryPathKey && nodePathKey && entryPathKey === nodePathKey;
-    });
-    return normalizeFileTagList(matchingEntry?.tags || []);
-  }
-
-  function getTagFilteredFolderTreeNodes(nodes) {
-    const selectedTags = Array.from(selectedFolderTreeTags || []);
-    if (!selectedTags.length) return nodes;
-
-    return (nodes || []).reduce(function(matches, node) {
-      if (node.kind === "directory") {
-        const filteredChildren = getTagFilteredFolderTreeNodes(node.children || []);
-        if (filteredChildren.length) {
-          matches.push({ ...node, children: filteredChildren });
-        }
-        return matches;
-      }
-
-      const nodeTags = getFolderTreeNodeTags(node);
-      if (selectedTags.some((tag) => nodeTags.includes(tag))) {
-        matches.push(node);
-      }
-      return matches;
-    }, []);
-  }
-
-  function toggleFolderTreeTagFilter(tagName) {
-    const normalizedTag = normalizeTagName(tagName);
-    if (!normalizedTag) return;
-    selectedFolderTreeTags = new Set(selectedFolderTreeTags);
-    if (selectedFolderTreeTags.has(normalizedTag)) {
-      selectedFolderTreeTags.delete(normalizedTag);
-    } else {
-      selectedFolderTreeTags.add(normalizedTag);
-    }
-    renderTagManagementList();
-    renderFilteredFolderTree();
-  }
-
-  function getFilteredFolderTreeNodes(nodes, filterText) {
-    const normalizedFilter = String(filterText || "").trim().toLowerCase();
-    if (!normalizedFilter) return nodes;
-
-    return (nodes || []).reduce(function(matches, node) {
-      const nameMatches = String(node.name || "").toLowerCase().includes(normalizedFilter);
-
-      if (node.kind === "directory") {
-        const filteredChildren = getFilteredFolderTreeNodes(node.children || [], normalizedFilter);
-        if (nameMatches || filteredChildren.length) {
-          matches.push({ ...node, children: filteredChildren });
-        }
-        return matches;
-      }
-
-      if (nameMatches) {
-        matches.push(node);
-      }
-      return matches;
-    }, []);
-  }
-
-  function renderFilteredFolderTree() {
-    if (!folderTreeRoot || !isFolderOpen) return;
-    const visibleNodes = getVisibleFolderTreeNodes(currentFolderTreeNodes);
-    const tagFilteredNodes = getTagFilteredFolderTreeNodes(visibleNodes);
-    const nodes = getFilteredFolderTreeNodes(tagFilteredNodes, folderTreeFilterText);
-    renderFolderTree(nodes, { preserveNodes: true, skipTagRefresh: true });
-    if (folderTreeFilterText || selectedFolderTreeTags.size) {
-      setAllFolderTreeDetails(true);
-    }
-  }
-
-  function updateFolderTreeFilterControls() {
-    const hasFolder = !!isFolderOpen;
-    const isVisible = !!(folderTreeFilterInput && !folderTreeFilterInput.hidden);
-    folderTreeFilterToggleButtons.forEach(function(button) {
-      button.disabled = !hasFolder;
-      button.title = hasFolder ? "Filter files and folders" : "Open a folder to filter files and folders";
-      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
-      button.setAttribute("aria-expanded", String(hasFolder && isVisible));
-      button.setAttribute("aria-pressed", String(hasFolder && (isVisible || !!folderTreeFilterText)));
-    });
-
-    if (folderTreeFilterInput) {
-      folderTreeFilterInput.disabled = !hasFolder;
-      if (!hasFolder) {
-        folderTreeFilterInput.value = "";
-        folderTreeFilterInput.hidden = true;
-      }
-    }
-  }
-
-  function getFolderSortLabel(mode) {
-    const labels = {
-      "name-asc": "File name (A to Z)",
-      "name-desc": "File name (Z to A)",
-      "modified-desc": "Modified time (new to old)",
-      "modified-asc": "Modified time (old to new)",
-      "created-desc": "Created time (new to old)",
-      "created-asc": "Created time (old to new)"
-    };
-    return labels[getValidFolderSortMode(mode)];
-  }
-
-  function updateFolderTreeSortControls() {
-    const hasFolder = !!isFolderOpen;
-    const activeLabel = getFolderSortLabel(currentFolderSortMode);
-    const title = hasFolder ? `Sort files and folders: ${activeLabel}` : "Open a folder to sort files and folders";
-
-    folderTreeSortMenuButtons.forEach(function(button) {
-      button.disabled = !hasFolder;
-      button.title = title;
-      button.setAttribute("aria-label", title);
-      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
-    });
-
-    folderTreeSortOptionButtons.forEach(function(button) {
-      const isActive = button.dataset.folderSort === currentFolderSortMode;
-      button.classList.toggle("active", isActive);
-      button.setAttribute("aria-checked", String(isActive));
-    });
-  }
-
-  function updateUnsupportedFileToggleButtons() {
-    const hasFolder = !!isFolderOpen;
-    const label = showUnsupportedFolderFiles ? "Hide unsupported file types" : "Show unsupported file types";
-    const title = hasFolder ? `${label} in the folder view` : "Open a folder to show unsupported file types";
-
-    getUnsupportedFileToggleButtons().forEach(function(button) {
-      const labelElement = button.querySelector(".unsupported-files-toggle-label");
-      if (labelElement) {
-        labelElement.textContent = label;
-      }
-      if (button.classList.contains("folder-tree-tool-button")) {
-        button.disabled = !hasFolder;
-        button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
-      }
-      button.title = title;
-      button.setAttribute("aria-label", title);
-      button.setAttribute("aria-pressed", String(hasFolder && showUnsupportedFolderFiles));
-    });
-  }
-
-  function updateFolderTreeGraphViewButtons() {
-    const hasFolder = !!isFolderOpen;
-    const title = hasFolder ? "Open Graph View" : "Open a folder to open Graph View";
-    getFolderTreeGraphViewButtons().forEach(function(button) {
-      button.disabled = !hasFolder;
-      button.title = title;
-      button.setAttribute("aria-label", title);
-      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
-    });
-  }
-
-  function updateFolderTreeGraphExportButtons() {
-    const hasFolder = !!isFolderOpen;
-    const label = "Export Folder to Graph";
-    const description = "Create a portable graph archive that includes Markdown file contents.";
-    const title = hasFolder ? description : "Create a portable graph archive that includes Markdown file contents.";
-    getFolderTreeGraphExportButtons().forEach(function(button) {
-      button.disabled = !hasFolder;
-      button.title = title;
-      button.setAttribute("aria-label", label);
-      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
-    });
-  }
-
-  function updateTagManagementMenuButtons() {
-    const hasFolder = !!isFolderOpen;
-    const title = hasFolder ? "Manage tags" : "Open a folder to manage tags";
-    getTagManagementMenuButtons().forEach(function(button) {
-      button.disabled = !hasFolder;
-      button.title = title;
-      button.setAttribute("aria-label", title);
-      button.setAttribute("aria-disabled", hasFolder ? "false" : "true");
-    });
-    [createTagButton, deleteTagButton, tagManagementSearch].forEach(function(control) {
-      if (!control) return;
-      control.disabled = !hasFolder;
-      control.setAttribute("aria-disabled", hasFolder ? "false" : "true");
-    });
-  }
-
-  function setShowUnsupportedFolderFiles(enabled) {
-    showUnsupportedFolderFiles = !!enabled;
-    saveGlobalState({ showUnsupportedFolderFiles });
-    updateUnsupportedFileToggleButtons();
-    renderFilteredFolderTree();
-  }
-
-  function updateFolderTreeToolbarState() {
-    updateAutoSelectFileButtons();
-    updateFolderTreeGraphViewButtons();
-    updateFolderTreeGraphExportButtons();
-    updateTagManagementMenuButtons();
-    updateUnsupportedFileToggleButtons();
-    updateFolderTreeExpandToggleButtons();
-    updateFolderTreeFilterControls();
-    updateFolderTreeSortControls();
-  }
-
-  function setAutoSelectFileEnabled(enabled) {
-    autoSelectFileEnabled = !!enabled;
-    saveGlobalState({ autoSelectFileEnabled });
-    updateAutoSelectFileButtons();
-    syncFolderTreeSelectionToActiveTab({ scroll: autoSelectFileEnabled });
-  }
-
-  function findFolderTreeFileButtonForTab(tab) {
-    if (!folderTreeRoot) return null;
-    const candidates = getTabTreeFileCandidates(tab);
-    if (!candidates.length) return null;
-
-    return Array.from(folderTreeRoot.querySelectorAll(".folder-tree-file")).find(function(button) {
-      const buttonCandidates = [button.dataset.fullPath, button.dataset.path, button.dataset.name, button.textContent]
-        .filter(Boolean)
-        .map(getComparableFilePath);
-
-      return candidates.some(function(candidate) {
-        return buttonCandidates.some(function(buttonCandidate) {
-          return buttonCandidate === candidate || buttonCandidate.endsWith(`/${candidate}`) || candidate.endsWith(`/${buttonCandidate}`);
-        });
-      });
-    }) || null;
-  }
-
-  function syncFolderTreeSelectionToActiveTab(options = {}) {
-    if (!folderTreeRoot) return;
-    folderTreeRoot.querySelectorAll(".folder-tree-file.auto-selected").forEach(function(button) {
-      button.classList.remove("auto-selected");
-      button.removeAttribute("aria-current");
-    });
-
-    if (!autoSelectFileEnabled) return;
-
-    const activeTab = tabs.find(function(tab) { return tab.id === activeTabId; });
-    const selectedButton = findFolderTreeFileButtonForTab(activeTab);
-    if (!selectedButton) return;
-
-    selectedButton.classList.add("auto-selected");
-    selectedButton.setAttribute("aria-current", "page");
-
-    if (options.scroll !== false) {
-      selectedButton.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-    }
-  }
-
-  themePreferences.initializeTheme();
-
-  const rendererConfig = window.registerMarkdownViewerRendererConfig(app, {
-    marked,
-    hljs,
-    mermaid
-  });
-  rendererConfig.initialize();
-  const initMermaid = rendererConfig.initMermaid;
-
-  const GITHUB_ALERT_META = {
-    note: {
-      label: "Note",
-      viewBox: "0 0 512 512",
-      path: "M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336l24 0 0-64-24 0c-13.3 0-24-10.7-24-24s10.7-24 24-24l48 0c13.3 0 24 10.7 24 24l0 88 8 0c13.3 0 24 10.7 24 24s-10.7 24-24 24l-80 0c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z",
-    },
-    tip: {
-      label: "Tip",
-      viewBox: "0 0 384 512",
-      path: "M297.2 248.9C311.6 228.3 320 203.2 320 176c0-70.7-57.3-128-128-128S64 105.3 64 176c0 27.2 8.4 52.3 22.8 72.9c3.7 5.3 8.1 11.3 12.8 17.7c0 0 0 0 0 0c12.9 17.7 28.3 38.9 39.8 59.8c10.4 19 15.7 38.8 18.3 57.5L109 384c-2.2-12-5.9-23.7-11.8-34.5c-9.9-18-22.2-34.9-34.5-51.8c0 0 0 0 0 0s0 0 0 0c-5.2-7.1-10.4-14.2-15.4-21.4C27.6 247.9 16 213.3 16 176C16 78.8 94.8 0 192 0s176 78.8 176 176c0 37.3-11.6 71.9-31.4 100.3c-5 7.2-10.2 14.3-15.4 21.4c0 0 0 0 0 0s0 0 0 0c-12.3 16.8-24.6 33.7-34.5 51.8c-5.9 10.8-9.6 22.5-11.8 34.5l-48.6 0c2.6-18.7 7.9-38.6 18.3-57.5c11.5-20.9 26.9-42.1 39.8-59.8c0 0 0 0 0 0s0 0 0 0s0 0 0 0c4.7-6.4 9-12.4 12.7-17.7zM192 128c-26.5 0-48 21.5-48 48c0 8.8-7.2 16-16 16s-16-7.2-16-16c0-44.2 35.8-80 80-80c8.8 0 16 7.2 16 16s-7.2 16-16 16zm0 384c-44.2 0-80-35.8-80-80l0-16 160 0 0 16c0 44.2-35.8 80-80 80z",
-    },
-    important: {
-      label: "Important",
-      viewBox: "0 0 512 512",
-      path: "M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zm0-384c13.3 0 24 10.7 24 24l0 112c0 13.3-10.7 24-24 24s-24-10.7-24-24l0-112c0-13.3 10.7-24 24-24zM224 352a32 32 0 1 1 64 0 32 32 0 1 1 -64 0z",
-    },
-    warning: {
-      label: "Warning",
-      viewBox: "0 0 512 512",
-      path: "M256 32c14.2 0 27.3 7.5 34.5 19.8l216 368c7.3 12.4 7.3 27.7 .2 40.1S486.3 480 472 480L40 480c-14.3 0-27.6-7.7-34.7-20.1s-7-27.8 .2-40.1l216-368C228.7 39.5 241.8 32 256 32zm0 128c-13.3 0-24 10.7-24 24l0 112c0 13.3 10.7 24 24 24s24-10.7 24-24l0-112c0-13.3-10.7-24-24-24zm32 224a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z",
-    },
-    caution: {
-      label: "Caution",
-      viewBox: "0 0 512 512",
-      path: "M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM175 175c9.4-9.4 24.6-9.4 33.9 0l47 47 47-47c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9l-47 47 47 47c9.4 9.4 9.4 24.6 0 33.9s-24.6 9.4-33.9 0l-47-47-47 47c-9.4 9.4-24.6 9.4-33.9 0s-9.4-24.6 0-33.9l47-47-47-47c-9.4-9.4-9.4-24.6 0-33.9z",
-    },
-  };
-  const GITHUB_ALERT_MARKER_REGEX = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s+|$)/i;
-
-  function enhanceGitHubAlerts(container) {
-    if (!container) return;
-
-    const blockquotes = container.querySelectorAll("blockquote");
-    blockquotes.forEach((blockquote) => {
-      let firstParagraph = null;
-      for (const child of blockquote.children) {
-        if (child.tagName === "P") {
-          firstParagraph = child;
-          break;
-        }
-      }
-      if (!firstParagraph) return;
-
-      const firstParagraphHtml = firstParagraph.innerHTML.trim();
-      const markerMatch = firstParagraphHtml.match(GITHUB_ALERT_MARKER_REGEX);
-      if (!markerMatch) return;
-
-      const alertType = markerMatch[1].toLowerCase();
-      blockquote.classList.add("markdown-alert", `markdown-alert-${alertType}`);
-
-      const title = document.createElement("p");
-      title.className = "markdown-alert-title";
-      const alertMeta = GITHUB_ALERT_META[alertType] || { label: markerMatch[1], path: "" };
-      const icon = document.createElement("span");
-      icon.className = "markdown-alert-icon";
-      icon.setAttribute("aria-hidden", "true");
-
-      if (alertMeta.path) {
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute("viewBox", alertMeta.viewBox || "0 0 512 512");
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", alertMeta.path);
-        svg.appendChild(path);
-        icon.appendChild(svg);
-      }
-
-      const label = document.createElement("span");
-      label.textContent = alertMeta.label;
-      title.appendChild(icon);
-      title.appendChild(label);
-
-      blockquote.insertBefore(title, blockquote.firstChild);
-
-      const remainingHtml = firstParagraphHtml
-        .replace(GITHUB_ALERT_MARKER_REGEX, "")
-        .trim();
-      if (remainingHtml) {
-        firstParagraph.innerHTML = remainingHtml;
-      } else {
-        firstParagraph.remove();
-      }
-    });
-  }
-
   function parseFrontmatter(markdown) {
     const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/);
     if (!match) return { frontmatter: null, body: markdown };
@@ -1908,7 +1522,7 @@ ShayBC Markdown-Viewer is a modern, client-side Markdown workspace for writing, 
 - **Best for:** Notes, READMEs, technical docs, wiki pages, research snippets, diagrams, math-heavy docs, and quick export workflows.
 - **App info:** Updated May 9, 2026.
 
-## 🚀 What You Can Do Here
+## ?? What You Can Do Here
 
 ### Write and preview Markdown
 - GitHub-flavored Markdown (GFM), including tables, task lists, strikethrough, and autolinks
@@ -1926,7 +1540,7 @@ ShayBC Markdown-Viewer is a modern, client-side Markdown workspace for writing, 
 ### Build richer documentation
 - Mermaid diagrams with interactive zoom, pan, copy, PNG export, and SVG export controls
 - LaTeX math rendering through MathJax
-- Emoji shortcode support plus native Unicode emoji 😄
+- Emoji shortcode support plus native Unicode emoji ??
 - Local wiki-style links for connected note workflows
 - Folder graph view for seeing relationships across imported Markdown files
 
@@ -1935,7 +1549,7 @@ ShayBC Markdown-Viewer is a modern, client-side Markdown workspace for writing, 
 - Copy rendered HTML for use in other tools
 - Share compressed Markdown through the page URL when you need a quick handoff
 
-## 💻 Code with Syntax Highlighting
+## ?? Code with Syntax Highlighting
 
 \`\`\`javascript
 function renderMarkdown(markdown) {
@@ -1945,14 +1559,14 @@ function renderMarkdown(markdown) {
 }
 \`\`\`
 
-## 🧮 Math Support
+## ?? Math Support
 
 Inline math: $$E = mc^2$$
 
 Block math:
 $$\\sum_{i=1}^{n} i^2 = \\frac{n(n+1)(2n+1)}{6}$$
 
-## 📊 Mermaid Diagrams
+## ?? Mermaid Diagrams
 
 \`\`\`mermaid
 flowchart LR
@@ -1964,7 +1578,7 @@ flowchart LR
     KeepWriting --> Preview
 \`\`\`
 
-## ✅ Markdown Task Lists
+## ? Markdown Task Lists
 
 - [x] Live Markdown preview
 - [x] Multi-tab documents
@@ -1975,21 +1589,21 @@ flowchart LR
 - [x] Folder graph workflows
 - [ ] Your next document
 
-## 🆚 Feature Snapshot
+## ?? Feature Snapshot
 
 | Capability | ShayBC Markdown-Viewer |
 |:--|:--|
-| Runs in browser | ✅ |
-| Client-side rendering | ✅ |
-| GitHub-flavored Markdown | ✅ |
-| Multi-document tabs | ✅ |
-| Folder import and graph view | ✅ |
-| Mermaid diagrams | ✅ |
-| LaTeX math | ✅ |
-| Export to MD, HTML, and PDF | ✅ |
-| Public GitHub import | ✅ |
+| Runs in browser | ? |
+| Client-side rendering | ? |
+| GitHub-flavored Markdown | ? |
+| Multi-document tabs | ? |
+| Folder import and graph view | ? |
+| Mermaid diagrams | ? |
+| LaTeX math | ? |
+| Export to MD, HTML, and PDF | ? |
+| Public GitHub import | ? |
 
-## 📝 Formatting Examples
+## ?? Formatting Examples
 
 Use **bold**, *italic*, ***bold italic***, ~~strikethrough~~, <mark>highlighting</mark>, and <u>underlines</u>.
 
@@ -1999,7 +1613,7 @@ Keyboard shortcuts: <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> to export Mark
 > [!TIP]
 > Drag Markdown files into the app or use the import menu to bring in existing documentation quickly.
 
-## 🔗 Helpful Links
+## ?? Helpful Links
 
 - [ShayBC Markdown-Viewer repository](https://github.com/ShayBC/Markdown-Viewer)
 - [GitHub Flavored Markdown spec](https://github.github.com/gfm/)
@@ -2008,7 +1622,7 @@ Keyboard shortcuts: <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> to export Mark
 
 ---
 
-## 🛡️ Security and Privacy
+## ??? Security and Privacy
 
 Markdown content is processed client-side in your browser and sanitized before preview rendering. Public GitHub import uses GitHub-hosted resources only for the files you choose to import, and local tab persistence stays in this browser's storage.`;
 
@@ -2036,7 +1650,6 @@ Markdown content is processed client-side in your browser and sanitized before p
   let untitledCounter = 0;
   const graphRenderCache = new Map();
   let graphRenderRequestId = 0;
-  let activeGraphStaleComparison = null;
   const GRAPH_GROUP_QUERY_UPDATE_DELAY = 180;
   const GRAPH_GROUP_DEFAULT_COLORS = Object.freeze([
     "#7c3aed",
@@ -2070,1316 +1683,150 @@ Markdown content is processed client-side in your browser and sanitized before p
     linkDistance: 170
   });
 
+  const graphPersistence = window.registerMarkdownViewerGraphPersistence(app, {
+    GRAPH_GROUP_DEFAULT_COLORS,
+    DEFAULT_GRAPH_VIEW_CONFIG,
+    GRAPH_DOCUMENT_SCHEMA_VERSION,
+    GRAPH_DOCUMENT_TYPE_VIEW,
+    GRAPH_DOCUMENT_TYPE_EXPORT,
+    GRAPH_DOCUMENT_TYPES,
+    STORAGE_KEY,
+    ACTIVE_TAB_KEY,
+    get activeTabId() { return activeTabId; },
+    set activeTabId(value) { activeTabId = value; },
+    get activeFolderName() { return activeFolderName; },
+    get activeFolderPath() { return activeFolderPath; },
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    get graphSettings() { return graphSettings; },
+    get graphRenderCache() { return graphRenderCache; },
+    get graphComparisonDetailsModal() { return graphComparisonDetailsModal; },
+    get graphComparisonDetailsTitle() { return graphComparisonDetailsTitle; },
+    get graphComparisonDetailsList() { return graphComparisonDetailsList; },
+    get graphStaleModal() { return graphStaleModal; },
+    get graphStaleSummary() { return graphStaleSummary; },
+    get graphStaleNewFilesCount() { return graphStaleNewFilesCount; },
+    get graphStaleMissingFilesCount() { return graphStaleMissingFilesCount; },
+    get graphStaleNewLinksCount() { return graphStaleNewLinksCount; },
+    get graphStaleMissingLinksCount() { return graphStaleMissingLinksCount; },
+    get graphStaleChangedTagsCount() { return graphStaleChangedTagsCount; },
+    get graphViewCanvas() { return graphViewCanvas; },
+    get graphViewToolbar() { return graphViewToolbar; },
+    get savedGraphModePill() { return savedGraphModePill; },
+    set savedGraphModePill(value) { savedGraphModePill = value; },
+    get tabs() { return tabs; },
+    set tabs(value) { tabs = value; },
+    normalizeGraphNodeName,
+    getGraphDisplayLabel,
+    resolveGraphTargetId,
+    normalizeTagName,
+    extractMarkdownLinks,
+    getFileTagsFromContent,
+    readFolderMarkdownFileContent,
+    getFileName,
+    updateGraphTagToolbar,
+    get renderGraphView() { return renderGraphView; },
+    saveGlobalState,
+    get renderTabBar() { return renderTabBar; },
+    get updateSaveCurrentFileButtons() { return updateSaveCurrentFileButtons; }
+  });
+  const {    normalizeGraphTagNodeId,
+    normalizeGraphTagNodeIds,
+    clampGraphNumber,
+    createGraphGroupId,
+    normalizeGraphGroupColor,
+    getGraphColorInputValue,
+    getNextDefaultGraphGroupColor,
+    normalizeGraphGroups,
+    normalizeGraphViewConfig,
+    cloneGraphPersistenceValue,
+    normalizeGraphTimestamp,
+    normalizeGraphSnapshot,
+    graphSnapshotHasEmbeddedFileContent,
+    getGraphFileKey,
+    getGraphLinkEndpointKey,
+    getGraphLinkKey,
+    getGraphSnapshotFilesForComparison,
+    getGraphSnapshotLinksForComparison,
+    getGraphTagRelationKeys,
+    compareGraphCollections,
+    compareGraphViewToCurrentFolder,
+    hasGraphComparisonChanges,
+    buildCompareGraphSnapshot,
+    isKeepSavedGraphMode,
+    getGraphNodeNormalizedPath,
+    getGraphSnapshotNodeIds,
+    getGraphLayoutEntryByNormalizedPath,
+    getGraphLayoutEntryForSnapshotNode,
+    shouldPreserveGraphZoomTransform,
+    preserveGraphLayoutForCurrentSnapshot,
+    preserveGraphLayoutForCompareSnapshot,
+    preserveGraphConfigForCurrentSnapshot,
+    applyCurrentFolderSnapshotToSavedGraphTab,
+    showGraphUpdatedBanner,
+    showSavedGraphModeBanner,
+    showGraphBanner,
+    ensureSavedGraphModePill,
+    updateSavedGraphModePill,
+    getGraphComparisonSummaryCounts,
+    getGraphFileDifferenceLabel,
+    createGraphComparisonLabelLookup,
+    getGraphComparisonEndpointLabel,
+    getGraphLinkDifferenceLabel,
+    getGraphTagRelationDifferenceLabel,
+    createGraphComparisonSection,
+    buildGraphComparisonDetailsModel,
+    renderGraphComparisonDetailsModel,
+    openGraphComparisonDetailsModal,
+    closeGraphComparisonDetailsModal,
+    openGraphStaleComparisonDetailsModal,
+    hideGraphStaleModal,
+    showGraphStaleModal,
+    promptForStaleSavedGraphIfNeeded,
+    keepSavedGraphFromStaleModal,
+    updateGraphFromStaleModal,
+    loadGraphComparisonFromStaleModal,
+    shouldPreserveGraphSnapshotFullPath,
+    stripGraphSnapshotContent,
+    serializeGraphViewDocument,
+    serializeGraphExportDocument,
+    getExplicitGraphDocumentType,
+    inferLegacyGraphDocumentType,
+    normalizeGraphDocumentType,
+    getGraphDocumentKind,
+    validateParsedGraphDocument,
+    normalizeGraphDocument,
+    serializeGraphTab,
+    deserializeGraphDocument,
+    syncGraphTabDocument,
+    getActiveGraphTab,
+    getSuggestedGraphFileName,
+    isFileBackedGraphTab,
+    markGraphTabAsChanged,
+    clearGraphTabUnsavedChanges,
+    getGraphFileSignature,
+    getGraphViewSignature,
+    createGraphSnapshot,
+    getGraphSnapshotSignature,
+    toFiniteNumber,
+    formatGraphZoomPercent,
+    getGraphZoomScaleFromLayout,
+    getSavedGraphNodeLayout,
+    applySavedGraphLayout,
+    getSavedGraphZoomTransform,
+    captureGraphLayout,
+    getGraphRenderWrappersForTab,
+    removeGraphRenderForTab,
+    hideInactiveGraphRenders,
+    suspendGraphRender,
+    suspendActiveGraphRender,
+    loadTabsFromStorage,
+    saveTabsToStorage,
+    scheduleGraphLayoutStorageSave,
+    loadActiveTabId,
+    saveActiveTabId,
+  } = graphPersistence;
+
   renderTagManagementList();
-
-  function normalizeGraphTagNodeId(value) {
-    const rawValue = String(value || "").trim();
-    if (!rawValue) return "";
-    if (rawValue.startsWith("tag:")) return `tag:${normalizeTagName(rawValue.slice(4))}`;
-    return `tag:${normalizeTagName(rawValue)}`;
-  }
-
-  function normalizeGraphTagNodeIds(values) {
-    return Array.from(new Set((Array.isArray(values) ? values : [])
-      .map(normalizeGraphTagNodeId)
-      .filter((tagId) => tagId && tagId !== "tag:")));
-  }
-
-  function clampGraphNumber(value, fallback, min, max) {
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue)) return fallback;
-    return Math.min(max, Math.max(min, numericValue));
-  }
-
-  function createGraphGroupId(seed) {
-    const rawSeed = String(seed || "graph-group");
-    let hash = 2166136261;
-    for (let i = 0; i < rawSeed.length; i += 1) {
-      hash ^= rawSeed.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    return `graph-group-${(hash >>> 0).toString(36)}`;
-  }
-
-  function normalizeGraphGroupColor(value, fallback) {
-    const fallbackColor = String(fallback || "#7c3aed").trim() || "#7c3aed";
-    const rawValue = String(value || "").trim();
-    if (!rawValue) return fallbackColor;
-    if (/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(rawValue)) return rawValue;
-    if (typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("color", rawValue)) return rawValue;
-    return fallbackColor;
-  }
-
-  function getGraphColorInputValue(value) {
-    const color = normalizeGraphGroupColor(value, GRAPH_GROUP_DEFAULT_COLORS[0]);
-    if (/^#[0-9a-f]{6}$/i.test(color)) return color;
-    if (/^#[0-9a-f]{3}$/i.test(color)) {
-      return `#${color.slice(1).split("").map((digit) => digit + digit).join("")}`;
-    }
-    return GRAPH_GROUP_DEFAULT_COLORS[0];
-  }
-
-  function getNextDefaultGraphGroupColor(groups) {
-    const groupCount = Array.isArray(groups) ? groups.length : 0;
-    return GRAPH_GROUP_DEFAULT_COLORS[groupCount % GRAPH_GROUP_DEFAULT_COLORS.length];
-  }
-
-  function normalizeGraphGroups(groups) {
-    const seenIds = new Set();
-    return (Array.isArray(groups) ? groups : [])
-      .map((group) => {
-        const source = group && typeof group === "object" ? group : {};
-        const query = String(source.query || "").trim();
-        const color = normalizeGraphGroupColor(source.color, GRAPH_GROUP_DEFAULT_COLORS[0]);
-        const baseId = String(source.id || "").trim() || createGraphGroupId(`${query}:${color}`);
-        let id = baseId;
-        let suffix = 2;
-        while (seenIds.has(id)) {
-          id = `${baseId}-${suffix}`;
-          suffix += 1;
-        }
-        seenIds.add(id);
-        return {
-          id,
-          query,
-          color,
-          enabled: source.enabled !== false
-        };
-      });
-  }
-
-  function normalizeGraphViewConfig(config) {
-    const source = config && typeof config === "object" ? config : {};
-    return {
-      ...DEFAULT_GRAPH_VIEW_CONFIG,
-      ...source,
-      showTags: source.showTags === true,
-      hiddenTagIds: normalizeGraphTagNodeIds(source.hiddenTagIds),
-      hiddenNodeIds: Array.from(new Set((Array.isArray(source.hiddenNodeIds) ? source.hiddenNodeIds : [])
-        .map((nodeId) => String(nodeId || "").trim())
-        .filter(Boolean))),
-      selectedTagIds: normalizeGraphTagNodeIds(source.selectedTagIds),
-      groups: normalizeGraphGroups(source.groups),
-      searchQuery: String(source.searchQuery || "").trim().toLowerCase(),
-      showArrows: source.showArrows !== false,
-      textFadeThreshold: clampGraphNumber(source.textFadeThreshold, DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold, 0, 1),
-      nodeSize: clampGraphNumber(source.nodeSize, DEFAULT_GRAPH_VIEW_CONFIG.nodeSize, 0.4, 1.8),
-      linkThickness: clampGraphNumber(source.linkThickness, DEFAULT_GRAPH_VIEW_CONFIG.linkThickness, 0.5, 4),
-      centerForce: clampGraphNumber(source.centerForce, DEFAULT_GRAPH_VIEW_CONFIG.centerForce, 0, 2),
-      repelForce: clampGraphNumber(source.repelForce, DEFAULT_GRAPH_VIEW_CONFIG.repelForce, 0, 1200),
-      linkForce: clampGraphNumber(source.linkForce, DEFAULT_GRAPH_VIEW_CONFIG.linkForce, 0, 1),
-      linkDistance: clampGraphNumber(source.linkDistance, DEFAULT_GRAPH_VIEW_CONFIG.linkDistance, 40, 320)
-    };
-  }
-
-  function cloneGraphPersistenceValue(value) {
-    if (value === undefined) return undefined;
-    if (value === null) return null;
-    try {
-      return JSON.parse(JSON.stringify(value));
-    } catch (e) {
-      console.warn("Failed to clone graph persistence value:", e);
-      return null;
-    }
-  }
-
-  function normalizeGraphTimestamp(value, fallback) {
-    const timestamp = typeof value === "string" ? Date.parse(value) : Number(value);
-    return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : fallback;
-  }
-
-  function normalizeGraphSnapshot(snapshot) {
-    const normalizedSnapshot = cloneGraphPersistenceValue(snapshot || null);
-    if (!normalizedSnapshot || typeof normalizedSnapshot !== "object") return normalizedSnapshot;
-
-    if (Array.isArray(normalizedSnapshot.nodes)) {
-      normalizedSnapshot.nodes = normalizedSnapshot.nodes.map((node) => ({
-        ...node,
-        type: node?.type || "file",
-        status: node?.status || "current"
-      }));
-    }
-
-    if (Array.isArray(normalizedSnapshot.links)) {
-      normalizedSnapshot.links = normalizedSnapshot.links.map((link) => ({
-        ...link,
-        type: link?.type || "link",
-        status: link?.status || "current"
-      }));
-    }
-
-    return normalizedSnapshot;
-  }
-
-  function graphSnapshotHasEmbeddedFileContent(snapshot) {
-    if (!snapshot || !Array.isArray(snapshot.files)) return false;
-    return snapshot.files.some((file) => file && typeof file === "object" && Object.prototype.hasOwnProperty.call(file, "content"));
-  }
-
-  function getGraphFileKey(file) {
-    if (!file) return "";
-    const source = file && typeof file === "object" ? file : { path: file };
-    const path = source.path || source.fullPath || source.file?.webkitRelativePath || source.file?.name || source.name || "";
-    if (path) return normalizeGraphNodeName(path);
-    return String(source.id || "").trim().toLowerCase();
-  }
-
-  function getGraphLinkEndpointKey(endpoint) {
-    if (!endpoint) return "";
-    if (typeof endpoint === "object") {
-      return String(endpoint.id || getGraphFileKey(endpoint) || "").trim().toLowerCase();
-    }
-    return String(endpoint || "").trim().toLowerCase();
-  }
-
-  function getGraphLinkKey(link) {
-    if (!link) return "";
-    const source = getGraphLinkEndpointKey(link.source);
-    const target = getGraphLinkEndpointKey(link.target);
-    if (!source || !target) return "";
-    return `${source}->${target}:${link.type || "link"}`;
-  }
-
-  function getGraphSnapshotFilesForComparison(snapshot) {
-    if (!snapshot || typeof snapshot !== "object") return [];
-    const files = Array.isArray(snapshot.files) ? snapshot.files : [];
-    if (files.length) return files;
-    return (Array.isArray(snapshot.nodes) ? snapshot.nodes : []).filter((node) => (node?.type || "file") === "file");
-  }
-
-  function getGraphSnapshotLinksForComparison(snapshot) {
-    return (Array.isArray(snapshot?.links) ? snapshot.links : [])
-      .filter((link) => (link?.type || "link") !== "tag");
-  }
-
-  function getGraphTagRelationKeys(snapshot) {
-    const relationKeys = new Set();
-
-    (Array.isArray(snapshot?.links) ? snapshot.links : [])
-      .filter((link) => (link?.type || "link") === "tag")
-      .forEach((link) => {
-        const key = getGraphLinkKey({ ...link, type: "tag" });
-        if (key) relationKeys.add(key);
-      });
-
-    getGraphSnapshotFilesForComparison(snapshot).forEach((file) => {
-      const fileKey = getGraphFileKey(file);
-      if (!fileKey) return;
-      normalizeFileTagList(file.tags || getFileTagsFromContent(file.content || "")).forEach((tag) => {
-        const tagId = normalizeGraphTagNodeId(tag);
-        if (tagId && tagId !== "tag:") relationKeys.add(`${fileKey}->${tagId}:tag`);
-      });
-    });
-
-    return Array.from(relationKeys).sort();
-  }
-
-  function compareGraphCollections(savedItems, currentItems, keyGetter) {
-    const savedByKey = new Map();
-    const currentByKey = new Map();
-
-    (savedItems || []).forEach((item) => {
-      const key = keyGetter(item);
-      if (key && !savedByKey.has(key)) savedByKey.set(key, item);
-    });
-
-    (currentItems || []).forEach((item) => {
-      const key = keyGetter(item);
-      if (key && !currentByKey.has(key)) currentByKey.set(key, item);
-    });
-
-    return {
-      currentOnly: Array.from(currentByKey.entries())
-        .filter(([key]) => !savedByKey.has(key))
-        .map(([, item]) => item),
-      savedOnly: Array.from(savedByKey.entries())
-        .filter(([key]) => !currentByKey.has(key))
-        .map(([, item]) => item)
-    };
-  }
-
-  function compareGraphViewToCurrentFolder(savedSnapshot, currentSnapshot) {
-    const fileComparison = compareGraphCollections(
-      getGraphSnapshotFilesForComparison(savedSnapshot),
-      getGraphSnapshotFilesForComparison(currentSnapshot),
-      getGraphFileKey
-    );
-    const linkComparison = compareGraphCollections(
-      getGraphSnapshotLinksForComparison(savedSnapshot),
-      getGraphSnapshotLinksForComparison(currentSnapshot),
-      getGraphLinkKey
-    );
-    const tagRelationComparison = compareGraphCollections(
-      getGraphTagRelationKeys(savedSnapshot),
-      getGraphTagRelationKeys(currentSnapshot),
-      (key) => key
-    );
-
-    const result = {
-      newFiles: fileComparison.currentOnly,
-      savedOnlyFiles: fileComparison.savedOnly,
-      newLinks: linkComparison.currentOnly,
-      savedOnlyLinks: linkComparison.savedOnly,
-      newTagRelations: tagRelationComparison.currentOnly,
-      savedOnlyTagRelations: tagRelationComparison.savedOnly
-    };
-
-    result.counts = {
-      newFiles: result.newFiles.length,
-      savedOnlyFiles: result.savedOnlyFiles.length,
-      newLinks: result.newLinks.length,
-      savedOnlyLinks: result.savedOnlyLinks.length,
-      newTagRelations: result.newTagRelations.length,
-      savedOnlyTagRelations: result.savedOnlyTagRelations.length
-    };
-
-    return result;
-  }
-
-  function hasGraphComparisonChanges(comparison) {
-    const counts = comparison?.counts || {};
-    return [
-      counts.newFiles,
-      counts.savedOnlyFiles,
-      counts.newLinks,
-      counts.savedOnlyLinks,
-      counts.newTagRelations,
-      counts.savedOnlyTagRelations
-    ].some((count) => Number(count) > 0);
-  }
-
-  function buildCompareGraphSnapshot(savedSnapshot, currentSnapshot, comparison) {
-    const sourceCurrentSnapshot = currentSnapshot && typeof currentSnapshot === "object" ? currentSnapshot : {};
-    const sourceSavedSnapshot = savedSnapshot && typeof savedSnapshot === "object" ? savedSnapshot : {};
-    const nodes = [];
-    const links = [];
-    const files = [];
-    const nodesById = new Map();
-    const linksByKey = new Map();
-    const savedNodesById = new Map((Array.isArray(sourceSavedSnapshot.nodes) ? sourceSavedSnapshot.nodes : [])
-      .map((node) => [String(node?.id || "").trim(), node])
-      .filter(([id]) => id));
-    const savedFilesById = new Map(getGraphSnapshotFilesForComparison(sourceSavedSnapshot)
-      .map((file) => [String(file?.id || getGraphFileKey(file) || "").trim(), file])
-      .filter(([id]) => id));
-
-    const addNode = (node, status = "current") => {
-      const nodeId = String(node?.id || getGraphFileKey(node) || "").trim();
-      if (!nodeId || nodesById.has(nodeId)) return nodesById.get(nodeId) || null;
-      const type = node?.type || (String(nodeId).startsWith("tag:") ? "tag" : "file");
-      const nextNode = {
-        ...node,
-        id: nodeId,
-        type,
-        status
-      };
-      if (!nextNode.label) nextNode.label = type === "tag" ? getGraphTagLabelFromId(nodeId) : getGraphDisplayLabel(node?.path || node?.fullPath || nodeId);
-      nodesById.set(nodeId, nextNode);
-      nodes.push(nextNode);
-      return nextNode;
-    };
-
-    const addFile = (file, status = "current") => {
-      const fileId = String(file?.id || getGraphFileKey(file) || "").trim();
-      if (!fileId) return;
-      const node = savedNodesById.get(fileId) || file;
-      addNode({
-        ...node,
-        id: fileId,
-        type: "file",
-        label: node?.label || getGraphDisplayLabel(file?.path || file?.fullPath || fileId),
-        fullPath: node?.fullPath || file?.fullPath || file?.path || null,
-        tags: node?.tags || file?.tags || []
-      }, status);
-      files.push({
-        ...file,
-        id: fileId,
-        status
-      });
-    };
-
-    const ensureNodeForEndpoint = (endpointId, status = "saved-only") => {
-      const nodeId = String(endpointId || "").trim();
-      if (!nodeId || nodesById.has(nodeId)) return;
-      if (nodeId.startsWith("tag:")) {
-        addNode({ id: nodeId, label: getGraphTagLabelFromId(nodeId), type: "tag", tag: nodeId.replace(/^tag:/, "") }, status);
-        return;
-      }
-      const savedFile = savedFilesById.get(nodeId);
-      const savedNode = savedNodesById.get(nodeId);
-      addNode({
-        ...(savedNode || savedFile || {}),
-        id: nodeId,
-        type: "file",
-        label: savedNode?.label || getGraphDisplayLabel(savedFile?.path || savedFile?.fullPath || nodeId),
-        fullPath: savedNode?.fullPath || savedFile?.fullPath || savedFile?.path || null,
-        tags: savedNode?.tags || savedFile?.tags || []
-      }, status);
-      if (savedFile && !files.some((file) => file.id === nodeId)) files.push({ ...savedFile, id: nodeId, status });
-    };
-
-    const addLink = (link, status = "current") => {
-      const source = getGraphLinkEndpointKey(link?.source);
-      const target = getGraphLinkEndpointKey(link?.target);
-      if (!source || !target) return;
-      ensureNodeForEndpoint(source, status);
-      ensureNodeForEndpoint(target, status);
-      const type = link?.type || "link";
-      const key = `${source}->${target}:${type}`;
-      if (linksByKey.has(key)) return;
-      linksByKey.set(key, true);
-      links.push({
-        ...link,
-        source,
-        target,
-        type,
-        status
-      });
-    };
-
-    (Array.isArray(sourceCurrentSnapshot.nodes) ? sourceCurrentSnapshot.nodes : []).forEach((node) => addNode(node, "current"));
-    getGraphSnapshotFilesForComparison(sourceCurrentSnapshot).forEach((file) => addFile(file, "current"));
-    (Array.isArray(sourceCurrentSnapshot.links) ? sourceCurrentSnapshot.links : []).forEach((link) => addLink(link, "current"));
-
-    (comparison?.savedOnlyFiles || []).forEach((file) => addFile(file, "saved-only"));
-    (comparison?.savedOnlyLinks || []).forEach((link) => addLink(link, "saved-only"));
-    (comparison?.savedOnlyTagRelations || []).forEach((relationKey) => {
-      const relationMatch = String(relationKey || "").match(/^(.*)->(tag:[^:]+):tag$/);
-      if (!relationMatch) return;
-      addLink({ source: relationMatch[1], target: relationMatch[2], type: "tag" }, "saved-only");
-    });
-
-    return {
-      version: sourceCurrentSnapshot.version || 1,
-      folderName: sourceCurrentSnapshot.folderName || sourceSavedSnapshot.folderName || "Graph Comparison",
-      createdAt: Date.now(),
-      nodes,
-      links,
-      files
-    };
-  }
-
-  function isKeepSavedGraphMode(tab) {
-    return !!(tab && tab.type === "graph" && tab.keepSavedGraphMode);
-  }
-
-
-  function getGraphNodeNormalizedPath(node) {
-    if (!node) return "";
-    if ((node.type || "file") === "tag" || String(node.id || "").startsWith("tag:")) return "";
-    return normalizeGraphNodeName(node.path || node.fullPath || node.id || node.name || "");
-  }
-
-  function getGraphSnapshotNodeIds(snapshot) {
-    return new Set((Array.isArray(snapshot?.nodes) ? snapshot.nodes : [])
-      .map((node) => String(node?.id || "").trim())
-      .filter(Boolean));
-  }
-
-  function getGraphLayoutEntryByNormalizedPath(graphLayout, savedSnapshot, normalizedPath) {
-    if (!graphLayout || !normalizedPath) return null;
-    const directEntry = getSavedGraphNodeLayout(graphLayout, normalizedPath);
-    if (directEntry) return directEntry;
-
-    const savedNodes = Array.isArray(savedSnapshot?.nodes) ? savedSnapshot.nodes : [];
-    const savedFiles = Array.isArray(savedSnapshot?.files) ? savedSnapshot.files : [];
-    const savedCandidates = [...savedNodes, ...savedFiles];
-    const matchingSavedNode = savedCandidates.find((candidate) => getGraphNodeNormalizedPath(candidate) === normalizedPath);
-    return matchingSavedNode?.id ? getSavedGraphNodeLayout(graphLayout, matchingSavedNode.id) : null;
-  }
-
-  function getGraphLayoutEntryForSnapshotNode(graphLayout, savedSnapshot, node) {
-    if (!graphLayout || !node?.id) return null;
-    const directEntry = getSavedGraphNodeLayout(graphLayout, node.id);
-    if (directEntry) return directEntry;
-    if ((node.type || "file") === "tag") return null;
-    return getGraphLayoutEntryByNormalizedPath(graphLayout, savedSnapshot, getGraphNodeNormalizedPath(node));
-  }
-
-  function shouldPreserveGraphZoomTransform(savedZoomTransform, preservedNodeCount) {
-    return !!savedZoomTransform && preservedNodeCount > 0;
-  }
-
-  function preserveGraphLayoutForCurrentSnapshot(savedLayout, savedSnapshot, currentSnapshot) {
-    const sourceLayout = savedLayout && typeof savedLayout === "object" ? savedLayout : {};
-    const currentNodes = Array.isArray(currentSnapshot?.nodes) ? currentSnapshot.nodes : [];
-    const nextNodes = {};
-
-    currentNodes.forEach((node) => {
-      if (!node?.id || (node.type || "file") === "tag") return;
-      const savedEntry = getGraphLayoutEntryForSnapshotNode(sourceLayout, savedSnapshot, node);
-      if (savedEntry) nextNodes[node.id] = cloneGraphPersistenceValue(savedEntry);
-    });
-
-    const nextLayout = {
-      ...sourceLayout,
-      nodes: nextNodes,
-      updatedAt: Date.now()
-    };
-    const savedZoomTransform = getSavedGraphZoomTransform(sourceLayout);
-    if (shouldPreserveGraphZoomTransform(savedZoomTransform, Object.keys(nextNodes).length)) nextLayout.zoom = savedZoomTransform;
-    else {
-      delete nextLayout.zoom;
-      delete nextLayout.transform;
-    }
-    return nextLayout;
-  }
-
-  function preserveGraphLayoutForCompareSnapshot(savedLayout, savedSnapshot, compareSnapshot) {
-    const sourceLayout = savedLayout && typeof savedLayout === "object" ? savedLayout : {};
-    const compareNodes = Array.isArray(compareSnapshot?.nodes) ? compareSnapshot.nodes : [];
-    const nextNodes = {};
-
-    compareNodes.forEach((node) => {
-      if (!node?.id) return;
-      const savedEntry = getGraphLayoutEntryForSnapshotNode(sourceLayout, savedSnapshot, node);
-      if (savedEntry) nextNodes[node.id] = cloneGraphPersistenceValue(savedEntry);
-    });
-
-    const nextLayout = {
-      ...sourceLayout,
-      nodes: nextNodes,
-      updatedAt: Date.now()
-    };
-    const savedZoomTransform = getSavedGraphZoomTransform(sourceLayout);
-    if (shouldPreserveGraphZoomTransform(savedZoomTransform, Object.keys(nextNodes).length)) nextLayout.zoom = savedZoomTransform;
-    else {
-      delete nextLayout.zoom;
-      delete nextLayout.transform;
-    }
-    return nextLayout;
-  }
-
-  function preserveGraphConfigForCurrentSnapshot(savedConfig, currentSnapshot) {
-    const normalizedConfig = normalizeGraphViewConfig(savedConfig);
-    const currentNodeIds = getGraphSnapshotNodeIds(currentSnapshot);
-    const currentTagIds = new Set(Array.from(currentNodeIds).filter((nodeId) => nodeId.startsWith("tag:")));
-
-    normalizedConfig.hiddenNodeIds = normalizedConfig.hiddenNodeIds.filter((nodeId) => currentNodeIds.has(nodeId));
-    normalizedConfig.hiddenTagIds = normalizedConfig.hiddenTagIds.filter((tagId) => currentTagIds.has(tagId));
-    normalizedConfig.selectedTagIds = normalizedConfig.selectedTagIds.filter((tagId) => currentTagIds.has(tagId));
-
-    if (Array.isArray(normalizedConfig.allowedNodeIds)) {
-      normalizedConfig.allowedNodeIds = normalizedConfig.allowedNodeIds.filter((nodeId) => currentNodeIds.has(nodeId));
-    }
-    if (normalizedConfig.focusNodeId && !currentNodeIds.has(normalizedConfig.focusNodeId)) {
-      delete normalizedConfig.focusNodeId;
-      delete normalizedConfig.mode;
-    }
-
-    return normalizedConfig;
-  }
-
-  function applyCurrentFolderSnapshotToSavedGraphTab(tab, currentSnapshot, options = {}) {
-    if (!tab || tab.type !== "graph" || !currentSnapshot) return false;
-    const savedSnapshot = options.savedSnapshot || tab.graphSnapshot || tab.graphDocument?.snapshot || null;
-    const savedLayout = options.savedLayout !== undefined
-      ? options.savedLayout
-      : (tab.graphLayout !== undefined ? tab.graphLayout : (tab.graphDocument?.graphLayout ?? tab.graphDocument?.layout));
-    const savedConfig = options.savedConfig !== undefined
-      ? options.savedConfig
-      : (tab.graphViewConfig || tab.graphDocument?.viewConfig || null);
-
-    tab.graphSnapshot = currentSnapshot;
-    tab.graphViewConfig = preserveGraphConfigForCurrentSnapshot(savedConfig, currentSnapshot);
-    tab.graphLayout = preserveGraphLayoutForCurrentSnapshot(savedLayout, savedSnapshot, currentSnapshot);
-    tab.folderName = tab.folderName || currentSnapshot.folderName || "Graph View";
-    tab.graphDocument = serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_VIEW });
-    return true;
-  }
-
-  let graphUpdateBannerTimeout = null;
-  let activeGraphComparisonDetailsModel = null;
-
-  function showGraphUpdatedBanner() {
-    showGraphBanner("Graph updated from current folder. Saved layout was preserved where possible.");
-  }
-
-  function showSavedGraphModeBanner(tab) {
-    const detailsModel = tab?.savedGraphComparisonDetails || null;
-    showGraphBanner("Saved graph mode — current folder changes are ignored.", detailsModel);
-  }
-
-  function showGraphBanner(message, detailsModel = null) {
-    let banner = document.getElementById("graph-update-banner");
-    if (!banner) {
-      banner = document.createElement("div");
-      banner.id = "graph-update-banner";
-      banner.setAttribute("role", "status");
-      banner.setAttribute("aria-live", "polite");
-      banner.style.position = "fixed";
-      banner.style.left = "50%";
-      banner.style.bottom = "24px";
-      banner.style.transform = "translateX(-50%)";
-      banner.style.zIndex = "2147483647";
-      banner.style.maxWidth = "min(92vw, 640px)";
-      banner.style.padding = "10px 14px";
-      banner.style.borderRadius = "999px";
-      banner.style.background = "#111827";
-      banner.style.color = "#ffffff";
-      banner.style.boxShadow = "0 10px 30px rgba(15, 23, 42, 0.25)";
-      banner.style.fontSize = "0.92rem";
-      banner.style.fontWeight = "600";
-      banner.style.textAlign = "center";
-      document.body.appendChild(banner);
-    }
-
-    banner.innerHTML = "";
-    const messageSpan = document.createElement("span");
-    messageSpan.textContent = message;
-    banner.appendChild(messageSpan);
-    if (detailsModel) {
-      banner.appendChild(document.createTextNode(" "));
-      const detailsButton = document.createElement("button");
-      detailsButton.type = "button";
-      detailsButton.className = "graph-update-banner-details-button";
-      detailsButton.textContent = "View details";
-      detailsButton.style.color = "#93c5fd";
-      detailsButton.addEventListener("click", () => openGraphComparisonDetailsModal(detailsModel));
-      banner.appendChild(detailsButton);
-    }
-    banner.classList.remove("hidden");
-    window.clearTimeout(graphUpdateBannerTimeout);
-    graphUpdateBannerTimeout = window.setTimeout(() => {
-      banner.classList.add("hidden");
-    }, detailsModel ? 8000 : 4500);
-  }
-
-  function ensureSavedGraphModePill() {
-    if (!graphViewToolbar) return null;
-    let pill = graphViewToolbar.querySelector(".saved-graph-mode-pill");
-    if (!pill) {
-      pill = document.createElement("div");
-      pill.className = "saved-graph-mode-pill hidden";
-      pill.setAttribute("role", "status");
-      pill.setAttribute("aria-live", "polite");
-      const panelHeading = graphViewToolbar.querySelector(".graph-filter-panel-heading");
-      if (panelHeading?.nextSibling) {
-        graphViewToolbar.insertBefore(pill, panelHeading.nextSibling);
-      } else {
-        graphViewToolbar.prepend(pill);
-      }
-    }
-    return pill;
-  }
-
-  function updateSavedGraphModePill(tab) {
-    const pill = ensureSavedGraphModePill();
-    if (!pill) return;
-    const isGraphTab = !!(tab && tab.type === "graph");
-    const isCompareMode = !!tab?.graphComparisonSnapshot;
-    const isSavedMode = isKeepSavedGraphMode(tab);
-    pill.classList.toggle("hidden", !isGraphTab);
-    pill.innerHTML = "";
-    if (!isGraphTab) return;
-
-    pill.classList.toggle("compare-mode", isCompareMode);
-    pill.classList.toggle("saved-mode", isSavedMode && !isCompareMode);
-    pill.classList.toggle("current-folder-mode", !isSavedMode && !isCompareMode);
-
-    const label = document.createElement("span");
-    label.textContent = isCompareMode ? "Compare" : (isSavedMode ? "Saved graph" : "Current folder");
-    pill.appendChild(label);
-    if (isSavedMode && !isCompareMode && tab?.savedGraphComparisonDetails) {
-      const detailsButton = document.createElement("button");
-      detailsButton.type = "button";
-      detailsButton.className = "saved-graph-mode-details-button";
-      detailsButton.textContent = "View details";
-      detailsButton.addEventListener("click", () => openGraphComparisonDetailsModal(tab.savedGraphComparisonDetails));
-      pill.appendChild(detailsButton);
-    }
-  }
-
-  function getGraphComparisonSummaryCounts(comparison) {
-    const counts = comparison?.counts || {};
-    return {
-      newFiles: counts.newFiles || 0,
-      savedOnlyFiles: counts.savedOnlyFiles || 0,
-      changedConnections: (counts.newLinks || 0) + (counts.savedOnlyLinks || 0),
-      changedTags: (counts.newTagRelations || 0) + (counts.savedOnlyTagRelations || 0)
-    };
-  }
-
-  function getGraphFileDifferenceLabel(file) {
-    if (!file) return "Unknown file";
-    return file.path || file.fullPath || file.name || file.id || "Unknown file";
-  }
-
-  function createGraphComparisonLabelLookup(savedSnapshot, currentSnapshot) {
-    const labels = new Map();
-    const addLabel = (id, label) => {
-      const key = String(id || "").trim();
-      const value = String(label || "").trim();
-      if (key && value && !labels.has(key)) labels.set(key, value);
-    };
-    [currentSnapshot, savedSnapshot].forEach((snapshot) => {
-      getGraphSnapshotFilesForComparison(snapshot).forEach((file) => {
-        const label = getGraphFileDifferenceLabel(file);
-        addLabel(file?.id, label);
-        addLabel(getGraphFileKey(file), label);
-        addLabel(file?.path, label);
-        addLabel(file?.fullPath, label);
-      });
-      (Array.isArray(snapshot?.nodes) ? snapshot.nodes : []).forEach((node) => {
-        const nodeId = String(node?.id || "").trim();
-        if (!nodeId) return;
-        if (nodeId.startsWith("tag:")) {
-          addLabel(nodeId, `#${getGraphTagLabelFromId(nodeId)}`);
-          return;
-        }
-        addLabel(nodeId, node?.path || node?.fullPath || node?.label || nodeId);
-      });
-    });
-    return labels;
-  }
-
-  function getGraphComparisonEndpointLabel(endpoint, labels) {
-    const endpointKey = getGraphLinkEndpointKey(endpoint) || String(endpoint || "").trim();
-    if (!endpointKey) return "unknown";
-    if (endpointKey.startsWith("tag:")) return `#${getGraphTagLabelFromId(endpointKey)}`;
-    return labels.get(endpointKey) || endpointKey;
-  }
-
-  function getGraphLinkDifferenceLabel(link, labels = new Map()) {
-    if (!link) return "Unknown connection";
-    const source = getGraphComparisonEndpointLabel(link.source, labels);
-    const target = getGraphComparisonEndpointLabel(link.target, labels);
-    return `${source} → ${target}`;
-  }
-
-  function getGraphTagRelationDifferenceLabel(relationKey, labels = new Map()) {
-    const rawKey = String(relationKey || "");
-    const relationMatch = rawKey.match(/^(.*)->(tag:[^:]+):tag$/);
-    if (!relationMatch) return rawKey || "Unknown tag";
-    const fileLabel = labels.get(relationMatch[1]) || relationMatch[1];
-    return `${fileLabel} → #${relationMatch[2].replace(/^tag:/, "")}`;
-  }
-
-  function createGraphComparisonSection(title, items, formatter) {
-    return {
-      title,
-      items: (items || []).map((item) => String(formatter(item) || "").trim()).filter(Boolean)
-    };
-  }
-
-  function buildGraphComparisonDetailsModel(comparison, savedSnapshot, currentSnapshot) {
-    const labels = createGraphComparisonLabelLookup(savedSnapshot, currentSnapshot);
-    return {
-      sections: [
-        createGraphComparisonSection("New in current folder", comparison?.newFiles || [], getGraphFileDifferenceLabel),
-        createGraphComparisonSection("Only in saved graph", comparison?.savedOnlyFiles || [], getGraphFileDifferenceLabel),
-        createGraphComparisonSection("New connections", comparison?.newLinks || [], (link) => getGraphLinkDifferenceLabel(link, labels)),
-        createGraphComparisonSection("Saved-only connections", comparison?.savedOnlyLinks || [], (link) => getGraphLinkDifferenceLabel(link, labels)),
-        createGraphComparisonSection("New tags", comparison?.newTagRelations || [], (relationKey) => getGraphTagRelationDifferenceLabel(relationKey, labels)),
-        createGraphComparisonSection("Saved-only tags", comparison?.savedOnlyTagRelations || [], (relationKey) => getGraphTagRelationDifferenceLabel(relationKey, labels))
-      ]
-    };
-  }
-
-  function renderGraphComparisonDetailsModel(model) {
-    const sections = Array.isArray(model?.sections) ? model.sections : [];
-    if (!sections.length) {
-      return '<p class="graph-comparison-details-empty">No graph comparison details are available.</p>';
-    }
-    return sections.map((section) => {
-      const items = Array.isArray(section.items) ? section.items : [];
-      const body = items.length
-        ? `<ul class="graph-comparison-details-list">${items.map((item) => `<li class="graph-comparison-details-item">${escapeHtml(String(item))}</li>`).join("")}</ul>`
-        : '<p class="graph-comparison-details-empty">None</p>';
-      return `<section class="graph-comparison-details-section"><h6>${escapeHtml(String(section.title || "Details"))}</h6>${body}</section>`;
-    }).join("");
-  }
-
-  function openGraphComparisonDetailsModal(model) {
-    if (!graphComparisonDetailsModal || !graphComparisonDetailsContent) return;
-    activeGraphComparisonDetailsModel = model || activeGraphComparisonDetailsModel;
-    graphComparisonDetailsContent.innerHTML = renderGraphComparisonDetailsModel(activeGraphComparisonDetailsModel);
-    graphComparisonDetailsModal.classList.remove("hidden");
-    graphComparisonDetailsModal.setAttribute("aria-hidden", "false");
-    graphComparisonDetailsContent.focus({ preventScroll: true });
-  }
-
-  function closeGraphComparisonDetailsModal() {
-    if (!graphComparisonDetailsModal) return;
-    graphComparisonDetailsModal.classList.add("hidden");
-    graphComparisonDetailsModal.setAttribute("aria-hidden", "true");
-  }
-
-  function hideGraphStaleModal() {
-    activeGraphStaleComparison = null;
-    if (!graphStaleModal) return;
-    graphStaleModal.classList.add("hidden");
-    graphStaleModal.setAttribute("aria-hidden", "true");
-  }
-
-  function showGraphStaleModal(tab, savedSnapshot, currentSnapshot, comparison) {
-    if (!graphStaleModal) return;
-    const detailsModel = buildGraphComparisonDetailsModel(comparison, savedSnapshot, currentSnapshot);
-    activeGraphStaleComparison = { tabId: tab?.id || null, savedSnapshot, currentSnapshot, comparison, detailsModel };
-    activeGraphComparisonDetailsModel = detailsModel;
-    const summary = getGraphComparisonSummaryCounts(comparison);
-    if (graphStaleNewFilesCount) graphStaleNewFilesCount.textContent = String(summary.newFiles);
-    if (graphStaleSavedOnlyFilesCount) graphStaleSavedOnlyFilesCount.textContent = String(summary.savedOnlyFiles);
-    if (graphStaleChangedConnectionsCount) graphStaleChangedConnectionsCount.textContent = String(summary.changedConnections);
-    if (graphStaleChangedTagsCount) graphStaleChangedTagsCount.textContent = String(summary.changedTags);
-    graphStaleModal.classList.remove("hidden");
-    graphStaleModal.setAttribute("aria-hidden", "false");
-    graphStaleUpdateButton?.focus({ preventScroll: true });
-  }
-
-  async function promptForStaleSavedGraphIfNeeded(tab, options = {}) {
-    const shouldPromptWhileKeepingSavedGraph = options.force === true;
-    if (!tab?.graphSnapshot || !folderMarkdownFiles.length || (!shouldPromptWhileKeepingSavedGraph && isKeepSavedGraphMode(tab))) return;
-    const graphDocumentType = tab.graphDocument?.documentType || inferLegacyGraphDocumentType(tab.graphSnapshot);
-    if (graphDocumentType !== GRAPH_DOCUMENT_TYPE_VIEW) return;
-
-    try {
-      const currentSnapshot = await createGraphSnapshot(folderMarkdownFiles.slice(), activeFolderName || tab.folderName || tab.title);
-      const comparison = compareGraphViewToCurrentFolder(tab.graphSnapshot, currentSnapshot);
-      if (hasGraphComparisonChanges(comparison)) {
-        showGraphStaleModal(tab, tab.graphSnapshot, currentSnapshot, comparison);
-      }
-    } catch (error) {
-      console.warn("Failed to compare saved graph with the current folder:", error);
-    }
-  }
-
-  function keepSavedGraphFromStaleModal() {
-    const staleComparison = activeGraphStaleComparison;
-    const tab = tabs.find((candidate) => candidate.id === staleComparison?.tabId) || getActiveGraphTab();
-    if (tab?.type === "graph") {
-      tab.keepSavedGraphMode = true;
-      tab.savedGraphComparisonDetails = staleComparison?.detailsModel || null;
-      delete tab.graphComparisonSnapshot;
-      delete tab.graphComparisonLayout;
-      saveTabsToStorage(tabs);
-      if (activeTabId === tab.id) {
-        updateSavedGraphModePill(tab);
-        showSavedGraphModeBanner(tab);
-      }
-    }
-    hideGraphStaleModal();
-  }
-
-  async function updateGraphFromStaleModal() {
-    const staleComparison = activeGraphStaleComparison;
-    if (!staleComparison?.currentSnapshot) return;
-    const tab = tabs.find((candidate) => candidate.id === staleComparison.tabId) || getActiveGraphTab();
-    if (!tab || tab.type !== "graph") return;
-
-    applyCurrentFolderSnapshotToSavedGraphTab(tab, staleComparison.currentSnapshot, {
-      savedSnapshot: staleComparison.savedSnapshot,
-      savedLayout: tab.graphLayout,
-      savedConfig: tab.graphViewConfig
-    });
-    delete tab.graphComparisonSnapshot;
-    delete tab.graphComparisonLayout;
-    delete tab.savedGraphComparisonDetails;
-    tab.keepSavedGraphMode = false;
-    markGraphTabAsChanged(tab);
-    saveTabsToStorage(tabs);
-    hideGraphStaleModal();
-    if (activeTabId === tab.id) {
-      graphRenderCache.delete(tab.id);
-      renderGraphView();
-      showGraphUpdatedBanner();
-    }
-  }
-
-  function loadGraphComparisonFromStaleModal() {
-    const staleComparison = activeGraphStaleComparison;
-    if (!staleComparison?.currentSnapshot || !staleComparison?.savedSnapshot) return;
-    const tab = tabs.find((candidate) => candidate.id === staleComparison.tabId) || getActiveGraphTab();
-    if (!tab || tab.type !== "graph") return;
-
-    tab.graphComparisonSnapshot = buildCompareGraphSnapshot(
-      staleComparison.savedSnapshot,
-      staleComparison.currentSnapshot,
-      staleComparison.comparison
-    );
-    tab.graphComparisonLayout = preserveGraphLayoutForCompareSnapshot(
-      tab.graphLayout,
-      staleComparison.savedSnapshot,
-      tab.graphComparisonSnapshot
-    );
-    tab.savedGraphComparisonDetails = staleComparison.detailsModel || buildGraphComparisonDetailsModel(
-      staleComparison.comparison,
-      staleComparison.savedSnapshot,
-      staleComparison.currentSnapshot
-    );
-    hideGraphStaleModal();
-    if (activeTabId === tab.id) {
-      graphRenderCache.delete(tab.id);
-      renderGraphView();
-    }
-  }
-
-  function shouldPreserveGraphSnapshotFullPath(snapshotFile) {
-    return !!(snapshotFile?.fullPath && isNeutralinoRuntime());
-  }
-
-  function stripGraphSnapshotContent(snapshot) {
-    const strippedSnapshot = cloneGraphPersistenceValue(snapshot || null);
-    if (!strippedSnapshot || typeof strippedSnapshot !== "object") return strippedSnapshot;
-
-    strippedSnapshot.nodes = Array.isArray(strippedSnapshot.nodes) ? cloneGraphPersistenceValue(strippedSnapshot.nodes) : [];
-    strippedSnapshot.links = Array.isArray(strippedSnapshot.links) ? cloneGraphPersistenceValue(strippedSnapshot.links) : [];
-    strippedSnapshot.files = (Array.isArray(strippedSnapshot.files) ? strippedSnapshot.files : [])
-      .map((snapshotFile) => {
-        const source = snapshotFile && typeof snapshotFile === "object" ? snapshotFile : {};
-        const strippedFile = {
-          id: source.id || normalizeGraphNodeName(source.path || source.fullPath || source.name || ""),
-          path: source.path || "",
-          name: source.name || getFileName(source.path || source.fullPath || "document.md"),
-          tags: normalizeFileTagList(source.tags || [])
-        };
-        if (shouldPreserveGraphSnapshotFullPath(source)) strippedFile.fullPath = source.fullPath;
-        return strippedFile;
-      });
-
-    return strippedSnapshot;
-  }
-
-  function serializeGraphViewDocument(tab) {
-    const graphDocument = serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_VIEW });
-    return normalizeGraphDocument({
-      ...graphDocument,
-      documentType: GRAPH_DOCUMENT_TYPE_VIEW,
-      snapshot: stripGraphSnapshotContent(graphDocument.snapshot)
-    });
-  }
-
-  function serializeGraphExportDocument(tab) {
-    return serializeGraphTab(tab, { documentType: GRAPH_DOCUMENT_TYPE_EXPORT });
-  }
-
-  function getExplicitGraphDocumentType(source) {
-    if (!source || typeof source !== "object") return "";
-    if (Object.prototype.hasOwnProperty.call(source, "documentType")) {
-      return typeof source.documentType === "string" ? source.documentType.trim() : "";
-    }
-
-    // Accept a document-level `type` alias for imported graph documents, but avoid
-    // treating persisted application tab types such as `graph` as graph document types.
-    const explicitTypeAlias = typeof source.type === "string" ? source.type.trim() : "";
-    return GRAPH_DOCUMENT_TYPES.has(explicitTypeAlias) ? explicitTypeAlias : "";
-  }
-
-  function inferLegacyGraphDocumentType(snapshot) {
-    // Legacy graph documents did not include a document type. Files with embedded
-    // snapshot file content are full exports; files without embedded content are
-    // view-only graph documents.
-    return graphSnapshotHasEmbeddedFileContent(snapshot) ? GRAPH_DOCUMENT_TYPE_EXPORT : GRAPH_DOCUMENT_TYPE_VIEW;
-  }
-
-  function normalizeGraphDocumentType(source, snapshot) {
-    const explicitDocumentType = getExplicitGraphDocumentType(source);
-    if (GRAPH_DOCUMENT_TYPES.has(explicitDocumentType)) return explicitDocumentType;
-
-    if (Object.prototype.hasOwnProperty.call(source, "documentType")) {
-      throw new Error(`Unsupported graph document type: ${String(source.documentType || "(empty)")}.`);
-    }
-
-    const typeAlias = typeof source.type === "string" ? source.type.trim() : "";
-    if (typeAlias && typeAlias !== "graph" && typeAlias !== "markdown" && looksLikeGraphDocument(source)) {
-      throw new Error(`Unsupported graph document type: ${typeAlias}.`);
-    }
-
-    return inferLegacyGraphDocumentType(snapshot);
-  }
-
-  function getGraphDocumentKind(source, snapshot) {
-    const explicitDocumentType = getExplicitGraphDocumentType(source);
-    if (GRAPH_DOCUMENT_TYPES.has(explicitDocumentType)) {
-      return { documentType: explicitDocumentType, isLegacy: false };
-    }
-
-    return { documentType: inferLegacyGraphDocumentType(snapshot), isLegacy: true };
-  }
-
-  function validateParsedGraphDocument(document) {
-    if (!document || typeof document !== "object" || Array.isArray(document)) {
-      throw new Error("The selected JSON file is not a valid graph document.");
-    }
-
-    if (Object.prototype.hasOwnProperty.call(document, "documentType")) {
-      const documentType = typeof document.documentType === "string" ? document.documentType.trim() : "";
-      if (!GRAPH_DOCUMENT_TYPES.has(documentType)) {
-        throw new Error(`Unsupported graph document type: ${String(document.documentType || "(empty)")}. Supported types are ${GRAPH_DOCUMENT_TYPE_EXPORT} and ${GRAPH_DOCUMENT_TYPE_VIEW}.`);
-      }
-    }
-
-    const typeAlias = typeof document.type === "string" ? document.type.trim() : "";
-    if (typeAlias && typeAlias !== "graph" && typeAlias !== "markdown" && !GRAPH_DOCUMENT_TYPES.has(typeAlias) && looksLikeGraphDocument(document)) {
-      throw new Error(`Unsupported graph document type: ${typeAlias}. Supported types are ${GRAPH_DOCUMENT_TYPE_EXPORT} and ${GRAPH_DOCUMENT_TYPE_VIEW}.`);
-    }
-
-    if (!looksLikeGraphDocument(document)) {
-      throw new Error("The selected JSON file is not a Markdown Viewer graph file.");
-    }
-  }
-
-  function normalizeGraphDocument(document) {
-    const source = document && typeof document === "object" ? document : {};
-    const snapshot = normalizeGraphSnapshot(source.snapshot || source.graphSnapshot || null);
-    const documentType = normalizeGraphDocumentType(source, snapshot);
-    const hasViewConfig = Object.prototype.hasOwnProperty.call(source, "viewConfig");
-    const viewConfig = normalizeGraphViewConfig(cloneGraphPersistenceValue(hasViewConfig ? source.viewConfig : (source.graphViewConfig || null)));
-    const layoutSource = source.graphLayout !== undefined ? source.graphLayout : (
-      source.graphLayoutData !== undefined ? source.graphLayoutData : (
-        source.layout !== undefined ? source.layout : source.layoutData
-      )
-    );
-    const createdAt = normalizeGraphTimestamp(source.createdAt || snapshot?.createdAt, Date.now());
-    const normalized = {
-      schemaVersion: source.schemaVersion || GRAPH_DOCUMENT_SCHEMA_VERSION,
-      documentType,
-      folderName: source.folderName || snapshot?.folderName || source.title || "Graph View",
-      createdAt,
-      updatedAt: normalizeGraphTimestamp(source.updatedAt, createdAt),
-      snapshot,
-      viewConfig
-    };
-
-    if (layoutSource !== undefined && layoutSource !== null) {
-      normalized.graphLayout = cloneGraphPersistenceValue(layoutSource);
-    }
-
-    return normalized;
-  }
-
-  function serializeGraphTab(tab, options) {
-    const existingDocument = tab?.graphDocument && typeof tab.graphDocument === "object" ? tab.graphDocument : {};
-    return normalizeGraphDocument({
-      ...existingDocument,
-      documentType: options?.documentType || existingDocument.documentType,
-      folderName: tab?.folderName || tab?.title || existingDocument.folderName || "Graph View",
-      createdAt: existingDocument.createdAt || tab?.createdAt,
-      updatedAt: Date.now(),
-      snapshot: tab?.graphSnapshot !== undefined ? tab.graphSnapshot : existingDocument.snapshot,
-      viewConfig: tab?.graphViewConfig !== undefined ? tab.graphViewConfig : existingDocument.viewConfig,
-      graphLayout: tab?.graphLayout !== undefined ? tab.graphLayout : (existingDocument.graphLayout !== undefined ? existingDocument.graphLayout : existingDocument.layout)
-    });
-  }
-
-  function deserializeGraphDocument(document) {
-    const normalizedDocument = normalizeGraphDocument(document);
-    const graphData = {
-      folderName: normalizedDocument.folderName,
-      graphSnapshot: normalizedDocument.snapshot,
-      graphViewConfig: normalizedDocument.viewConfig,
-      graphDocument: normalizedDocument
-    };
-
-    if (Object.prototype.hasOwnProperty.call(normalizedDocument, "graphLayout")) {
-      graphData.graphLayout = normalizedDocument.graphLayout;
-    }
-
-    return graphData;
-  }
-
-  function syncGraphTabDocument(tab) {
-    if (!tab || tab.type !== "graph") return tab;
-    const graphDocument = serializeGraphTab(tab);
-    tab.folderName = graphDocument.folderName;
-    tab.graphSnapshot = graphDocument.snapshot;
-    tab.graphViewConfig = graphDocument.viewConfig;
-    tab.graphDocument = graphDocument;
-    if (Object.prototype.hasOwnProperty.call(graphDocument, "graphLayout")) tab.graphLayout = graphDocument.graphLayout;
-    return tab;
-  }
-
-  function getActiveGraphTab() {
-    return tabs.find((tab) => tab.id === activeTabId && tab.type === "graph") || null;
-  }
-
-  function getSuggestedGraphFileName(tab) {
-    const rawName = (tab?.folderName || tab?.title || "graph-view").trim() || "graph-view";
-    const safeName = rawName.replace(/[\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() || "graph-view";
-    return /\.mdviewer-graph\.json$/i.test(safeName) ? safeName : `${safeName}.mdviewer-graph.json`;
-  }
-
-  function isFileBackedGraphTab(tab) {
-    return !!(tab && tab.type === "graph" && (tab.sourceFileHandle || tab.sourceFilePath || tab.sourceFileName));
-  }
-
-  function markGraphTabAsChanged(tab) {
-    if (!isFileBackedGraphTab(tab)) return;
-    tab.graphHasUnsavedChanges = true;
-    saveTabsToStorage(tabs);
-    renderTabBar(tabs, activeTabId);
-    updateSaveCurrentFileButtons();
-  }
-
-  function clearGraphTabUnsavedChanges(tab) {
-    if (!tab || tab.type !== "graph") return;
-    tab.graphHasUnsavedChanges = false;
-  }
-
-  function getGraphFileSignature(files) {
-    return (files || []).map((fileEntry) => {
-      const file = fileEntry.file || fileEntry;
-      return {
-        path: fileEntry.path || file?.webkitRelativePath || file?.name || "",
-        name: file?.name || "",
-        size: file?.size || 0,
-        lastModified: file?.lastModified || 0
-      };
-    });
-  }
-
-  function getGraphViewSignature(files, graphViewConfig) {
-    return JSON.stringify({
-      files: getGraphFileSignature(files),
-      config: graphViewConfig || null
-    });
-  }
-
-  async function createGraphSnapshot(files, folderName) {
-    const nodes = [];
-    const links = [];
-    const seenEdges = new Set();
-    const nodeIndex = new Map();
-    const snapshotFiles = [];
-
-    for (const fileEntry of (files || [])) {
-      const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
-      const name = getFileName(path || fileEntry.file?.name || "document.md");
-      const content = await readFolderMarkdownFileContent(fileEntry);
-      const fileContent = content || "";
-      const tags = getFileTagsFromContent(fileContent);
-      const id = normalizeGraphNodeName(path);
-      nodeIndex.set(id, path);
-      nodes.push({ id, label: getGraphDisplayLabel(path), fullPath: path, type: "file", status: "current", tags });
-      snapshotFiles.push({
-        id,
-        path,
-        name,
-        content: fileContent,
-        fullPath: fileEntry.fullPath || null,
-        status: "current",
-        tags
-      });
-    }
-
-    const tagIndex = new Map();
-
-    for (const snapshotFile of snapshotFiles) {
-      const source = snapshotFile.id;
-      (snapshotFile.tags || []).forEach((tag) => {
-        const normalizedTag = normalizeTagName(tag);
-        if (!normalizedTag) return;
-        const tagNodeId = `tag:${normalizedTag}`;
-        if (!tagIndex.has(tagNodeId)) {
-          tagIndex.set(tagNodeId, normalizedTag);
-          nodes.push({
-            id: tagNodeId,
-            label: `#${normalizedTag}`,
-            type: "tag",
-            status: "current",
-            tag: normalizedTag
-          });
-        }
-        const edgeKey = `${source}->${tagNodeId}:tag`;
-        if (seenEdges.has(edgeKey)) return;
-        seenEdges.add(edgeKey);
-        links.push({ source, target: tagNodeId, type: "tag", status: "current" });
-      });
-    }
-
-    for (const snapshotFile of snapshotFiles) {
-      const source = snapshotFile.id;
-      extractMarkdownLinks(snapshotFile.content).forEach((ref) => {
-        const target = resolveGraphTargetId(ref, snapshotFile.path, nodeIndex);
-        if (!target || target === source) return;
-        const edgeKey = `${source}->${target}:link`;
-        if (seenEdges.has(edgeKey)) return;
-        seenEdges.add(edgeKey);
-        links.push({ source, target, type: "link", status: "current" });
-      });
-    }
-
-    return {
-      version: 1,
-      folderName: folderName || "Graph View",
-      createdAt: Date.now(),
-      nodes,
-      links,
-      files: snapshotFiles
-    };
-  }
-
-  function getGraphSnapshotSignature(snapshot, graphViewConfig) {
-    return JSON.stringify({
-      snapshot: {
-        version: snapshot?.version || 0,
-        folderName: snapshot?.folderName || "",
-        createdAt: snapshot?.createdAt || 0,
-        nodes: (snapshot?.nodes || []).map((node) => `${node.id}:${node.status || "current"}`),
-        links: (snapshot?.links || []).map((link) => `${link.source}->${link.target}:${link.type || "link"}:${link.status || "current"}`)
-      },
-      config: graphViewConfig || null
-    });
-  }
-
-  function toFiniteNumber(value) {
-    const numberValue = Number(value);
-    return Number.isFinite(numberValue) ? numberValue : null;
-  }
-
-  function formatGraphZoomPercent(zoomScale) {
-    const scale = Number.isFinite(Number(zoomScale)) && Number(zoomScale) > 0 ? Number(zoomScale) : 1;
-    return `${Math.round(scale * 100)}%`;
-  }
-
-  function getGraphZoomScaleFromLayout(graphLayout) {
-    return getSavedGraphZoomTransform(graphLayout)?.k || 1;
-  }
-
-  function getSavedGraphNodeLayout(graphLayout, nodeId) {
-    if (!graphLayout || !nodeId) return null;
-    if (graphLayout.nodes && typeof graphLayout.nodes === "object") return graphLayout.nodes[nodeId] || null;
-    if (Array.isArray(graphLayout.nodePositions)) {
-      return graphLayout.nodePositions.find((entry) => entry && entry.id === nodeId) || null;
-    }
-    return null;
-  }
-
-  function applySavedGraphLayout(nodes, graphLayout) {
-    (nodes || []).forEach((node) => {
-      const savedNode = getSavedGraphNodeLayout(graphLayout, node.id);
-      if (!savedNode) return;
-      const x = toFiniteNumber(savedNode.x);
-      const y = toFiniteNumber(savedNode.y);
-      const fx = toFiniteNumber(savedNode.fx);
-      const fy = toFiniteNumber(savedNode.fy);
-      if (x !== null) node.x = x;
-      if (y !== null) node.y = y;
-      if (fx !== null) node.fx = fx;
-      if (fy !== null) node.fy = fy;
-    });
-  }
-
-  function getSavedGraphZoomTransform(graphLayout) {
-    const zoom = graphLayout?.zoom || graphLayout?.transform || null;
-    if (!zoom) return null;
-    const x = toFiniteNumber(zoom.x);
-    const y = toFiniteNumber(zoom.y);
-    const k = toFiniteNumber(zoom.k ?? zoom.scale);
-    if (x === null || y === null || k === null || k <= 0) return null;
-    return { x, y, k };
-  }
-
-  function captureGraphLayout(tab, nodes, zoomTransform, options) {
-    if (!tab || tab.type !== "graph") return null;
-    const storePinnedPositions = !!options?.storePinnedPositions;
-    const isCompareMode = !!tab.graphComparisonSnapshot;
-    const layoutSource = isCompareMode ? (tab.graphComparisonLayout || tab.graphLayout) : tab.graphLayout;
-    const existingLayout = layoutSource && typeof layoutSource === "object" ? layoutSource : {};
-    const existingNodes = existingLayout.nodes && typeof existingLayout.nodes === "object" ? existingLayout.nodes : {};
-    const nextNodes = { ...existingNodes };
-
-    (nodes || []).forEach((node) => {
-      if (!node?.id) return;
-      const x = toFiniteNumber(node.x);
-      const y = toFiniteNumber(node.y);
-      const fx = toFiniteNumber(node.fx);
-      const fy = toFiniteNumber(node.fy);
-      const entry = {};
-      if (x !== null) entry.x = x;
-      if (y !== null) entry.y = y;
-      if (storePinnedPositions && fx !== null) entry.fx = fx;
-      if (storePinnedPositions && fy !== null) entry.fy = fy;
-      if (Object.keys(entry).length) nextNodes[node.id] = entry;
-    });
-
-    const zoom = zoomTransform ? { x: zoomTransform.x, y: zoomTransform.y, k: zoomTransform.k } : getSavedGraphZoomTransform(existingLayout);
-    const nextLayout = {
-      ...existingLayout,
-      magneticEnabled: graphSettings.magneticEnabled,
-      nodes: nextNodes,
-      updatedAt: Date.now()
-    };
-    if (zoom) nextLayout.zoom = zoom;
-
-    if (isCompareMode) {
-      tab.graphComparisonLayout = nextLayout;
-      return nextLayout;
-    }
-
-    tab.graphLayout = nextLayout;
-    if (tab.graphDocument && typeof tab.graphDocument === "object") {
-      tab.graphDocument.graphLayout = nextLayout;
-      tab.graphDocument.updatedAt = Date.now();
-    }
-    return nextLayout;
-  }
-
-  function getGraphRenderWrappersForTab(tabId) {
-    if (!graphViewCanvas || !tabId) return [];
-    return Array.from(graphViewCanvas.querySelectorAll(".graph-tab-render"))
-      .filter((wrapper) => wrapper.dataset.graphTabId === String(tabId));
-  }
-
-  function removeGraphRenderForTab(tabId) {
-    if (!tabId) return;
-    const entry = graphRenderCache.get(tabId);
-    if (entry?.simulation) entry.simulation.stop();
-    if (entry?.wrapper) entry.wrapper.remove();
-    graphRenderCache.delete(tabId);
-    getGraphRenderWrappersForTab(tabId).forEach((wrapper) => wrapper.remove());
-  }
-
-  function hideInactiveGraphRenders(activeGraphTabId) {
-    graphRenderCache.forEach((entry, tabId) => {
-      if (!entry || !entry.wrapper) return;
-      entry.wrapper.classList.toggle("hidden", tabId !== activeGraphTabId);
-    });
-  }
-
-  function suspendGraphRender(tabId) {
-    const entry = graphRenderCache.get(tabId);
-    if (entry && entry.simulation) entry.simulation.stop();
-  }
-
-  function suspendActiveGraphRender() {
-    const activeTab = tabs.find((tab) => tab.id === activeTabId);
-    if (activeTab && activeTab.type === "graph") suspendGraphRender(activeTab.id);
-  }
-
-  function loadTabsFromStorage() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  function saveTabsToStorage(tabsArr) {
-    try {
-      (tabsArr || []).forEach((tab) => syncGraphTabDocument(tab));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tabsArr));
-    } catch (e) {
-      console.warn('Failed to save tabs to localStorage:', e);
-    }
-  }
-
-  function scheduleGraphLayoutStorageSave() {
-    clearTimeout(graphLayoutSaveTimeout);
-    graphLayoutSaveTimeout = setTimeout(() => {
-      graphLayoutSaveTimeout = null;
-      saveTabsToStorage(tabs);
-    }, 750);
-  }
-
-  function loadActiveTabId() {
-    return localStorage.getItem(ACTIVE_TAB_KEY);
-  }
-
-  function saveActiveTabId(id) {
-    if (id) localStorage.setItem(ACTIVE_TAB_KEY, id);
-    else localStorage.removeItem(ACTIVE_TAB_KEY);
-  }
 
   function loadUntitledCounter() {
     return parseInt(localStorage.getItem(UNTITLED_COUNTER_KEY) || '0', 10);
@@ -3395,1268 +1842,138 @@ Markdown content is processed client-side in your browser and sanitized before p
   const normalizeEditorContent = unsavedChanges.normalizeEditorContent;
   const tabHasUnsavedChanges = unsavedChanges.tabHasUnsavedChanges;
 
-  function nextUntitledTitle() {
-    untitledCounter += 1;
-    saveUntitledCounter(untitledCounter);
-    return 'Untitled ' + untitledCounter;
-  }
-
-  function createTab(content, title, viewMode) {
-    if (content === undefined) content = '';
-    content = normalizeEditorContent(content);
-    if (title === undefined) title = null;
-    if (viewMode === undefined) viewMode = loadGlobalState().viewMode || 'split';
-    return {
-      id: 'tab_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
-      title: title || 'Untitled',
-      content: content,
-      scrollPos: 0,
-      viewMode: viewMode,
-      createdAt: Date.now(),
-      isTemporary: false,
-      sourceFileName: null,
-      sourceFileHandle: null,
-      sourceFilePath: null,
-      savedContent: content,
-      type: "markdown",
-      folderName: null,
-      isUnsupportedFile: false
-    };
-  }
-
-  function createGraphTab(folderName, options) {
-    if (options === undefined) options = {};
-    const graphDocument = normalizeGraphDocument({
-      ...(options.graphDocument || {}),
-      folderName: folderName || options.folderName || "Graph View",
-      snapshot: options.graphSnapshot !== undefined ? options.graphSnapshot : options.graphDocument?.snapshot,
-      viewConfig: options.graphViewConfig !== undefined ? options.graphViewConfig : options.graphDocument?.viewConfig,
-      graphLayout: options.graphLayout !== undefined ? options.graphLayout : (options.graphDocument?.graphLayout !== undefined ? options.graphDocument.graphLayout : options.graphDocument?.layout)
-    });
-    const graphData = deserializeGraphDocument(graphDocument);
-    const tab = createTab("", graphData.folderName, "preview");
-    tab.type = "graph";
-    tab.folderName = graphData.folderName;
-    tab.graphViewConfig = graphData.graphViewConfig;
-    tab.graphSnapshot = graphData.graphSnapshot;
-    tab.graphDocument = graphData.graphDocument;
-    if (options.graphScopeKey) tab.graphScopeKey = options.graphScopeKey;
-    if (Object.prototype.hasOwnProperty.call(graphData, "graphLayout")) tab.graphLayout = graphData.graphLayout;
-    return tab;
-  }
-
-  function normalizeGraphScopePath(value) {
-    return String(value || "")
-      .replace(/\\/g, "/")
-      .replace(/\/+/g, "/")
-      .replace(/\/+$|^\s+|\s+$/g, "")
-      .toLowerCase();
-  }
-
-  function createFolderGraphScopeKey(scope, value) {
-    const normalizedPath = normalizeGraphScopePath(value);
-    return normalizedPath ? `${scope}:${normalizedPath}` : "";
-  }
-
-  function getRootFolderGraphScopeKey() {
-    return createFolderGraphScopeKey("root-folder", activeFolderPath || activeFolderName || "Graph View");
-  }
-
-  function findExistingFolderGraphTab(scopeKey, fallbackTitle) {
-    if (!scopeKey && !fallbackTitle) return null;
-    return tabs.find((tab) => {
-      if (!tab || tab.type !== "graph" || isFileBackedGraphTab(tab)) return false;
-      if (scopeKey && tab.graphScopeKey === scopeKey) return true;
-      return !!(fallbackTitle && !tab.graphScopeKey && getGraphTabTitle(tab) === fallbackTitle);
-    }) || null;
-  }
-
-  function focusExistingFolderGraphTab(scopeKey, fallbackTitle) {
-    const existingGraphTab = findExistingFolderGraphTab(scopeKey, fallbackTitle);
-    if (!existingGraphTab) return false;
-    switchTab(existingGraphTab.id);
-    saveActiveTabId(existingGraphTab.id);
-    return true;
-  }
-
-  function getGraphTitleFromFileName(fileName) {
-    return (fileName || "Saved Graph")
-      .replace(/\.mdviewer-graph\.json$/i, "")
-      .replace(/\.mdgraph\.json$/i, "")
-      .replace(/\.json$/i, "");
-  }
-
-  function getGraphTabTitle(tab) {
-    if (!tab || tab.type !== "graph") return tab?.title || 'Untitled';
-    if (tab.sourceFileName) return getGraphTitleFromFileName(tab.sourceFileName) || "Saved Graph";
-    if (tab.sourceFilePath) return getGraphTitleFromFileName(getFileName(tab.sourceFilePath)) || "Saved Graph";
-    return tab.title || tab.folderName || "Graph View";
-  }
-
-  function getTabDisplayName(tab) {
-    const baseName = tab && tab.type === "graph" ? getGraphTabTitle(tab) : (tab.title || 'Untitled');
-    return tabHasUnsavedChanges(tab) ? baseName + ' *' : baseName;
-  }
-
-  function getTabTooltipText(tab) {
-    if (!tab) return 'Untitled';
-    return tab.sourceFilePath || tab.sourceFileName || tab.title || tab.folderName || 'Untitled';
-  }
-
-  function updateTabScrollControls() {
-    const tabList = document.getElementById('tab-list');
-    const scrollLeftBtn = document.getElementById('tab-scroll-left');
-    const scrollRightBtn = document.getElementById('tab-scroll-right');
-    if (!tabList || !scrollLeftBtn || !scrollRightBtn) return;
-
-    const hasOverflow = tabList.scrollWidth > tabList.clientWidth + 1;
-    scrollLeftBtn.classList.toggle('visible', hasOverflow);
-    scrollRightBtn.classList.toggle('visible', hasOverflow);
-
-    const maxScrollLeft = Math.max(0, tabList.scrollWidth - tabList.clientWidth);
-    scrollLeftBtn.disabled = !hasOverflow || tabList.scrollLeft <= 1;
-    scrollRightBtn.disabled = !hasOverflow || tabList.scrollLeft >= maxScrollLeft - 1;
-  }
-
-  function scrollTabsBy(delta) {
-    const tabList = document.getElementById('tab-list');
-    if (!tabList) return;
-
-    tabList.scrollBy({ left: delta, behavior: 'smooth' });
-    window.setTimeout(updateTabScrollControls, 180);
-  }
-
-  function setupTabScrolling() {
-    const tabList = document.getElementById('tab-list');
-    const scrollLeftBtn = document.getElementById('tab-scroll-left');
-    const scrollRightBtn = document.getElementById('tab-scroll-right');
-    if (!tabList || !scrollLeftBtn || !scrollRightBtn) return;
-
-    const getScrollAmount = function() {
-      return Math.max(160, Math.floor(tabList.clientWidth * 0.75));
-    };
-
-    scrollLeftBtn.addEventListener('click', function() {
-      scrollTabsBy(-getScrollAmount());
-    });
-
-    scrollRightBtn.addEventListener('click', function() {
-      scrollTabsBy(getScrollAmount());
-    });
-
-    tabList.addEventListener('wheel', function(e) {
-      if (tabList.scrollWidth <= tabList.clientWidth) return;
-
-      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      if (delta === 0) return;
-
-      e.preventDefault();
-      tabList.scrollLeft += delta;
-      updateTabScrollControls();
-    }, { passive: false });
-
-    tabList.addEventListener('scroll', updateTabScrollControls);
-    window.addEventListener('resize', updateTabScrollControls);
-    updateTabScrollControls();
-  }
-
-  setupTabScrolling();
-
-  function renderTabBar(tabsArr, currentActiveTabId) {
-    const tabList = document.getElementById('tab-list');
-    if (!tabList) return;
-    tabList.innerHTML = '';
-    tabsArr.forEach(function(tab) {
-      const item = document.createElement('div');
-      item.className = 'tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tabHasUnsavedChanges(tab) ? ' unsaved' : '');
-      item.setAttribute('data-tab-id', tab.id);
-      item.setAttribute('role', 'tab');
-      item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
-      item.setAttribute('draggable', 'true');
-
-      const displayName = getTabDisplayName(tab);
-      const tooltipText = getTabTooltipText(tab);
-      item.title = tooltipText;
-      item.setAttribute('aria-label', tooltipText);
-
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'tab-title' + (tab.isTemporary ? ' temporary' : '');
-      titleSpan.title = tooltipText;
-      if (tab.type === "graph") {
-        const graphIcon = document.createElement("i");
-        graphIcon.className = "bi bi-diagram-3 me-1";
-        titleSpan.appendChild(graphIcon);
-        titleSpan.append(document.createTextNode(displayName));
-      } else {
-        const tabIcon = document.createElement("i");
-        tabIcon.className = `bi ${getFileIconClass(tab.sourceFileName || tab.sourceFilePath || tab.title)} me-1`;
-        titleSpan.appendChild(tabIcon);
-        titleSpan.append(document.createTextNode(displayName));
-      }
-
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'tab-close-btn';
-      closeBtn.setAttribute('aria-label', 'Close tab');
-      closeBtn.title = 'Close tab';
-      closeBtn.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
-      closeBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        closeTab(tab.id, { promptForUnsaved: true });
-      });
-
-      item.appendChild(titleSpan);
-      item.appendChild(closeBtn);
-
-      item.addEventListener('click', function() {
-        switchTab(tab.id);
-      });
-
-      item.addEventListener('contextmenu', function(e) {
-        showTabContextMenu(e, tab);
-      });
-
-      item.addEventListener('dblclick', function() {
-        pinTemporaryTab(tab.id);
-      });
-
-      item.addEventListener('dragstart', function() {
-        draggedTabId = tab.id;
-        setTimeout(function() { item.classList.add('dragging'); }, 0);
-      });
-
-      item.addEventListener('dragend', function() {
-        item.classList.remove('dragging');
-        draggedTabId = null;
-      });
-
-      item.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        item.classList.add('drag-over');
-      });
-
-      item.addEventListener('dragleave', function() {
-        item.classList.remove('drag-over');
-      });
-
-      item.addEventListener('drop', function(e) {
-        e.preventDefault();
-        item.classList.remove('drag-over');
-        if (!draggedTabId || draggedTabId === tab.id) return;
-        const fromIdx = tabs.findIndex(function(t) { return t.id === draggedTabId; });
-        const toIdx = tabs.findIndex(function(t) { return t.id === tab.id; });
-        if (fromIdx === -1 || toIdx === -1) return;
-        const moved = tabs.splice(fromIdx, 1)[0];
-        tabs.splice(toIdx, 0, moved);
-        saveTabsToStorage(tabs);
-        renderTabBar(tabs, activeTabId);
-      });
-
-      tabList.appendChild(item);
-    });
-
-    // "+ Create" button at end of tab list
-    const newBtn = document.createElement('button');
-    newBtn.className = 'tab-new-btn';
-    newBtn.title = 'New Tab (Ctrl+T)';
-    newBtn.setAttribute('aria-label', 'Open new tab');
-    newBtn.innerHTML = '<i class="bi bi-plus-lg"></i>';
-    newBtn.addEventListener('click', function() { newTab(); });
-    tabList.appendChild(newBtn);
-
-    // Auto-scroll active tab into view
-    const activeItem = tabList.querySelector('.tab-item.active');
-    if (activeItem) {
-      activeItem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }
-
-    updateTabScrollControls();
-    requestAnimationFrame(updateTabScrollControls);
-
-    renderMobileTabList(tabsArr, currentActiveTabId);
-    updateSaveCurrentFileButtons();
-  }
-
-  function renderMobileTabList(tabsArr, currentActiveTabId) {
-    const mobileTabList = document.getElementById('mobile-tab-list');
-    if (!mobileTabList) return;
-    mobileTabList.innerHTML = '';
-    tabsArr.forEach(function(tab) {
-      const item = document.createElement('div');
-      item.className = 'mobile-tab-item' + (tab.id === currentActiveTabId ? ' active' : '') + (tabHasUnsavedChanges(tab) ? ' unsaved' : '');
-      item.setAttribute('role', 'tab');
-      item.setAttribute('aria-selected', tab.id === currentActiveTabId ? 'true' : 'false');
-      item.setAttribute('data-tab-id', tab.id);
-
-      const displayName = getTabDisplayName(tab);
-      const tooltipText = getTabTooltipText(tab);
-      item.title = tooltipText;
-      item.setAttribute('aria-label', tooltipText);
-
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'mobile-tab-title' + (tab.isTemporary ? ' temporary' : '');
-      titleSpan.title = tooltipText;
-      if (tab.type === "graph") {
-        const graphIcon = document.createElement("i");
-        graphIcon.className = "bi bi-diagram-3 me-1";
-        titleSpan.appendChild(graphIcon);
-        titleSpan.append(document.createTextNode(displayName));
-      } else {
-        titleSpan.textContent = displayName;
-      }
-
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'tab-close-btn';
-      closeBtn.setAttribute('aria-label', 'Close tab');
-      closeBtn.title = 'Close tab';
-      closeBtn.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
-      closeBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        closeTab(tab.id, { promptForUnsaved: true });
-        closeMobileMenu();
-      });
-
-      item.appendChild(titleSpan);
-      item.appendChild(closeBtn);
-
-      item.addEventListener('click', function() {
-        switchTab(tab.id);
-        closeMobileMenu();
-      });
-
-      item.addEventListener('contextmenu', function(e) {
-        showTabContextMenu(e, tab, { closeMobileMenuOnAction: true });
-      });
-
-      mobileTabList.appendChild(item);
-    });
-  }
-
-  let tabContextMenu = null;
-  let tabContextTargetId = null;
-  let tabContextCloseMobileMenuOnAction = false;
-
-  function ensureTabContextMenu() {
-    if (tabContextMenu) return tabContextMenu;
-
-    tabContextMenu = document.createElement('div');
-    tabContextMenu.className = 'graph-context-menu tab-context-menu hidden';
-    tabContextMenu.setAttribute('role', 'menu');
-    tabContextMenu.innerHTML =
-      '<button class="graph-context-menu-item tab-context-menu-action" type="button" role="menuitem" data-action="rename"><i class="bi bi-pencil" aria-hidden="true"></i><span class="graph-context-menu-item-label">Rename</span></button>' +
-      '<button class="graph-context-menu-item tab-context-menu-action" type="button" role="menuitem" data-action="duplicate"><i class="bi bi-files" aria-hidden="true"></i><span class="graph-context-menu-item-label">Duplicate</span></button>' +
-      '<div class="graph-context-menu-separator" aria-hidden="true"></div>' +
-      '<button class="graph-context-menu-item graph-context-menu-item-danger tab-context-menu-action" type="button" role="menuitem" data-action="close"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="graph-context-menu-item-label">Close</span></button>' +
-      '<button class="graph-context-menu-item graph-context-menu-item-danger tab-context-menu-action" type="button" role="menuitem" data-action="close-others"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="graph-context-menu-item-label">Close others</span></button>' +
-      '<button class="graph-context-menu-item graph-context-menu-item-danger tab-context-menu-action" type="button" role="menuitem" data-action="close-all"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="graph-context-menu-item-label">Close all</span></button>';
-
-    tabContextMenu.addEventListener('click', function(e) {
-      e.stopPropagation();
-      const actionBtn = e.target.closest('.tab-context-menu-action');
-      if (!actionBtn || !tabContextTargetId) return;
-      if (actionBtn.disabled) return;
-      const action = actionBtn.getAttribute('data-action');
-      const targetTab = tabs.find(function(tab) { return tab.id === tabContextTargetId; });
-      const shouldCloseMobileMenu = tabContextCloseMobileMenuOnAction;
-      hideTabContextMenu();
-      if (!targetTab) return;
-      if (action === 'rename') renameTab(targetTab.id);
-      else if (action === 'duplicate') duplicateTab(targetTab.id);
-      else if (action === 'close') closeTab(targetTab.id, { promptForUnsaved: true });
-      else if (action === 'close-others') closeOtherTabs(targetTab.id);
-      else if (action === 'close-all') closeAllTabs();
-      if (shouldCloseMobileMenu) closeMobileMenu();
-    });
-
-    document.body.appendChild(tabContextMenu);
-    return tabContextMenu;
-  }
-
-  function positionTabContextMenu(menu, event) {
-    const margin = 8;
-    menu.style.left = '0px';
-    menu.style.top = '0px';
-    const rect = menu.getBoundingClientRect();
-    const left = Math.min(
-      Math.max(margin, event.clientX),
-      Math.max(margin, window.innerWidth - rect.width - margin)
-    );
-    const top = Math.min(
-      Math.max(margin, event.clientY),
-      Math.max(margin, window.innerHeight - rect.height - margin)
-    );
-    menu.style.left = left + 'px';
-    menu.style.top = top + 'px';
-  }
-
-  function setTabContextMenuActionEnabled(menu, action, enabled) {
-    const button = menu.querySelector('[data-action="' + action + '"]');
-    if (!button) return;
-    button.disabled = !enabled;
-    button.setAttribute('aria-disabled', enabled ? 'false' : 'true');
-    button.classList.toggle('disabled', !enabled);
-  }
-
-  function updateTabContextMenuActionStates(menu, tab) {
-    const hasTargetTab = !!tab && tabs.some(function(openTab) { return openTab.id === tab.id; });
-    setTabContextMenuActionEnabled(menu, 'close', hasTargetTab);
-    setTabContextMenuActionEnabled(menu, 'close-others', hasTargetTab && tabs.length > 1);
-    setTabContextMenuActionEnabled(menu, 'close-all', tabs.length > 0);
-  }
-
-  function showTabContextMenu(event, tab, options) {
-    if (!tab) return;
-    event.preventDefault();
-    event.stopPropagation();
-    hideSidebarContextMenus();
-    hideTabContextMenu();
-
-    tabContextTargetId = tab.id;
-    tabContextCloseMobileMenuOnAction = !!(options && options.closeMobileMenuOnAction);
-    const menu = ensureTabContextMenu();
-    const isGraphTab = tab.type === 'graph';
-    menu.querySelectorAll('[data-action="rename"], [data-action="duplicate"]').forEach(function(button) {
-      button.classList.toggle('hidden', isGraphTab);
-    });
-    const separator = menu.querySelector('.graph-context-menu-separator');
-    if (separator) separator.classList.toggle('hidden', isGraphTab);
-    updateTabContextMenuActionStates(menu, tab);
-    menu.classList.remove('hidden');
-    positionTabContextMenu(menu, event);
-  }
-
-  function hideTabContextMenu() {
-    if (tabContextMenu) tabContextMenu.classList.add('hidden');
-    tabContextTargetId = null;
-    tabContextCloseMobileMenuOnAction = false;
-  }
-
-  // Close any open tab context menu when clicking elsewhere in the document
-  document.addEventListener('click', function() {
-    hideTabContextMenu();
+  const tabsModule = window.registerMarkdownViewerTabs(app, {
+    sampleMarkdown,
+    unsavedChanges,
+    get activeTabId() { return activeTabId; },
+    set activeTabId(value) { activeTabId = value; },
+    get tabs() { return tabs; },
+    set tabs(value) { tabs = value; },
+    get untitledCounter() { return untitledCounter; },
+    set untitledCounter(value) { untitledCounter = value; },
+    get tabContextMenu() { return tabContextMenu; },
+    set tabContextMenu(value) { tabContextMenu = value; },
+    get tabContextTargetId() { return tabContextTargetId; },
+    set tabContextTargetId(value) { tabContextTargetId = value; },
+    get tabContextCloseMobileMenuOnAction() { return tabContextCloseMobileMenuOnAction; },
+    set tabContextCloseMobileMenuOnAction(value) { tabContextCloseMobileMenuOnAction = value; },
+    get activeFolderName() { return activeFolderName; },
+    get activeFolderPath() { return activeFolderPath; },
+    get folderMarkdownFiles() { return folderMarkdownFiles; },
+    get markdownEditor() { return markdownEditor; },
+    get graphRenderCache() { return graphRenderCache; },
+    get graphViewCanvas() { return graphViewCanvas; },
+    normalizeEditorContent,
+    normalizeGraphDocument,
+    deserializeGraphDocument,
+    serializeGraphTab,
+    getFileIconClass,
+    tabHasUnsavedChanges,
+    isFileBackedGraphTab,
+    saveTabsToStorage,
+    loadTabsFromStorage,
+    saveActiveTabId,
+    loadActiveTabId,
+    loadUntitledCounter,
+    saveUntitledCounter,
+    setViewMode,
+    loadGlobalState,
+    saveGlobalState,
+    setGraphViewMode,
+    get renderGraphView() { return renderGraphView; },
+    renderMarkdown,
+    renderEditorSyntaxHighlights,
+    updateEditorLineNumbers,
+    syncEditorSyntaxHighlightScroll,
+    syncFolderTreeSelectionToActiveTab,
+    hideSidebarContextMenus,
+    suspendActiveGraphRender,
+    removeGraphRenderForTab,
+    updateGraphTagToolbar,
+    getActiveGraphTab,
+    get updateStatusLine() { return updateStatusLine; },
+    saveActiveTabToSource,
+    saveActiveTabWithSaveDialog,
+    openDocumentSourceFile,
+    getMarkdownTitleFromFileName,
+    getFileName,
+    joinPath,
+    isNeutralinoRuntime,
+    isMarkdownPath,
+    isTextDocumentPath,
+    isSupportedFolderTreeDocumentPath,
+    get closeMobileMenu() { return closeMobileMenu; },
+    readFolderMarkdownFileContent,
+    getGraphFileEntryNodeId,
+    promptForStaleSavedGraphIfNeeded,
+    clearGraphTabUnsavedChanges
   });
-
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') hideTabContextMenu();
-  });
-
-  window.addEventListener('blur', hideTabContextMenu);
-
-  function saveCurrentTabState() {
-    const tab = tabs.find(function(t) { return t.id === activeTabId; });
-    if (!tab) return;
-    if (tab.type === "graph") return;
-    tab.content = markdownEditor.value;
-    tab.scrollPos = markdownEditor.scrollTop;
-    tab.viewMode = isUnsupportedFileTab(tab) ? 'editor' : (currentViewMode || 'split');
-    saveTabsToStorage(tabs);
-  }
-
-  function getActiveMarkdownTab() {
-    const tab = tabs.find(function(t) { return t.id === activeTabId; });
-    if (!tab || tab.type === "graph") return null;
-    return tab;
-  }
-
-  function activeTabHasUnsavedChanges() {
-    const tab = getActiveMarkdownTab();
-    return tabHasUnsavedChanges(tab, markdownEditor.value);
-  }
-
-  function getUnsavedTabs() {
-    return tabs.filter(function(tab) {
-      if (!tab) return false;
-      if (tab.type === "graph") return tabHasUnsavedChanges(tab);
-      const currentContent = tab.id === activeTabId ? markdownEditor.value : tab.content;
-      return tabHasUnsavedChanges(tab, currentContent);
-    });
-  }
-
-  const confirmDiscardUnsavedChangesBeforeExit = unsavedChanges.bindWindowExitGuards({
-    getUnsavedTabs
-  });
-
-  function updateSaveCurrentFileButtons() {
-    const graphTab = getActiveGraphTab();
-    const tab = getActiveMarkdownTab();
-    const hasUnsavedChanges = activeTabHasUnsavedChanges();
-    const graphHasUnsavedChanges = tabHasUnsavedChanges(graphTab);
-    const graphNeedsSave = !!(graphTab && (!isFileBackedGraphTab(graphTab) || graphHasUnsavedChanges));
-    const hasWritableSource = !!(tab && (tab.sourceFileHandle || (isNeutralinoRuntime() && tab.sourceFilePath)));
-    const title = graphTab
-      ? "Save layout, groups, filters, hidden points, tags, and connections. File contents are not included."
-      : (hasUnsavedChanges
-        ? (hasWritableSource ? "Save changes to current file" : "Save changes as Markdown")
-        : "No changes to save");
-    const label = graphTab ? "Save Graph View" : "Save Changes";
-
-    document.querySelectorAll(".save-current-file-button").forEach(function(button) {
-      button.disabled = graphTab ? !graphNeedsSave : !hasUnsavedChanges;
-      button.title = graphTab && !graphNeedsSave ? "No graph changes to save" : title;
-      button.setAttribute("aria-label", title);
-      const icon = button.querySelector("i");
-      button.textContent = "";
-      if (icon) button.append(icon, document.createTextNode(` ${label}`));
-      else button.textContent = label;
-    });
-
-    const unsavedCount = getUnsavedTabs().length;
-    const saveAllTitle = unsavedCount
-      ? `Save all unsaved changes in ${unsavedCount} tab${unsavedCount === 1 ? "" : "s"}`
-      : "No changes to save";
-    document.querySelectorAll(".save-all-files-button").forEach(function(button) {
-      button.disabled = unsavedCount === 0;
-      button.title = saveAllTitle;
-      button.setAttribute("aria-label", saveAllTitle);
-    });
-  }
-
-  async function saveChangedTab(tab) {
-    if (!tab) return false;
-    if (tab.type === "graph") {
-      if (!tabHasUnsavedChanges(tab)) return true;
-      return (await saveGraphTabToSource(tab)) || (await saveGraphTabWithSaveDialog(tab));
-    }
-
-    const content = getMarkdownTabContentForSave(tab);
-    if (!tabHasUnsavedChanges(tab, content)) return true;
-    return (await saveMarkdownTabToSource(tab)) || (await saveMarkdownTabWithSaveDialog(tab));
-  }
-
-  async function saveAllChangedTabs() {
-    saveCurrentTabState();
-    const changedTabs = getUnsavedTabs();
-    if (!changedTabs.length) {
-      updateSaveCurrentFileButtons();
-      return;
-    }
-
-    const failedTabs = [];
-    let wasCanceled = false;
-
-    for (const tab of changedTabs) {
-      try {
-        const saved = await saveChangedTab(tab);
-        if (!saved) {
-          wasCanceled = true;
-          break;
-        }
-      } catch (error) {
-        if (error && error.name === "AbortError") {
-          wasCanceled = true;
-          break;
-        }
-        console.error("Failed to save changed tab:", error);
-        failedTabs.push(getTabDisplayName(tab));
-      }
-    }
-
-    saveTabsToStorage(tabs);
-    renderTabBar(tabs, activeTabId);
-    updateSaveCurrentFileButtons();
-
-    if (failedTabs.length) {
-      alert("Unable to save: " + failedTabs.join(", "));
-    } else if (wasCanceled && getUnsavedTabs().length) {
-      console.info("Save All canceled before all changed tabs were saved.");
-    }
-  }
-
-  async function saveCurrentFileIfChanged() {
-    const activeGraphTab = getActiveGraphTab();
-    if (activeGraphTab) {
-      if (isFileBackedGraphTab(activeGraphTab) && !tabHasUnsavedChanges(activeGraphTab)) {
-        updateSaveCurrentFileButtons();
-        return;
-      }
-      if (!(await saveActiveGraphToSource())) {
-        await saveActiveGraphWithSaveDialog();
-      }
-      updateSaveCurrentFileButtons();
-      return;
-    }
-
-    if (!activeTabHasUnsavedChanges()) {
-      updateSaveCurrentFileButtons();
-      return;
-    }
-
-    exportMd.click();
-  }
-
-  function restoreViewMode(mode) {
-    currentViewMode = null;
-    setViewMode(getAllowedViewModeForActiveTab(mode || loadGlobalState().viewMode || 'split'), false);
-  }
-
-  function setNoOpenTabsMode(enabled) {
-    const container = document.querySelector(".content-container");
-    if (container) container.classList.toggle("no-open-tabs", !!enabled);
-    if (markdownEditor) {
-      markdownEditor.disabled = !!enabled;
-      markdownEditor.setAttribute("aria-disabled", enabled ? "true" : "false");
-    }
-  }
-
-  function switchTab(tabId) {
-    if (tabId === activeTabId) return;
-    setNoOpenTabsMode(false);
-    suspendActiveGraphRender();
-    saveCurrentTabState();
-    activeTabId = tabId;
-    saveActiveTabId(activeTabId);
-    const tab = tabs.find(function(t) { return t.id === tabId; });
-    if (!tab) return;
-    if (tab.type === "graph") {
-      setViewMode('preview');
-      setGraphViewMode(true);
-      renderTabBar(tabs, activeTabId);
-      syncFolderTreeSelectionToActiveTab();
-      renderGraphView();
-      return;
-    }
-    setGraphViewMode(false);
-    markdownEditor.value = tab.content;
-    restoreViewMode(tab.viewMode);
-    renderEditorSyntaxHighlights();
-    renderMarkdown();
-    requestAnimationFrame(function() {
-      markdownEditor.scrollTop = tab.scrollPos || 0;
-      syncEditorSyntaxHighlightScroll();
-    });
-    renderTabBar(tabs, activeTabId);
-    syncFolderTreeSelectionToActiveTab();
-  }
-
-
-
-  function pinTemporaryTab(tabId) {
-    const tab = tabs.find(function(t) { return t.id === tabId; });
-    if (!tab || !tab.isTemporary) return;
-    tab.isTemporary = false;
-    // Promote preview tab to a normal tab without marking it dirty.
-    tab.savedContent = tab.content;
-    saveTabsToStorage(tabs);
-    renderTabBar(tabs, activeTabId);
-  }
-
-  function findTemporaryTab() {
-    return tabs.find(function(t) { return !!t.isTemporary; }) || null;
-  }
-
-  function applySidebarFileMetadata(tab, sourceFile) {
-    tab.sourceFileName = sourceFile && sourceFile.name ? sourceFile.name : null;
-    tab.sourceFileHandle = sourceFile && sourceFile.handle ? sourceFile.handle : null;
-    tab.sourceFilePath = sourceFile && sourceFile.path ? sourceFile.path : null;
-    tab.isUnsupportedFile = isUnsupportedSourceFile(sourceFile);
-    if (tab.isUnsupportedFile) tab.viewMode = 'editor';
-  }
-
-  function isUnsupportedSourceFile(sourceFile) {
-    if (!sourceFile) return false;
-    if (sourceFile.isUnsupportedFile === true) return true;
-    const path = sourceFile.path || sourceFile.name || sourceFile.file?.name || sourceFile.handle?.name || "";
-    return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
-  }
-
-  function isUnsupportedFileTab(tab) {
-    if (!tab || tab.type === "graph") return false;
-    if (tab.isUnsupportedFile === true) return true;
-    const path = tab.sourceFilePath || tab.sourceFileName || tab.sourceFileHandle?.name || "";
-    return !!path && isTextDocumentPath(path) && !isSupportedFolderTreeDocumentPath(path);
-  }
-
-  function getActiveTab() {
-    return tabs.find(function(tab) { return tab.id === activeTabId; }) || null;
-  }
-
-  function getAllowedViewModeForActiveTab(mode) {
-    const activeTab = getActiveTab();
-    if (activeTab && activeTab.type === "graph") return 'preview';
-    return isUnsupportedFileTab(activeTab) ? 'editor' : (mode || 'split');
-  }
-
-  function getDefaultViewModeForOpenedFile(sourceFile) {
-    return isUnsupportedSourceFile(sourceFile) ? 'editor' : 'split';
-  }
-
-  function activateSidebarTab(tab) {
-    activeTabId = tab.id;
-    saveActiveTabId(activeTabId);
-    setGraphViewMode(false);
-    setNoOpenTabsMode(false);
-    markdownEditor.value = tab.content;
-    restoreViewMode(tab.viewMode);
-    renderEditorSyntaxHighlights();
-    renderMarkdown();
-    requestAnimationFrame(function() {
-      markdownEditor.scrollTop = tab.scrollPos || 0;
-      syncEditorSyntaxHighlightScroll();
-    });
-    saveTabsToStorage(tabs);
-    renderTabBar(tabs, activeTabId);
-    syncFolderTreeSelectionToActiveTab();
-    markdownEditor.focus();
-  }
-
-  function openSidebarFileInTab(content, title, sourceFile, options) {
-    options = options || {};
-    const isTemporary = options.temporary !== false;
-    saveCurrentTabState();
-
-    let tab = isTemporary ? findTemporaryTab() : null;
-    if (!tab && tabs.length >= 20) {
-      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
-      return null;
-    }
-
-    if (!tab) {
-      const normalizedContent = normalizeEditorContent(content);
-      const requestedViewMode = getDefaultViewModeForOpenedFile(sourceFile);
-      tab = createTab(normalizedContent, title || 'Untitled', requestedViewMode);
-      tab.isTemporary = isTemporary;
-      applySidebarFileMetadata(tab, sourceFile);
-      tab.savedContent = normalizedContent;
-      tabs.push(tab);
-    } else {
-      const normalizedContent = normalizeEditorContent(content);
-      tab.title = title || 'Untitled';
-      tab.content = normalizedContent;
-      tab.scrollPos = 0;
-      tab.viewMode = getDefaultViewModeForOpenedFile(sourceFile);
-      tab.isTemporary = isTemporary;
-      applySidebarFileMetadata(tab, sourceFile);
-      tab.savedContent = normalizedContent;
-    }
-
-    activateSidebarTab(tab);
-    return tab;
-  }
-
-  function openSidebarFileInTemporaryTab(content, title, sourceFile) {
-    return openSidebarFileInTab(content, title, sourceFile, { temporary: true });
-  }
-
-  function openSidebarFileInPermanentTab(content, title, sourceFile) {
-    return openSidebarFileInTab(content, title, sourceFile, { temporary: false });
-  }
-
-  function findTabForSourceFile(sourceFile) {
-    if (!sourceFile) return null;
-
-    if (sourceFile.handle) {
-      const handleMatch = tabs.find(function(tab) {
-        return tab.type !== "graph" && tab.sourceFileHandle === sourceFile.handle;
-      });
-      if (handleMatch) return handleMatch;
-    }
-
-    if (sourceFile.path) {
-      const pathMatch = tabs.find(function(tab) {
-        return tab.type !== "graph" && tab.sourceFilePath === sourceFile.path;
-      });
-      if (pathMatch) return pathMatch;
-    }
-
-    const title = sourceFile.name ? getMarkdownTitleFromFileName(sourceFile.name) : null;
-    return tabs.find(function(tab) {
-      return tab.type !== "graph" && ((sourceFile.name && tab.sourceFileName === sourceFile.name) || (title && tab.title === title));
-    }) || null;
-  }
-
-  function findGraphTabForSourceFile(sourceFile) {
-    if (!sourceFile) return null;
-
-    if (sourceFile.handle) {
-      const handleMatch = tabs.find(function(tab) {
-        return tab.type === "graph" && tab.sourceFileHandle === sourceFile.handle;
-      });
-      if (handleMatch) return handleMatch;
-    }
-
-    if (sourceFile.path) {
-      const pathMatch = tabs.find(function(tab) {
-        return tab.type === "graph" && tab.sourceFilePath === sourceFile.path;
-      });
-      if (pathMatch) return pathMatch;
-    }
-
-    const title = sourceFile.name ? getGraphTitleFromFileName(sourceFile.name) : null;
-    return tabs.find(function(tab) {
-      return tab.type === "graph" && ((sourceFile.name && tab.sourceFileName === sourceFile.name) || (title && tab.title === title));
-    }) || null;
-  }
-
-  function showSavedGraphMissingPathDialog() {
-    return new Promise((resolve) => {
-      const overlay = document.createElement("div");
-      overlay.className = "saved-graph-missing-file-modal";
-      overlay.setAttribute("role", "dialog");
-      overlay.setAttribute("aria-modal", "true");
-      overlay.setAttribute("aria-labelledby", "saved-graph-missing-file-title");
-      overlay.innerHTML = `
-        <div class="saved-graph-missing-file-dialog">
-          <p id="saved-graph-missing-file-title" class="saved-graph-missing-file-message">This file no longer exists at the saved path.</p>
-          <div class="saved-graph-missing-file-actions">
-            <button class="tool-button saved-graph-locate-file" type="button">Locate file</button>
-            <button class="tool-button saved-graph-remove-file" type="button">Remove from graph</button>
-            <button class="tool-button saved-graph-cancel-file" type="button">Cancel</button>
-          </div>
-        </div>
-      `;
-
-      const cleanup = (action) => {
-        overlay.remove();
-        resolve(action);
-      };
-
-      overlay.querySelector(".saved-graph-locate-file")?.addEventListener("click", () => cleanup("locate"));
-      overlay.querySelector(".saved-graph-remove-file")?.addEventListener("click", () => cleanup("remove"));
-      overlay.querySelector(".saved-graph-cancel-file")?.addEventListener("click", () => cleanup("cancel"));
-      overlay.addEventListener("click", (event) => {
-        if (event.target === overlay) cleanup("cancel");
-      });
-      overlay.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") cleanup("cancel");
-      });
-
-      document.body.appendChild(overlay);
-      overlay.querySelector(".saved-graph-locate-file")?.focus({ preventScroll: true });
-    });
-  }
-
-  async function locateReplacementMarkdownFileForSavedGraphNode() {
-    if (isNeutralinoRuntime() && Neutralino.os?.showOpenDialog) {
-      const selected = await Neutralino.os.showOpenDialog("Locate Markdown file", {
-        multiSelections: false,
-        filters: [{ name: "Markdown files", extensions: ["md", "markdown"] }]
-      });
-      const selectedPath = Array.isArray(selected) ? selected[0] : selected;
-      if (!selectedPath) return null;
-      return {
-        name: getFileName(selectedPath),
-        path: selectedPath,
-        content: await Neutralino.filesystem.readFile(selectedPath)
-      };
-    }
-
-    if (typeof window.showOpenFilePicker === "function") {
-      const handles = await window.showOpenFilePicker({
-        multiple: false,
-        types: [
-          {
-            description: "Markdown files",
-            accept: { "text/markdown": [".md", ".markdown"], "text/plain": [".md", ".markdown"] }
-          }
-        ]
-      });
-      const handle = handles && handles[0];
-      if (!handle) return null;
-      const file = await handle.getFile();
-      return {
-        name: file.name || handle.name || "document.md",
-        handle,
-        content: await file.text()
-      };
-    }
-
-    alert("Locate file is available in browsers that support the file picker or in the desktop app.");
-    return null;
-  }
-
-  async function openLocatedSavedGraphFile(graphNode) {
-    try {
-      const locatedFile = await locateReplacementMarkdownFileForSavedGraphNode();
-      if (!locatedFile) return null;
-      return openSidebarFileInPermanentTab(
-        normalizeEditorContent(locatedFile.content || ""),
-        getMarkdownTitleFromFileName(locatedFile.name || graphNode?.label || "document.md"),
-        { name: locatedFile.name, handle: locatedFile.handle || null, path: locatedFile.path || null }
-      );
-    } catch (error) {
-      if (error && error.name === "AbortError") return null;
-      console.error("Failed to locate saved graph file:", error);
-      alert("Unable to open the located file.");
-      return null;
-    }
-  }
-
-  function removeSavedGraphNodeFromActiveTab(nodeId) {
-    const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
-    if (!activeGraphTab?.graphSnapshot || !nodeId) return;
-    activeGraphTab.graphSnapshot = {
-      ...activeGraphTab.graphSnapshot,
-      nodes: (activeGraphTab.graphSnapshot.nodes || []).filter((node) => node.id !== nodeId),
-      links: (activeGraphTab.graphSnapshot.links || []).filter((link) => {
-        const sourceId = link.source?.id || link.source;
-        const targetId = link.target?.id || link.target;
-        return sourceId !== nodeId && targetId !== nodeId;
-      }),
-      files: (activeGraphTab.graphSnapshot.files || []).filter((file) => file.id !== nodeId)
-    };
-    activeGraphTab.graphDocument = serializeGraphTab(activeGraphTab, { documentType: GRAPH_DOCUMENT_TYPE_VIEW });
-    markGraphTabAsChanged(activeGraphTab);
-    saveTabsToStorage(tabs);
-    graphRenderCache.delete(activeGraphTab.id);
-    renderGraphView();
-  }
-
-  async function handleMissingSavedGraphNodePath(graphNode) {
-    const action = await showSavedGraphMissingPathDialog();
-    if (action === "locate") return openLocatedSavedGraphFile(graphNode);
-    if (action === "remove") removeSavedGraphNodeFromActiveTab(graphNode?.id);
-    return null;
-  }
-
-  async function openGraphNodeFileInPermanentTab(graphNode) {
-    if (!graphNode) return null;
-
-    const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
-    const keepSavedMode = isKeepSavedGraphMode(activeGraphTab);
-    const snapshotFile = activeGraphTab?.graphSnapshot?.files?.find((file) => file.id === graphNode.id);
-    const folderEntry = keepSavedMode ? null : (folderMarkdownFiles || []).find(function(entry) {
-      return getGraphFileEntryNodeId(entry) === graphNode.id;
-    });
-    const fileEntry = snapshotFile || folderEntry;
-    const readableFileEntry = keepSavedMode
-      ? snapshotFile
-      : ((fileEntry && typeof fileEntry.content === "string") ? fileEntry : (folderEntry || fileEntry));
-
-    if (!fileEntry) {
-      alert("Unable to find the selected file in this graph snapshot.");
-      return null;
-    }
-
-    if (keepSavedMode && readableFileEntry?.content === undefined && !readableFileEntry?.handle && !(isNeutralinoRuntime() && readableFileEntry?.fullPath)) {
-      return handleMissingSavedGraphNodePath(graphNode);
-    }
-
-    const path = fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || graphNode.fullPath || null;
-    const name = fileEntry.name || getFileName(path || graphNode.fullPath || graphNode.label || "document.md");
-    const sourceFile = {
-      name,
-      handle: fileEntry.handle || readableFileEntry?.handle || null,
-      path: fileEntry.fullPath || readableFileEntry?.fullPath || path
-    };
-
-    const existingTab = findTabForSourceFile(sourceFile);
-    if (existingTab) {
-      switchTab(existingTab.id);
-      pinTemporaryTab(existingTab.id);
-      return existingTab;
-    }
-
-    try {
-      const content = await readFolderMarkdownFileContent(readableFileEntry);
-      if (content === undefined || content === null) throw new Error("No readable Markdown file was provided.");
-      if (!sourceFile.handle && readableFileEntry?.handle) sourceFile.handle = readableFileEntry.handle;
-      if (readableFileEntry?.fullPath) sourceFile.path = readableFileEntry.fullPath;
-
-      return openSidebarFileInPermanentTab(content, getMarkdownTitleFromFileName(name), sourceFile);
-    } catch (error) {
-      console.error("Failed to open graph node file:", error);
-      if (keepSavedMode) return handleMissingSavedGraphNodePath(graphNode);
-      alert("Unable to open selected file.");
-      return null;
-    }
-  }
-
-  function newTab(content, title) {
-    if (content === undefined) content = '';
-    if (tabs.length >= 20) {
-      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
-      return;
-    }
-    if (!title) title = nextUntitledTitle();
-    const tab = createTab(content, title);
-    tabs.push(tab);
-    switchTab(tab.id);
-    markdownEditor.focus();
-  }
-
-  function closeTab(tabId, options) {
-    if (options === undefined) options = {};
-    const tabToClose = tabs.find(function(t) { return t.id === tabId; });
-    if (!tabToClose) return;
-    const hasUnsavedChanges = tabHasUnsavedChanges(tabToClose);
-    if (options.promptForUnsaved && hasUnsavedChanges) {
-      const shouldClose = window.confirm('You have unsaved changes. Are you sure you want to close this tab?');
-      if (!shouldClose) return;
-    }
-
-    const idx = tabs.findIndex(function(t) { return t.id === tabId; });
-    if (idx === -1) return;
-    const cachedGraphRender = graphRenderCache.get(tabId);
-    if (cachedGraphRender) {
-      if (cachedGraphRender.simulation) cachedGraphRender.simulation.stop();
-      if (cachedGraphRender.wrapper) cachedGraphRender.wrapper.remove();
-      graphRenderCache.delete(tabId);
-    }
-    tabs.splice(idx, 1);
-    if (tabs.length === 0) {
-      if (options.allowEmpty) {
-        activeTabId = null;
-        saveActiveTabId(null);
-        setGraphViewMode(false);
-        setNoOpenTabsMode(true);
-        markdownEditor.value = '';
-        restoreViewMode('split');
-        renderEditorSyntaxHighlights();
-        renderMarkdown();
-        saveTabsToStorage(tabs);
-        renderTabBar(tabs, activeTabId);
-        return;
-      }
-
-      const newTabAfterClose = createTab('', nextUntitledTitle());
-      tabs.push(newTabAfterClose);
-      activeTabId = newTabAfterClose.id;
-      saveActiveTabId(activeTabId);
-      setGraphViewMode(false);
-      setNoOpenTabsMode(false);
-      markdownEditor.value = '';
-      restoreViewMode('split');
-      renderEditorSyntaxHighlights();
-      renderMarkdown();
-    } else if (activeTabId === tabId) {
-      const newIdx = Math.max(0, idx - 1);
-      activeTabId = tabs[newIdx].id;
-      saveActiveTabId(activeTabId);
-      const newActiveTab = tabs[newIdx];
-      if (newActiveTab.type === 'graph') {
-        setViewMode('preview');
-        setGraphViewMode(true);
-        renderTabBar(tabs, activeTabId);
-        syncFolderTreeSelectionToActiveTab();
-        renderGraphView();
-        saveTabsToStorage(tabs);
-        return;
-      }
-      setGraphViewMode(false);
-      markdownEditor.value = newActiveTab.content;
-      restoreViewMode(newActiveTab.viewMode);
-      renderEditorSyntaxHighlights();
-      renderMarkdown();
-      requestAnimationFrame(function() {
-        markdownEditor.scrollTop = newActiveTab.scrollPos || 0;
-        syncEditorSyntaxHighlightScroll();
-      });
-    }
-    saveTabsToStorage(tabs);
-    renderTabBar(tabs, activeTabId);
-  }
-
-  function renameUnsourcedTabTitle(tab) {
-    const modal = document.getElementById('rename-modal');
-    const input = document.getElementById('rename-modal-input');
-    const confirmBtn = document.getElementById('rename-modal-confirm');
-    const cancelBtn = document.getElementById('rename-modal-cancel');
-    const title = document.getElementById('rename-modal-title');
-    if (!modal || !input || !confirmBtn || !cancelBtn) return;
-    if (title) title.textContent = 'Rename tab';
-    input.placeholder = 'Tab name';
-    input.value = tab.title;
-    confirmBtn.textContent = 'Rename';
-    modal.style.display = 'flex';
-    input.focus();
-    input.select();
-
-    function doRename() {
-      const newName = input.value.trim();
-      if (newName) {
-        tab.title = newName;
-        saveTabsToStorage(tabs);
-        renderTabBar(tabs, activeTabId);
-      }
-      modal.style.display = 'none';
-      cleanup();
-    }
-
-    function cleanup() {
-      confirmBtn.removeEventListener('click', doRename);
-      cancelBtn.removeEventListener('click', doCancel);
-      input.removeEventListener('keydown', onKey);
-    }
-
-    function doCancel() {
-      modal.style.display = 'none';
-      cleanup();
-    }
-
-    function onKey(e) {
-      if (e.key === 'Enter') doRename();
-      else if (e.key === 'Escape') doCancel();
-    }
-
-    confirmBtn.addEventListener('click', doRename);
-    cancelBtn.addEventListener('click', doCancel);
-    input.addEventListener('keydown', onKey);
-  }
-
-  async function renameTab(tabId) {
-    const tab = tabs.find(function(t) { return t.id === tabId; });
-    if (!tab) return;
-
-    const sourceName = tab.sourceFileName || (tab.sourceFilePath ? getFileName(tab.sourceFilePath) : tab.sourceFileHandle?.name);
-    if (!sourceName || (!tab.sourceFileHandle && !tab.sourceFilePath)) {
-      renameUnsourcedTabTitle(tab);
-      return;
-    }
-
-    try {
-      await renameSidebarNodeOnDisk({
-        kind: "file",
-        name: sourceName,
-        handle: tab.sourceFileHandle || null,
-        fullPath: isNeutralinoRuntime() ? tab.sourceFilePath : null,
-        path: tab.sourceFilePath || null
-      }, "file");
-    } catch (error) {
-      console.error("Failed to rename tab source file:", error);
-      alert("Unable to rename this file.");
-    }
-  }
-
-  function duplicateTab(tabId) {
-    const tab = tabs.find(function(t) { return t.id === tabId; });
-    if (!tab) return;
-    if (tabs.length >= 20) {
-      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
-      return;
-    }
-    saveCurrentTabState();
-    const dupTitle = tab.title + ' (copy)';
-    const dup = createTab(tab.content, dupTitle, isUnsupportedFileTab(tab) ? 'editor' : tab.viewMode);
-    dup.savedContent = tab.savedContent;
-    dup.isUnsupportedFile = isUnsupportedFileTab(tab);
-    const idx = tabs.findIndex(function(t) { return t.id === tabId; });
-    tabs.splice(idx + 1, 0, dup);
-    switchTab(dup.id);
-  }
-
-  function confirmCloseTabsIfNeeded(tabsToClose) {
-    const unsavedTabsToClose = tabsToClose.filter(function(tab) {
-      return tabHasUnsavedChanges(tab);
-    });
-    if (unsavedTabsToClose.length === 0) return true;
-    if (unsavedTabsToClose.length === 1) {
-      return window.confirm('You have unsaved changes. Are you sure you want to close this tab?');
-    }
-    return window.confirm('You have unsaved changes in ' + unsavedTabsToClose.length + ' tabs. Are you sure you want to close them?');
-  }
-
-  function closeTabsByIds(tabIds, options) {
-    if (options === undefined) options = {};
-    const idsToClose = Array.from(new Set(tabIds));
-    const tabsToClose = idsToClose
-      .map(function(tabId) { return tabs.find(function(tab) { return tab.id === tabId; }); })
-      .filter(Boolean);
-    if (tabsToClose.length === 0 || (options.promptForUnsaved !== false && !confirmCloseTabsIfNeeded(tabsToClose))) return;
-    idsToClose.forEach(function(tabId) {
-      closeTab(tabId, { promptForUnsaved: false, allowEmpty: options.allowEmpty });
-    });
-  }
-
-  function closeOtherTabs(tabId) {
-    const targetTab = tabs.find(function(tab) { return tab.id === tabId; });
-    if (!targetTab || tabs.length <= 1) return;
-    closeTabsByIds(tabs
-      .filter(function(tab) { return tab.id !== tabId; })
-      .map(function(tab) { return tab.id; }));
-    if (tabs.some(function(tab) { return tab.id === tabId; }) && activeTabId !== tabId) {
-      switchTab(tabId);
-    }
-  }
-
-  function closeAllTabs(options) {
-    if (options === undefined) options = {};
-    if (tabs.length === 0) return;
-    closeTabsByIds(tabs.map(function(tab) { return tab.id; }), { allowEmpty: true, promptForUnsaved: options.promptForUnsaved });
-  }
-
-  function resetAllTabs() {
-    const modal = document.getElementById('reset-confirm-modal');
-    const confirmBtn = document.getElementById('reset-modal-confirm');
-    const cancelBtn = document.getElementById('reset-modal-cancel');
-    if (!modal) return;
-    modal.style.display = 'flex';
-
-    function doReset() {
-      modal.style.display = 'none';
-      cleanup();
-      closeAllTabs({ promptForUnsaved: false });
-      untitledCounter = 0;
-      saveUntitledCounter(0);
-    }
-
-    function doCancel() {
-      modal.style.display = 'none';
-      cleanup();
-    }
-
-    function cleanup() {
-      confirmBtn.removeEventListener('click', doReset);
-      cancelBtn.removeEventListener('click', doCancel);
-    }
-
-    confirmBtn.addEventListener('click', doReset);
-    cancelBtn.addEventListener('click', doCancel);
-  }
-
-  function initTabs() {
-    untitledCounter = loadUntitledCounter();
-    tabs = loadTabsFromStorage();
-    tabs.forEach(function(tab) {
-      tab.content = normalizeEditorContent(tab.content);
-      if (typeof tab.savedContent !== 'string') tab.savedContent = tab.content || '';
-      tab.savedContent = normalizeEditorContent(tab.savedContent);
-      if (!tab.type) tab.type = 'markdown';
-      if (tab.type === 'graph') {
-        const graphData = deserializeGraphDocument({
-          ...(tab.graphDocument || tab),
-          graphLayout: tab.graphLayout !== undefined
-            ? tab.graphLayout
-            : (tab.graphDocument?.graphLayout !== undefined ? tab.graphDocument.graphLayout : tab.graphDocument?.layout)
-        });
-        tab.folderName = graphData.folderName;
-        tab.graphSnapshot = graphData.graphSnapshot;
-        tab.graphViewConfig = graphData.graphViewConfig;
-        tab.graphDocument = graphData.graphDocument;
-        if (Object.prototype.hasOwnProperty.call(graphData, "graphLayout")) tab.graphLayout = graphData.graphLayout;
-      }
-    });
-    activeTabId = loadActiveTabId();
-    if (tabs.length === 0) {
-      const tab = createTab(sampleMarkdown, 'Welcome to ShayBC Markdown-Viewer');
-      tabs.push(tab);
-      activeTabId = tab.id;
-      saveTabsToStorage(tabs);
-      saveActiveTabId(activeTabId);
-    } else if (!tabs.find(function(t) { return t.id === activeTabId; })) {
-      activeTabId = tabs[0].id;
-      saveActiveTabId(activeTabId);
-    }
-    const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
-    if (activeTab.type === 'graph') {
-      setNoOpenTabsMode(false);
-      setViewMode('preview');
-      setGraphViewMode(true);
-      renderTabBar(tabs, activeTabId);
-      renderGraphView();
-      return;
-    }
-    setNoOpenTabsMode(false);
-    setGraphViewMode(false);
-    markdownEditor.value = activeTab.content;
-    restoreViewMode(activeTab.viewMode);
-    renderEditorSyntaxHighlights();
-    renderMarkdown();
-    requestAnimationFrame(function() {
-      markdownEditor.scrollTop = activeTab.scrollPos || 0;
-      syncEditorSyntaxHighlightScroll();
-    });
-    renderTabBar(tabs, activeTabId);
-  }
-
+  const {    nextUntitledTitle,
+    createTab,
+    createGraphTab,
+    normalizeGraphScopePath,
+    createFolderGraphScopeKey,
+    getRootFolderGraphScopeKey,
+    findExistingFolderGraphTab,
+    focusExistingFolderGraphTab,
+    getGraphTitleFromFileName,
+    getGraphTabTitle,
+    getTabDisplayName,
+    getTabTooltipText,
+    updateTabScrollControls,
+    scrollTabsBy,
+    setupTabScrolling,
+    renderTabBar,
+    renderMobileTabList,
+    ensureTabContextMenu,
+    positionTabContextMenu,
+    setTabContextMenuActionEnabled,
+    updateTabContextMenuActionStates,
+    showTabContextMenu,
+    hideTabContextMenu,
+    saveCurrentTabState,
+    getActiveMarkdownTab,
+    activeTabHasUnsavedChanges,
+    getUnsavedTabs,
+    updateSaveCurrentFileButtons,
+    saveChangedTab,
+    saveAllChangedTabs,
+    saveCurrentFileIfChanged,
+    restoreViewMode,
+    setNoOpenTabsMode,
+    switchTab,
+    pinTemporaryTab,
+    findTemporaryTab,
+    applySidebarFileMetadata,
+    isUnsupportedSourceFile,
+    isUnsupportedFileTab,
+    getActiveTab,
+    getAllowedViewModeForActiveTab,
+    getDefaultViewModeForOpenedFile,
+    activateSidebarTab,
+    openSidebarFileInTab,
+    openSidebarFileInTemporaryTab,
+    openSidebarFileInPermanentTab,
+    findTabForSourceFile,
+    findGraphTabForSourceFile,
+    showSavedGraphMissingPathDialog,
+    locateReplacementMarkdownFileForSavedGraphNode,
+    openLocatedSavedGraphFile,
+    removeSavedGraphNodeFromActiveTab,
+    handleMissingSavedGraphNodePath,
+    openGraphNodeFileInPermanentTab,
+    newTab,
+    closeTab,
+    renameUnsourcedTabTitle,
+    renameTab,
+    duplicateTab,
+    confirmCloseTabsIfNeeded,
+    closeTabsByIds,
+    closeOtherTabs,
+    closeAllTabs,
+    resetAllTabs,
+    initTabs,
+  } = tabsModule;
   function renderMarkdown() {
     updateEditorLineNumbers();
     try {
@@ -7413,6 +4730,14 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       }
 
       // Browser: read file via File System Access API or upload fallback
+      const nodePathKey = getComparableFilePath(node.fullPath || node.path || node.name || "");
+      const folderEntry = (folderMarkdownFiles || []).find((entry) => {
+        const entryPathKey = getComparableFilePath(entry.fullPath || entry.path || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
+        return entryPathKey && nodePathKey && entryPathKey === nodePathKey;
+      });
+      if (folderEntry) return readFolderMarkdownFileContent(folderEntry);
+
+      if (!node.handle?.getFile) throw new Error("No readable file handle is available.");
       const file = node.file ? node.file : await node.handle.getFile();
       return file.text();
     }
@@ -9426,9 +6751,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   graphStaleCloseButton?.addEventListener("click", keepSavedGraphFromStaleModal);
   graphStaleKeepButton?.addEventListener("click", keepSavedGraphFromStaleModal);
   graphStaleUpdateButton?.addEventListener("click", updateGraphFromStaleModal);
-  graphStaleViewDetailsButton?.addEventListener("click", () => {
-    openGraphComparisonDetailsModal(activeGraphStaleComparison?.detailsModel || activeGraphComparisonDetailsModel);
-  });
+  graphStaleViewDetailsButton?.addEventListener("click", openGraphStaleComparisonDetailsModal);
   graphStaleCompareButton?.addEventListener("click", loadGraphComparisonFromStaleModal);
   graphStaleModal?.addEventListener("click", (event) => {
     if (event.target === graphStaleModal) hideGraphStaleModal();
