@@ -203,6 +203,10 @@ body {
   overflow: hidden;
 }
 
+.content-container.no-open-tabs .editor-workspace {
+  display: none;
+}
+
 .editor-workspace {
   display: flex;
   flex: 1 1 auto;

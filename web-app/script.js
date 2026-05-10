@@ -3988,8 +3988,18 @@ Markdown content is processed client-side in your browser and sanitized before p
     setViewMode(getAllowedViewModeForActiveTab(mode || loadGlobalState().viewMode || 'split'), false);
   }
 
+  function setNoOpenTabsMode(enabled) {
+    const container = document.querySelector(".content-container");
+    if (container) container.classList.toggle("no-open-tabs", !!enabled);
+    if (markdownEditor) {
+      markdownEditor.disabled = !!enabled;
+      markdownEditor.setAttribute("aria-disabled", enabled ? "true" : "false");
+    }
+  }
+
   function switchTab(tabId) {
     if (tabId === activeTabId) return;
+    setNoOpenTabsMode(false);
     suspendActiveGraphRender();
     saveCurrentTabState();
     activeTabId = tabId;
@@ -4386,6 +4396,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         activeTabId = null;
         saveActiveTabId(null);
         setGraphViewMode(false);
+        setNoOpenTabsMode(true);
         markdownEditor.value = '';
         restoreViewMode('split');
         renderEditorSyntaxHighlights();
@@ -4400,6 +4411,7 @@ Markdown content is processed client-side in your browser and sanitized before p
       activeTabId = newTabAfterClose.id;
       saveActiveTabId(activeTabId);
       setGraphViewMode(false);
+      setNoOpenTabsMode(false);
       markdownEditor.value = '';
       restoreViewMode('split');
       renderEditorSyntaxHighlights();
@@ -4624,12 +4636,14 @@ Markdown content is processed client-side in your browser and sanitized before p
     }
     const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
     if (activeTab.type === 'graph') {
+      setNoOpenTabsMode(false);
       setViewMode('preview');
       setGraphViewMode(true);
       renderTabBar(tabs, activeTabId);
       renderGraphView();
       return;
     }
+    setNoOpenTabsMode(false);
     setGraphViewMode(false);
     markdownEditor.value = activeTab.content;
     restoreViewMode(activeTab.viewMode);

@@ -765,6 +765,29 @@ test("desktop graph context menu can update file tags", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
   await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.__writes[0].content)).toContain("other");
+  await expect(page.locator(".graph-link-tag")).toHaveCount(3);
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await expect(page.locator(".graph-tab-render .tags-context-menu-item", { hasText: "#other" })).toHaveAttribute("aria-checked", "true");
+  await page.locator(".graph-tab-render .tags-context-menu-item", { hasText: "#defined" }).evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => window.__writes.length)).toBe(2);
+  await expect(page.locator(".graph-link-tag")).toHaveCount(2);
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await expect(page.locator(".graph-tab-render .tags-context-menu-item")).toHaveText(["#other"]);
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -852,6 +875,8 @@ test("close all leaves the workspace without replacement tabs", async ({ page })
   await page.locator("#tab-reset-btn").click();
   await page.locator("#reset-modal-confirm").click();
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
+  await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#markdown-editor")).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs")))).toEqual([]);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("markdownViewerActiveTab"))).toBe(null);
 
@@ -869,6 +894,8 @@ test("close all leaves the workspace without replacement tabs", async ({ page })
   await page.locator(".tab-context-menu-action[data-action='close-all']").evaluate((button) => button.click());
 
   await expect(page.locator("#tab-list .tab-item")).toHaveCount(0);
+  await expect(page.locator(".content-container")).toHaveClass(/no-open-tabs/);
+  await expect(page.locator("#markdown-editor")).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("markdownViewerTabs")))).toEqual([]);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("markdownViewerActiveTab"))).toBe(null);
 });

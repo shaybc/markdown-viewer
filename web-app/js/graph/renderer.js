@@ -861,12 +861,54 @@
       }) || null;
     };
 
-    const rebuildActiveGraphSnapshotAfterTagChange = async (activeGraphTab) => {
-      if (!activeGraphTab?.graphSnapshot) return;
-      const currentSnapshot = activeGraphTab.graphSnapshot;
-      activeGraphTab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || activeGraphTab.folderName || activeGraphTab.title);
-      if (currentSnapshot.createdAt) activeGraphTab.graphSnapshot.createdAt = currentSnapshot.createdAt;
-      graphRenderCache.delete(activeGraphTab.id);
+    const graphSnapshotFileMatches = (candidateFile, referenceFile) => {
+      if (!candidateFile || !referenceFile) return false;
+      const candidateIds = new Set([
+        candidateFile.id,
+        candidateFile.path ? normalizeGraphNodeName(candidateFile.path) : null,
+        candidateFile.fullPath ? normalizeGraphNodeName(candidateFile.fullPath) : null,
+        candidateFile.name ? normalizeGraphNodeName(candidateFile.name) : null
+      ].filter(Boolean));
+      const referenceIds = [
+        referenceFile.id,
+        referenceFile.path ? normalizeGraphNodeName(referenceFile.path) : null,
+        referenceFile.fullPath ? normalizeGraphNodeName(referenceFile.fullPath) : null,
+        referenceFile.name ? normalizeGraphNodeName(referenceFile.name) : null
+      ].filter(Boolean);
+      if (referenceIds.some((id) => candidateIds.has(id))) return true;
+
+      const candidatePaths = new Set([
+        candidateFile.path,
+        candidateFile.fullPath
+      ].filter(Boolean));
+      return [referenceFile.path, referenceFile.fullPath].filter(Boolean).some((path) => candidatePaths.has(path));
+    };
+
+    const rebuildOpenGraphSnapshotsAfterTagChange = async (changedSnapshotFile) => {
+      if (!changedSnapshotFile) return false;
+      let changedActiveGraph = false;
+
+      for (const tab of tabs) {
+        if (tab?.type !== "graph" || !tab.graphSnapshot?.files || isKeepSavedGraphMode(tab)) continue;
+
+        let graphChanged = false;
+        tab.graphSnapshot.files.forEach((snapshotFile) => {
+          if (!graphSnapshotFileMatches(snapshotFile, changedSnapshotFile)) return;
+          snapshotFile.content = changedSnapshotFile.content || "";
+          snapshotFile.tags = normalizeFileTagList(changedSnapshotFile.tags || getFileTagsFromContent(snapshotFile.content));
+          graphChanged = true;
+        });
+
+        if (!graphChanged) continue;
+        const currentSnapshot = tab.graphSnapshot;
+        tab.graphSnapshot = await createGraphSnapshot(currentSnapshot.files || [], currentSnapshot.folderName || tab.folderName || tab.title);
+        if (currentSnapshot.createdAt) tab.graphSnapshot.createdAt = currentSnapshot.createdAt;
+        graphRenderCache.delete(tab.id);
+        markGraphTabAsChanged(tab);
+        changedActiveGraph = changedActiveGraph || tab.id === activeTabId;
+      }
+
+      return changedActiveGraph;
     };
 
     const updateGraphNodeTagContent = async (graphNode, tag, action) => {
@@ -919,8 +961,8 @@
         }
       }
 
-      await rebuildActiveGraphSnapshotAfterTagChange(activeGraphTab);
-      markGraphTabAsChanged(activeGraphTab);
+      const changedActiveGraph = await rebuildOpenGraphSnapshotsAfterTagChange(snapshotFile);
+      if (!changedActiveGraph) markGraphTabAsChanged(activeGraphTab);
       saveTabsToStorage(tabs);
       renderTabBar(tabs, activeTabId);
       updateSaveCurrentFileButtons();
@@ -930,6 +972,7 @@
       renderLinkAutocomplete();
       simulation.stop();
       graphRenderWrapper.remove();
+      updateGraphTagToolbar(activeGraphTab, activeGraphTab.graphSnapshot || null);
       renderGraphView();
     };
 
