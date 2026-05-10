@@ -1236,6 +1236,86 @@ test("opens a saved graph view file from the desktop file picker", async ({ page
   await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
 });
 
+test("prompts when an opened saved graph view is stale against the current folder", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    const currentFiles = new Map([["beta.md", "# Beta"]]);
+    const savedGraph = {
+      schemaVersion: 1,
+      documentType: "graph-view",
+      folderName: "Saved Graph",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      viewConfig: {
+        showTags: true,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      snapshot: {
+        version: 1,
+        folderName: "Saved Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: [] }
+        ],
+        links: [],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", fullPath: "alpha.md", status: "current", tags: [] }
+        ]
+      }
+    };
+    const getName = (path) => String(path || "").split(/[\\/]/).pop();
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        showOpenDialog: async () => "C:/vault/saved.mdviewer-graph.json",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return Array.from(currentFiles.keys()).map((entry) => ({ entry, type: "FILE" }));
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          if (path === "C:/vault/saved.mdviewer-graph.json") return JSON.stringify(savedGraph);
+          const name = getName(path);
+          if (currentFiles.has(name)) return currentFiles.get(name);
+          throw new Error("Unexpected read path: " + path);
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  await page.locator("#import-from-file").first().click();
+
+  await expect(page.locator("#graph-stale-modal")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#graph-stale-update")).toBeVisible();
+  await expect(page.locator("#graph-stale-keep")).toBeVisible();
+  await expect(page.locator("#graph-stale-compare")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+});
+
 test("folder and graph Open in a new tab focus existing file tabs", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerTabs", JSON.stringify([{
