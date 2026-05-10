@@ -1170,6 +1170,72 @@ test("saves a new graph view through the desktop save dialog", async ({ page }) 
     .toContain('"documentType": "graph-view"');
 });
 
+test("opens a saved graph view file from the desktop file picker", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "5.0.0";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    const savedGraph = {
+      schemaVersion: 1,
+      documentType: "graph-view",
+      folderName: "Saved Graph",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      viewConfig: {
+        showTags: true,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      snapshot: {
+        version: 1,
+        folderName: "Saved Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: [] }
+        ],
+        links: [],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", fullPath: "alpha.md", status: "current", tags: [] }
+        ]
+      }
+    };
+    window.Neutralino = {
+      os: {
+        showOpenDialog: async () => "C:/vault/saved.mdviewer-graph.json",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readFile: async (path) => {
+          if (path === "C:/vault/saved.mdviewer-graph.json") return JSON.stringify(savedGraph);
+          throw new Error("Unexpected read path: " + path);
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-file").first().click();
+
+  await expect(page.locator("#tab-list .tab-item", { hasText: "saved" })).toHaveCount(1);
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+});
+
 test("folder and graph Open in a new tab focus existing file tabs", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerTabs", JSON.stringify([{

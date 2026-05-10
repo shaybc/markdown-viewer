@@ -1187,6 +1187,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     resolveGraphTargetId,
     normalizeTagName,
     normalizeFileTagList,
+    looksLikeGraphDocument,
     extractMarkdownLinks,
     getFileTagsFromContent,
     get readFolderMarkdownFileContent() { return readFolderMarkdownFileContent; },
