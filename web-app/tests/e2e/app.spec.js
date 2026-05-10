@@ -1001,6 +1001,82 @@ test("graph group hide button removes and restores matching points", async ({ pa
   await expect(page.locator(".graph-link")).toHaveCount(1);
 });
 
+test("graph display can hide and show orphan points", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "orphan_toggle_graph_e2e",
+      title: "Orphan Toggle Graph E2E",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Orphan Toggle Graph E2E",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Orphan Toggle Graph E2E",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: [] },
+          { id: "beta.md", label: "beta.md", fullPath: "beta.md", type: "file", status: "current", tags: [] },
+          { id: "orphan.md", label: "orphan.md", fullPath: "orphan.md", type: "file", status: "current", tags: [] }
+        ],
+        links: [
+          { source: "alpha.md", target: "beta.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", status: "current", tags: [] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", status: "current", tags: [] },
+          { id: "orphan.md", path: "orphan.md", name: "orphan.md", content: "# Orphan", status: "current", tags: [] }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+  await page.goto("/");
+  await expect(page.locator("#graph-view-canvas")).toBeVisible();
+  await expect(page.locator(".graph-node")).toHaveCount(3);
+
+  await page.locator("#graph-filter-panel-toggle").click();
+  await page.locator(".graph-collapsible-section", { hasText: "Display" }).locator("summary").click();
+  const orphansToggle = page.locator("#graph-display-orphans");
+  const orphansToggleLabel = page.locator('label[for="graph-display-orphans"]');
+  await expect(orphansToggle).toBeChecked();
+
+  await orphansToggleLabel.click();
+  await expect.poll(() => page.evaluate(() => {
+    const nodeIds = Array.from(document.querySelectorAll(".graph-node")).map((node) => node.__data__?.id).sort();
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return { nodeIds, showOrphans: tabs[0]?.graphViewConfig?.showOrphans };
+  })).toEqual({ nodeIds: ["alpha.md", "beta.md"], showOrphans: false });
+
+  await orphansToggleLabel.click();
+  await expect(page.locator(".graph-node")).toHaveCount(3);
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    return tabs[0]?.graphViewConfig?.showOrphans;
+  })).toBe(true);
+});
+
 test("desktop graph context menu can update file tags", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";

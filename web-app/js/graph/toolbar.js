@@ -680,6 +680,7 @@
     }
     const graphControlInputs = [
       graphDisplayArrows,
+      graphDisplayOrphans,
       graphTextFadeThreshold,
       graphNodeSize,
       graphLinkThickness,
@@ -690,6 +691,7 @@
     ].filter(Boolean);
     graphControlInputs.forEach((input) => { input.disabled = !isGraphTab; });
     if (graphDisplayArrows) graphDisplayArrows.checked = graphViewConfig.showArrows;
+    if (graphDisplayOrphans) graphDisplayOrphans.checked = graphViewConfig.showOrphans;
     if (graphTextFadeThreshold) graphTextFadeThreshold.value = graphViewConfig.textFadeThreshold;
     if (graphNodeSize) graphNodeSize.value = graphViewConfig.nodeSize;
     if (graphLinkThickness) graphLinkThickness.value = graphViewConfig.linkThickness;
@@ -708,6 +710,7 @@
       searchQuery: DEFAULT_GRAPH_VIEW_CONFIG.searchQuery,
       groups: currentConfig.groups.map((group) => ({ ...group, enabled: false, hidden: false })),
       showArrows: DEFAULT_GRAPH_VIEW_CONFIG.showArrows,
+      showOrphans: DEFAULT_GRAPH_VIEW_CONFIG.showOrphans,
       textFadeThreshold: DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold,
       nodeSize: DEFAULT_GRAPH_VIEW_CONFIG.nodeSize,
       linkThickness: DEFAULT_GRAPH_VIEW_CONFIG.linkThickness,
@@ -809,6 +812,7 @@
     });
   }
   if (graphDisplayArrows) graphDisplayArrows.addEventListener("change", () => updateActiveGraphViewConfig({ showArrows: graphDisplayArrows.checked }));
+  if (graphDisplayOrphans) graphDisplayOrphans.addEventListener("change", () => updateActiveGraphViewConfig({ showOrphans: graphDisplayOrphans.checked }));
   const bindGraphRangeControl = (input, configKey) => {
     if (!input) return;
     input.addEventListener("input", () => updateActiveGraphViewConfig({ [configKey]: Number(input.value) }));
@@ -845,6 +849,7 @@
       ["#graph-only-selected-tag", "Limit the graph to files with the selected tag and their connected tag points."],
       ["#graph-add-group", "Add a color group. Groups use queries like path:, file:, tag:, text:, and line: to color matching files."],
       ["#graph-display-arrows", "Toggle arrowheads on Markdown links to show link direction."],
+      ["#graph-display-orphans", "Toggle graph points that do not have any visible connections."],
       ["#graph-text-fade-threshold", "Control how aggressively labels disappear while zooming out. At the default, labels are gone near 45% zoom and only larger points keep faded labels around 65%."],
       ["#graph-node-size", "Scale every graph point. Larger points are easier to hit and keep labels visible slightly longer while zoomed out."],
       ["#graph-link-thickness", "Adjust the stroke width of Markdown links between file points."],

@@ -269,6 +269,23 @@
       links.push(...visibleLinks);
     }
 
+    if (graphViewConfig && graphViewConfig.showOrphans === false) {
+      const connectedNodeIds = new Set();
+      links.forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (sourceId) connectedNodeIds.add(sourceId);
+        if (targetId) connectedNodeIds.add(targetId);
+      });
+      const visibleNodes = nodes.filter((n) => connectedNodeIds.has(n.id));
+      const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
+      const visibleLinks = links.filter((l) => visibleNodeIds.has(getLinkSourceId(l)) && visibleNodeIds.has(getLinkTargetId(l)));
+      nodes.length = 0;
+      nodes.push(...visibleNodes);
+      links.length = 0;
+      links.push(...visibleLinks);
+    }
+
     const filterGraphToNodeIds = (nodeIds) => {
       const filteredNodes = nodes.filter((n) => nodeIds.has(n.id));
       const filteredLinks = links.filter((l) => nodeIds.has(getLinkSourceId(l)) && nodeIds.has(getLinkTargetId(l)));

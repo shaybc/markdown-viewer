@@ -805,6 +805,7 @@
   const graphAddGroupButton = document.getElementById("graph-add-group");
   const graphFileSearchFilter = document.getElementById("graph-file-search-filter");
   const graphDisplayArrows = document.getElementById("graph-display-arrows");
+  const graphDisplayOrphans = document.getElementById("graph-display-orphans");
   const graphTextFadeThreshold = document.getElementById("graph-text-fade-threshold");
   const graphNodeSize = document.getElementById("graph-node-size");
   const graphLinkThickness = document.getElementById("graph-link-thickness");
@@ -1150,6 +1151,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     groups: [],
     searchQuery: "",
     showArrows: true,
+    showOrphans: true,
     textFadeThreshold: 0.35,
     nodeSize: 0.8,
     linkThickness: 1,
@@ -2903,6 +2905,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get graphSelectedTagFilter() { return graphSelectedTagFilter; },
     get graphOnlySelectedTagButton() { return graphOnlySelectedTagButton; },
     get graphDisplayArrows() { return graphDisplayArrows; },
+    get graphDisplayOrphans() { return graphDisplayOrphans; },
     get graphTextFadeThreshold() { return graphTextFadeThreshold; },
     get graphNodeSize() { return graphNodeSize; },
     get graphLinkThickness() { return graphLinkThickness; },
