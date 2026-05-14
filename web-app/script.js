@@ -999,7 +999,7 @@ MD-Editor is a modern, client-side Markdown workspace for writing, previewing, i
 - **Best for:** Notes, READMEs, technical docs, wiki pages, research snippets, diagrams, math-heavy docs, and quick export workflows.
 - **App info:** Updated May 9, 2026.
 
-## ?? What You Can Do Here
+## 🚀 What You Can Do Here
 
 ### Write and preview Markdown
 - GitHub-flavored Markdown (GFM), including tables, task lists, strikethrough, and autolinks
@@ -1017,7 +1017,7 @@ MD-Editor is a modern, client-side Markdown workspace for writing, previewing, i
 ### Build richer documentation
 - Mermaid diagrams with interactive zoom, pan, copy, PNG export, and SVG export controls
 - LaTeX math rendering through MathJax
-- Emoji shortcode support plus native Unicode emoji ??
+- Emoji shortcode support plus native Unicode emoji 😀
 - Local wiki-style links for connected note workflows
 - Folder graph view for seeing relationships across imported Markdown files
 
@@ -1026,7 +1026,7 @@ MD-Editor is a modern, client-side Markdown workspace for writing, previewing, i
 - Copy rendered HTML for use in other tools
 - Share compressed Markdown through the page URL when you need a quick handoff
 
-## ?? Code with Syntax Highlighting
+## 💻 Code with Syntax Highlighting
 
 \`\`\`javascript
 function renderMarkdown(markdown) {
@@ -1036,26 +1036,26 @@ function renderMarkdown(markdown) {
 }
 \`\`\`
 
-## ?? Math Support
+## 🧮 Math Support
 
 Inline math: $$E = mc^2$$
 
 Block math:
 $$\\sum_{i=1}^{n} i^2 = \\frac{n(n+1)(2n+1)}{6}$$
 
-## ?? Mermaid Diagrams
+## 📊 Mermaid Diagrams
 
 \`\`\`mermaid
 flowchart LR
-    Start[Open MD-Editor] --> Write[Write or import Markdown]
-    Write --> Preview[Preview instantly]
-    Preview --> Export{Need output?}
-    Export -->|Yes| Files[Export MD, HTML, or PDF]
-    Export -->|No| KeepWriting[Keep writing]
+    Start["Open MD-Editor"] --> Write["Write or import Markdown"]
+    Write --> Preview["Preview instantly"]
+    Preview --> Export{"Need output?"}
+    Export -->|Yes| Files["Export MD, HTML, or PDF"]
+    Export -->|No| KeepWriting["Keep writing"]
     KeepWriting --> Preview
 \`\`\`
 
-## ? Markdown Task Lists
+## ✅ Markdown Task Lists
 
 - [x] Live Markdown preview
 - [x] Multi-tab documents
@@ -1066,21 +1066,21 @@ flowchart LR
 - [x] Folder graph workflows
 - [ ] Your next document
 
-## ?? Feature Snapshot
+## 📋 Feature Snapshot
 
 | Capability | MD-Editor |
 |:--|:--|
-| Runs in browser | ? |
-| Client-side rendering | ? |
-| GitHub-flavored Markdown | ? |
-| Multi-document tabs | ? |
-| Folder import and graph view | ? |
-| Mermaid diagrams | ? |
-| LaTeX math | ? |
-| Export to MD, HTML, and PDF | ? |
-| Public GitHub import | ? |
+| Runs in browser | ✅ |
+| Client-side rendering | ✅ |
+| GitHub-flavored Markdown | ✅ |
+| Multi-document tabs | ✅ |
+| Folder import and graph view | ✅ |
+| Mermaid diagrams | ✅ |
+| LaTeX math | ✅ |
+| Export to MD, HTML, and PDF | ✅ |
+| Public GitHub import | ✅ |
 
-## ?? Formatting Examples
+## ✨ Formatting Examples
 
 Use **bold**, *italic*, ***bold italic***, ~~strikethrough~~, <mark>highlighting</mark>, and <u>underlines</u>.
 
@@ -1090,7 +1090,7 @@ Keyboard shortcuts: <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> to export Mark
 > [!TIP]
 > Drag Markdown files into the app or use the import menu to bring in existing documentation quickly.
 
-## ?? Helpful Links
+## 🔗 Helpful Links
 
 - [MD-Editor repository](https://github.com/ThisIs-Developer/Markdown-Viewer)
 - [GitHub Flavored Markdown spec](https://github.github.com/gfm/)
@@ -1099,7 +1099,7 @@ Keyboard shortcuts: <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>S</kbd> to export Mark
 
 ---
 
-## ??? Security and Privacy
+## 🔒 Security and Privacy
 
 Markdown content is processed client-side in your browser and sanitized before preview rendering. Public GitHub import uses GitHub-hosted resources only for the files you choose to import, and local tab persistence stays in this browser's storage.`;
 
