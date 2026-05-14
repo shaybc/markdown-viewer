@@ -614,6 +614,79 @@ test("converts selected editor text from the formatting toolbar", async ({ page 
   await page.locator(".editor-format-button[data-editor-format-action='heading-1']").click();
 
   await expect(editor).toHaveValue("# Toolbar heading");
+
+  await editor.fill("small heading");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='heading-6']").click();
+  await expect(editor).toHaveValue("###### small heading");
+
+  await editor.fill("removed");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='strikethrough']").click();
+
+  await expect(editor).toHaveValue("~~removed~~");
+
+  await editor.fill("mIXed WORDS");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='title-case']").click();
+  await expect(editor).toHaveValue("Mixed Words");
+
+  await editor.fill("make me loud");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='uppercase']").click();
+  await expect(editor).toHaveValue("MAKE ME LOUD");
+
+  await editor.fill("MAKE ME QUIET");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='lowercase']").click();
+  await expect(editor).toHaveValue("make me quiet");
+
+  await editor.fill("OpenAI docs");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='link']").click();
+  await expect(page.locator("#editor-link-modal")).toBeVisible();
+  await expect(page.locator("#editor-link-text")).toHaveValue("OpenAI docs");
+  await page.locator("#editor-link-url").fill("https://openai.com");
+  await page.locator("#editor-link-apply").click();
+  await expect(editor).toHaveValue("[OpenAI docs](https://openai.com)");
+
+  await editor.fill("italic text");
+  await editor.evaluate((textarea) => {
+    textarea.focus();
+    textarea.selectionStart = 0;
+    textarea.selectionEnd = textarea.value.length;
+  });
+  await page.locator(".editor-format-button[data-editor-format-action='reference']").click();
+  await expect(page.locator("#editor-reference-modal")).toBeVisible();
+  await expect(page.locator("#editor-reference-number")).toHaveValue("[1]");
+  await page.locator("#editor-reference-url").fill("https://example.com/ref");
+  await page.locator("#editor-reference-title").fill("Reference title");
+  await page.locator("#editor-reference-apply").click();
+  await expect(editor).toHaveValue('italic text[1]\n\n[1]: https://example.com/ref "Reference title"');
 });
 
 test("mirrors editor markdown syntax in the highlight overlay", async ({ page }) => {

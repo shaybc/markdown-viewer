@@ -88,7 +88,20 @@
   const editorPositionLabelElement = document.getElementById("editor-position-label");
   const editorPositionValueElement = document.getElementById("editor-position-value");
   const editorFormattingToolbarButtons = document.querySelectorAll(".editor-formatting-toolbar [data-editor-format-action]");
+  const editorLinkModal = document.getElementById("editor-link-modal");
+  const editorLinkUrlInput = document.getElementById("editor-link-url");
+  const editorLinkTextInput = document.getElementById("editor-link-text");
+  const editorLinkCancelButton = document.getElementById("editor-link-cancel");
+  const editorLinkApplyButton = document.getElementById("editor-link-apply");
+  const editorReferenceModal = document.getElementById("editor-reference-modal");
+  const editorReferenceNumberInput = document.getElementById("editor-reference-number");
+  const editorReferenceUrlInput = document.getElementById("editor-reference-url");
+  const editorReferenceTitleInput = document.getElementById("editor-reference-title");
+  const editorReferenceCancelButton = document.getElementById("editor-reference-cancel");
+  const editorReferenceApplyButton = document.getElementById("editor-reference-apply");
   let previewHoveredLinkUrl = "";
+  let editorLinkSelection = null;
+  let editorReferenceSelection = null;
 
   const clipboard = window.registerMarkdownViewerClipboard(app, {
     copyMarkdownButton,
@@ -352,6 +365,99 @@
   const handleEditorContextMenu = editorContextMenu.handleEditorContextMenu;
   const redoEditorContextMenuConversion = editorContextMenu.redoEditorContextMenuConversion;
   const undoEditorContextMenuConversion = editorContextMenu.undoEditorContextMenuConversion;
+  function getSelectedEditorText() {
+    const selectionStart = Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+    const selectionEnd = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+    return markdownEditor.value.slice(selectionStart, selectionEnd);
+  }
+  function openEditorLinkModal() {
+    if (!editorLinkModal) return;
+    editorLinkSelection = {
+      start: Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0),
+      end: Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0)
+    };
+    editorLinkUrlInput.value = "https://";
+    editorLinkTextInput.value = getSelectedEditorText();
+    editorLinkModal.style.display = "flex";
+    window.setTimeout(function() {
+      editorLinkUrlInput.focus();
+      editorLinkUrlInput.select();
+    }, 0);
+  }
+  function closeEditorLinkModal() {
+    if (!editorLinkModal) return;
+    editorLinkModal.style.display = "none";
+    markdownEditor.focus();
+  }
+  function applyEditorLinkModal() {
+    if (!editorLinkSelection) return;
+    const url = editorLinkUrlInput.value.trim();
+    const linkText = editorLinkTextInput.value || url;
+    if (!url) {
+      editorLinkUrlInput.focus();
+      return;
+    }
+    markdownEditor.focus();
+    markdownEditor.selectionStart = editorLinkSelection.start;
+    markdownEditor.selectionEnd = editorLinkSelection.end;
+    editorContextMenu.replaceSelectionWithText(`[${linkText}](${url})`);
+    closeEditorLinkModal();
+  }
+  function normalizeReferenceNumber(value) {
+    const trimmed = (value || "").trim();
+    if (!trimmed) return "";
+    return /^\[[^\]]+\]$/.test(trimmed) ? trimmed : `[${trimmed.replace(/^\[|\]$/g, "")}]`;
+  }
+  function getEditorReferenceDefinition(referenceNumber, url, title) {
+    const trimmedTitle = (title || "").trim();
+    const escapedTitle = trimmedTitle.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return trimmedTitle ? `${referenceNumber}: ${url} "${escapedTitle}"` : `${referenceNumber}: ${url}`;
+  }
+  function openEditorReferenceModal() {
+    if (!editorReferenceModal) return;
+    editorReferenceSelection = {
+      start: Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0),
+      end: Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0)
+    };
+    editorReferenceNumberInput.value = "[1]";
+    editorReferenceUrlInput.value = "https://";
+    editorReferenceTitleInput.value = "";
+    editorReferenceModal.style.display = "flex";
+    window.setTimeout(function() {
+      editorReferenceNumberInput.focus();
+      editorReferenceNumberInput.select();
+    }, 0);
+  }
+  function closeEditorReferenceModal() {
+    if (!editorReferenceModal) return;
+    editorReferenceModal.style.display = "none";
+    markdownEditor.focus();
+  }
+  function applyEditorReferenceModal() {
+    if (!editorReferenceSelection) return;
+    const referenceNumber = normalizeReferenceNumber(editorReferenceNumberInput.value);
+    const url = editorReferenceUrlInput.value.trim();
+    if (!referenceNumber) {
+      editorReferenceNumberInput.focus();
+      return;
+    }
+    if (!url) {
+      editorReferenceUrlInput.focus();
+      return;
+    }
+
+    const value = markdownEditor.value;
+    const selectedText = value.slice(editorReferenceSelection.start, editorReferenceSelection.end);
+    const inlineReference = `${selectedText}${referenceNumber}`;
+    const trailingContent = value.slice(editorReferenceSelection.end);
+    const definition = getEditorReferenceDefinition(referenceNumber, url, editorReferenceTitleInput.value);
+    const separator = value.trimEnd() ? "\n\n" : "";
+    const replacement = `${inlineReference}${trailingContent}${separator}${definition}`;
+
+    markdownEditor.focus();
+    editorContextMenu.replaceRangeWithText(editorReferenceSelection.start, value.length, replacement);
+    closeEditorReferenceModal();
+  }
   editorFormattingToolbarButtons.forEach(function(button) {
     button.addEventListener("mousedown", function(event) {
       event.preventDefault();
@@ -360,7 +466,63 @@
       event.preventDefault();
       hideLinkAutocomplete();
       hideEditorContextMenu();
+      if (button.dataset.editorFormatAction === "link") {
+        openEditorLinkModal();
+        return;
+      }
+      if (button.dataset.editorFormatAction === "reference") {
+        openEditorReferenceModal();
+        return;
+      }
       editorContextMenu.applyMarkdownActionToSelection(button.dataset.editorFormatAction);
+    });
+  });
+  if (editorLinkCancelButton) {
+    editorLinkCancelButton.addEventListener("click", closeEditorLinkModal);
+  }
+  if (editorLinkApplyButton) {
+    editorLinkApplyButton.addEventListener("click", applyEditorLinkModal);
+  }
+  if (editorLinkModal) {
+    editorLinkModal.addEventListener("click", function(event) {
+      if (event.target === editorLinkModal) closeEditorLinkModal();
+    });
+  }
+  if (editorReferenceCancelButton) {
+    editorReferenceCancelButton.addEventListener("click", closeEditorReferenceModal);
+  }
+  if (editorReferenceApplyButton) {
+    editorReferenceApplyButton.addEventListener("click", applyEditorReferenceModal);
+  }
+  if (editorReferenceModal) {
+    editorReferenceModal.addEventListener("click", function(event) {
+      if (event.target === editorReferenceModal) closeEditorReferenceModal();
+    });
+  }
+  [editorLinkUrlInput, editorLinkTextInput].forEach(function(input) {
+    if (!input) return;
+    input.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyEditorLinkModal();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorLinkModal();
+      }
+    });
+  });
+  [editorReferenceNumberInput, editorReferenceUrlInput, editorReferenceTitleInput].forEach(function(input) {
+    if (!input) return;
+    input.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyEditorReferenceModal();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeEditorReferenceModal();
+      }
     });
   });
   // View Mode Elements - Story 1.1

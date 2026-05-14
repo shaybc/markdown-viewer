@@ -21,11 +21,18 @@
       { type: "heading-1", label: "Heading 1", icon: "bi-type-h1" },
       { type: "heading-2", label: "Heading 2", icon: "bi-type-h2" },
       { type: "heading-3", label: "Heading 3", icon: "bi-type-h3" },
+      { type: "heading-4", label: "Heading 4", icon: "bi-type-h4" },
+      { type: "heading-5", label: "Heading 5", icon: "bi-type-h5" },
+      { type: "heading-6", label: "Heading 6", icon: "bi-type-h6" },
       { type: "fenced-code", label: "Fenced code", icon: "bi-code-square" },
       { type: "inline-code", label: "Inline code", icon: "bi-code" },
       { type: "link", label: "Link", icon: "bi-link-45deg" },
       { type: "url", label: "URL", icon: "bi-globe" },
       { type: "emphasis", label: "Emphasis", icon: "bi-type-italic" },
+      { type: "strikethrough", label: "Strikethrough", icon: "bi-type-strikethrough" },
+      { type: "title-case", label: "Title case", icon: "bi-type" },
+      { type: "uppercase", label: "Uppercase", icon: "bi-alphabet-uppercase" },
+      { type: "lowercase", label: "Lowercase", icon: "bi-alphabet" },
       { type: "strong", label: "Strong emphasis", icon: "bi-type-bold" },
       { type: "blockquote", label: "Blockquote", icon: "bi-blockquote-left" },
       { type: "unordered-list", label: "Bulleted list", icon: "bi-list-ul" },
@@ -185,6 +192,12 @@
       return tableRows.map((row) => `| ${row.join(" | ")} |`).join("\n");
     }
 
+    function convertSelectionToTitleCase(text) {
+      return text.toLowerCase().replace(/\p{L}[\p{L}\p{N}'-]*/gu, function(word) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      });
+    }
+
     function convertSelectionToMarkdown(type, selectedText) {
       const text = selectedText || "";
       const trimmed = text.trim();
@@ -196,6 +209,12 @@
           return toggleLinePrefix(text, "## ");
         case "heading-3":
           return toggleLinePrefix(text, "### ");
+        case "heading-4":
+          return toggleLinePrefix(text, "#### ");
+        case "heading-5":
+          return toggleLinePrefix(text, "##### ");
+        case "heading-6":
+          return toggleLinePrefix(text, "###### ");
         case "fenced-code":
           return `\`\`\`\n${text}\n\`\`\``;
         case "inline-code":
@@ -206,6 +225,14 @@
           return `<${trimmed || text}>`;
         case "emphasis":
           return `*${text}*`;
+        case "strikethrough":
+          return `~~${text}~~`;
+        case "title-case":
+          return convertSelectionToTitleCase(text);
+        case "uppercase":
+          return text.toUpperCase();
+        case "lowercase":
+          return text.toLowerCase();
         case "strong":
           return `**${text}**`;
         case "blockquote":
@@ -247,6 +274,18 @@
         end: Math.max(selectionStart, selectionEnd)
       };
       replaceEditorSelectionWithMarkdown(type);
+    }
+
+    function replaceSelectionWithText(replacement) {
+      const selectionStart = Math.min(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+      const selectionEnd = Math.max(markdownEditor.selectionStart || 0, markdownEditor.selectionEnd || 0);
+      replaceEditorSelectionPreservingUndo(selectionStart, selectionEnd, replacement);
+      hideEditorContextMenu();
+    }
+
+    function replaceRangeWithText(start, end, replacement) {
+      replaceEditorSelectionPreservingUndo(start, end, replacement);
+      hideEditorContextMenu();
     }
 
     function renderEditorContextMenu(clientX, clientY) {
@@ -299,6 +338,8 @@
       contains,
       convertSelectionToMarkdown,
       applyMarkdownActionToSelection,
+      replaceSelectionWithText,
+      replaceRangeWithText,
       hideEditorContextMenu,
       handleEditorContextMenu,
       redoEditorContextMenuConversion,

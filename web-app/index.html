@@ -366,6 +366,38 @@
           </div>
         </div>
 
+        <!-- Editor Link Modal -->
+        <div id="editor-link-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-link-modal-title" style="display:none;">
+          <div class="reset-modal-box editor-link-modal-box">
+            <p id="editor-link-modal-title" class="reset-modal-message editor-link-modal-title">Insert link</p>
+            <label class="editor-link-modal-label" for="editor-link-url">Address / URL</label>
+            <input type="url" id="editor-link-url" class="rename-modal-input" placeholder="https://" autocomplete="url" />
+            <label class="editor-link-modal-label" for="editor-link-text">Link Text</label>
+            <input type="text" id="editor-link-text" class="rename-modal-input" placeholder="Link title" />
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="editor-link-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn" id="editor-link-apply" type="button">Apply</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Reference Modal -->
+        <div id="editor-reference-modal" class="reset-modal-overlay editor-link-modal" role="dialog" aria-modal="true" aria-labelledby="editor-reference-modal-title" style="display:none;">
+          <div class="reset-modal-box editor-link-modal-box">
+            <p id="editor-reference-modal-title" class="reset-modal-message editor-link-modal-title">Insert reference</p>
+            <label class="editor-link-modal-label" for="editor-reference-number">Reference Number</label>
+            <input type="text" id="editor-reference-number" class="rename-modal-input" placeholder="[1]" />
+            <label class="editor-link-modal-label" for="editor-reference-url">Address / Link</label>
+            <input type="url" id="editor-reference-url" class="rename-modal-input" placeholder="https://" autocomplete="url" />
+            <label class="editor-link-modal-label" for="editor-reference-title">Title</label>
+            <input type="text" id="editor-reference-title" class="rename-modal-input" placeholder="Reference title" />
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="editor-reference-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn" id="editor-reference-apply" type="button">Insert</button>
+            </div>
+          </div>
+        </div>
+
         <!-- About Modal -->
         <div id="about-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="about-modal-title" style="display:none;">
           <div class="reset-modal-box about-modal-box">
@@ -515,6 +547,12 @@
                   <button class="editor-format-button" type="button" data-editor-format-action="emphasis" title="Italic" aria-label="Italic">
                     <i class="bi bi-type-italic" aria-hidden="true"></i>
                   </button>
+                  <button class="editor-format-button" type="button" data-editor-format-action="strikethrough" title="Strikethrough" aria-label="Strikethrough">
+                    <i class="bi bi-type-strikethrough" aria-hidden="true"></i>
+                  </button>
+                  <button class="editor-format-button editor-format-case" type="button" data-editor-format-action="title-case" title="Title case" aria-label="Title case">Aa</button>
+                  <button class="editor-format-button editor-format-case" type="button" data-editor-format-action="uppercase" title="Uppercase" aria-label="Uppercase">A</button>
+                  <button class="editor-format-button editor-format-case" type="button" data-editor-format-action="lowercase" title="Lowercase" aria-label="Lowercase">a</button>
                   <button class="editor-format-button" type="button" data-editor-format-action="blockquote" title="Blockquote" aria-label="Blockquote">
                     <i class="bi bi-blockquote-left" aria-hidden="true"></i>
                   </button>
@@ -528,6 +566,9 @@
                   <button class="editor-format-button editor-format-heading" type="button" data-editor-format-action="heading-1" title="Heading 1" aria-label="Heading 1">H1</button>
                   <button class="editor-format-button editor-format-heading" type="button" data-editor-format-action="heading-2" title="Heading 2" aria-label="Heading 2">H2</button>
                   <button class="editor-format-button editor-format-heading" type="button" data-editor-format-action="heading-3" title="Heading 3" aria-label="Heading 3">H3</button>
+                  <button class="editor-format-button editor-format-heading" type="button" data-editor-format-action="heading-4" title="Heading 4" aria-label="Heading 4">H4</button>
+                  <button class="editor-format-button editor-format-heading" type="button" data-editor-format-action="heading-5" title="Heading 5" aria-label="Heading 5">H5</button>
+                  <button class="editor-format-button editor-format-heading" type="button" data-editor-format-action="heading-6" title="Heading 6" aria-label="Heading 6">H6</button>
                   <span class="editor-format-separator" aria-hidden="true"></span>
                   <button class="editor-format-button" type="button" data-editor-format-action="unordered-list" title="Bulleted list" aria-label="Bulleted list">
                     <i class="bi bi-list-ul" aria-hidden="true"></i>
@@ -545,6 +586,7 @@
                   <button class="editor-format-button" type="button" data-editor-format-action="link" title="Link" aria-label="Link">
                     <i class="bi bi-link-45deg" aria-hidden="true"></i>
                   </button>
+                  <button class="editor-format-button editor-format-reference" type="button" data-editor-format-action="reference" title="Reference" aria-label="Reference">[]</button>
                   <button class="editor-format-button" type="button" data-editor-format-action="url" title="URL" aria-label="URL">
                     <i class="bi bi-globe" aria-hidden="true"></i>
                   </button>

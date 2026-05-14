@@ -290,6 +290,18 @@ body {
   font-weight: 700;
 }
 
+.editor-format-case {
+  width: 32px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+}
+
+.editor-format-reference {
+  width: 32px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-weight: 700;
+}
+
 .editor-format-separator {
   flex: 0 0 1px;
   width: 1px;
@@ -4054,6 +4066,24 @@ a:focus {
 
 .rename-modal-input:focus {
   border-color: var(--accent-color);
+}
+
+.editor-link-modal-box {
+  width: min(640px, calc(100vw - 28px));
+  max-width: min(640px, calc(100vw - 28px));
+  gap: 10px;
+  text-align: left;
+}
+
+.editor-link-modal-title {
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.editor-link-modal-label {
+  color: var(--disabled-text-color);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .github-import-error {
