@@ -1363,7 +1363,7 @@
     }
 
     const graphSnapshot = await createGraphSnapshot(folderFiles, folderName);
-    const graphTab = createGraphTab(folderName, { graphSnapshot, graphViewConfig: null, graphScopeKey });
+    const graphTab = createGraphTab(folderName, { graphSnapshot, graphScopeKey });
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);

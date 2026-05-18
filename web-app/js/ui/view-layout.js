@@ -172,6 +172,9 @@
     if (!folderTreePane) return;
     const sidebarWidth = getClampedSidebarWidth(width);
     folderTreePane.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+    if (appStatusLineElement) {
+      appStatusLineElement.style.setProperty('--status-sidebar-width', `${sidebarWidth}px`);
+    }
     updateSidebarWidthResizerAccessibility(sidebarWidth);
     if (shouldPersist) {
       saveGlobalState({ sidebarWidth });

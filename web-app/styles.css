@@ -105,16 +105,17 @@ body {
 
 .app-status-line {
   position: fixed;
+  --status-sidebar-width: 280px;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 1200;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: var(--status-sidebar-width) minmax(0, 1fr);
   align-items: center;
-  gap: 0.75rem;
+  gap: 0;
   min-height: 24px;
-  padding: 2px 10px;
+  padding: 0;
   border-top: 1px solid var(--border-color);
   background-color: var(--header-bg);
   color: var(--text-color);
@@ -123,11 +124,40 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+.app-status-line.sidebar-hidden {
+  --status-sidebar-width: 0px;
+}
+
 .status-section {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   min-width: 0;
+}
+
+.status-sidebar {
+  justify-content: flex-start;
+  align-self: stretch;
+  overflow: hidden;
+  padding: 2px 10px;
+  border-right: 1px solid var(--border-color);
+  transition: padding 0.24s ease, border-color 0.24s ease;
+}
+
+.app-status-line.sidebar-hidden .status-sidebar {
+  gap: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-right-color: transparent;
+}
+
+.status-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 2px 10px;
 }
 
 .status-left {
@@ -175,10 +205,18 @@ body {
 
 @media (max-width: 767px) {
   .app-status-line {
+    grid-template-columns: minmax(0, 1fr);
+    font-size: 0.65rem;
+  }
+
+  .status-sidebar {
+    display: none;
+  }
+
+  .status-main {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.35rem;
     padding: 2px 6px;
-    font-size: 0.65rem;
   }
 
   .status-left {
@@ -1831,6 +1869,16 @@ body {
 .graph-view-canvas {
   flex: 1;
   min-height: 560px;
+}
+
+.graph-loading-message {
+  display: grid;
+  place-items: center;
+  min-height: inherit;
+  height: 100%;
+  margin: 0;
+  color: var(--disabled-text-color);
+  font-weight: 600;
 }
 
 .graph-tab-render {

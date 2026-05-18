@@ -32,13 +32,32 @@
     };
   }
 
+  function getGraphNodeCountForDisplayDefaults(options = {}) {
+    const snapshot = options.graphSnapshot !== undefined ? options.graphSnapshot : options.graphDocument?.snapshot;
+    return Array.isArray(snapshot?.nodes) ? snapshot.nodes.length : 0;
+  }
+
+  function getDefaultGraphViewConfigForNodeCount(nodeCount) {
+    const config = { ...DEFAULT_GRAPH_VIEW_CONFIG };
+    if (nodeCount > LARGE_GRAPH_DISPLAY_NODE_LIMIT) {
+      config.showArrows = false;
+      config.showOrphans = false;
+      config.showLabels = false;
+    }
+    return config;
+  }
+
   function createGraphTab(folderName, options) {
     if (options === undefined) options = {};
+    const hasExplicitViewConfig = options.graphViewConfig != null || options.graphDocument?.viewConfig != null;
+    const viewConfig = hasExplicitViewConfig
+      ? (options.graphViewConfig != null ? options.graphViewConfig : options.graphDocument?.viewConfig)
+      : getDefaultGraphViewConfigForNodeCount(getGraphNodeCountForDisplayDefaults(options));
     const graphDocument = normalizeGraphDocument({
       ...(options.graphDocument || {}),
       folderName: folderName || options.folderName || "Graph View",
       snapshot: options.graphSnapshot !== undefined ? options.graphSnapshot : options.graphDocument?.snapshot,
-      viewConfig: options.graphViewConfig !== undefined ? options.graphViewConfig : options.graphDocument?.viewConfig,
+      viewConfig,
       graphLayout: options.graphLayout !== undefined ? options.graphLayout : (options.graphDocument?.graphLayout !== undefined ? options.graphDocument.graphLayout : options.graphDocument?.layout)
     });
     const graphData = deserializeGraphDocument(graphDocument);
@@ -50,6 +69,9 @@
     tab.graphDocument = graphData.graphDocument;
     if (options.graphScopeKey) tab.graphScopeKey = options.graphScopeKey;
     if (Object.prototype.hasOwnProperty.call(graphData, "graphLayout")) tab.graphLayout = graphData.graphLayout;
+    if (!hasExplicitViewConfig && getGraphNodeCountForDisplayDefaults(options) === 0) {
+      tab.pendingLargeGraphDisplayDefaults = true;
+    }
     return tab;
   }
 

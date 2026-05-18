@@ -828,13 +828,18 @@
     </div>
 
         <footer class="app-status-line" aria-label="Document status">
-            <div class="status-section status-left">
+            <div class="status-section status-sidebar">
+                <span class="status-item"><i class="bi bi-file-earmark-text" aria-hidden="true"></i> <span id="folder-file-count">0</span> Files</span>
+                <span class="status-item"><i class="bi bi-folder2-open" aria-hidden="true"></i> <span id="folder-directory-count">0</span> Folders</span>
+            </div>
+            <div class="status-main">
+              <div class="status-section status-left">
                 <span class="status-item"><i class="bi bi-clock" aria-hidden="true"></i> <span id="reading-time">0</span> Min Read</span>
                 <span class="status-item"><i class="bi bi-text-paragraph" aria-hidden="true"></i> <span id="word-count">0</span> Words</span>
                 <span class="status-item"><i class="bi bi-fonts" aria-hidden="true"></i> <span id="char-count">0</span> Chars</span>
-            </div>
-            <div id="status-tip" class="status-tip">Drop a Markdown file or open a folder to start.</div>
-            <div class="status-section status-right">
+              </div>
+              <div id="status-tip" class="status-tip">Drop a Markdown file or open a folder to start.</div>
+              <div class="status-section status-right">
                 <span id="graph-zoom-status" class="status-item graph-zoom-status hidden">Zoom: <span id="graph-zoom-percent">100%</span></span>
                 <span id="graph-points-status" class="status-item graph-points-status hidden"># of points: <span id="graph-points-count">0</span></span>
                 <span id="editor-textpad-status" class="status-item editor-textpad-status hidden" aria-live="polite">
@@ -844,6 +849,7 @@
                     <span>Col: <span id="editor-cursor-column">1</span></span>
                     <span><span id="editor-position-label">Pos</span>: <span id="editor-position-value">1</span></span>
                 </span>
+              </div>
             </div>
         </footer>
 
@@ -972,6 +978,11 @@
                   <label class="graph-toggle-row" for="graph-display-orphans">
                     <span>Orphans</span>
                     <input id="graph-display-orphans" class="graph-switch-input" type="checkbox" aria-label="Show graph orphan points">
+                    <span class="graph-switch" aria-hidden="true"></span>
+                  </label>
+                  <label class="graph-toggle-row" for="graph-display-labels">
+                    <span>Labels</span>
+                    <input id="graph-display-labels" class="graph-switch-input" type="checkbox" aria-label="Show graph node labels">
                     <span class="graph-switch" aria-hidden="true"></span>
                   </label>
                   <label class="graph-slider-control" for="graph-text-fade-threshold">

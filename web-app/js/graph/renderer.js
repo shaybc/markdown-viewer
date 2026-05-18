@@ -7,7 +7,7 @@
     if (!graphViewCanvas) return;
     const renderRequestId = ++graphRenderRequestId;
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
-    const graphViewConfig = activeTab && activeTab.type === "graph" ? normalizeGraphViewConfig(activeTab.graphViewConfig) : normalizeGraphViewConfig(null);
+    let graphViewConfig = activeTab && activeTab.type === "graph" ? normalizeGraphViewConfig(activeTab.graphViewConfig) : normalizeGraphViewConfig(null);
     if (activeTab && activeTab.type === "graph") activeTab.graphViewConfig = graphViewConfig;
     hideInactiveGraphRenders(activeTab?.id);
     graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
@@ -24,9 +24,14 @@
     if (!graphSnapshot && folderMarkdownFiles.length && !isKeepSavedGraphMode(activeTab)) {
       const snapshotFiles = folderMarkdownFiles.slice();
       const loadingMessage = document.createElement("p");
-      loadingMessage.className = "folder-tree-placeholder";
+      loadingMessage.className = "folder-tree-placeholder graph-loading-message";
       loadingMessage.textContent = "Building graph view…";
       graphViewCanvas.appendChild(loadingMessage);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
+        loadingMessage.remove();
+        return;
+      }
       graphSnapshot = await createGraphSnapshot(snapshotFiles, activeTab.folderName || activeTab.title);
       if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
         loadingMessage.remove();
@@ -34,6 +39,18 @@
       }
       activeTab.graphSnapshot = graphSnapshot;
       delete activeTab.graphComparisonSnapshot;
+      if (activeTab.pendingLargeGraphDisplayDefaults) {
+        if ((graphSnapshot.nodes || []).length > LARGE_GRAPH_DISPLAY_NODE_LIMIT) {
+          activeTab.graphViewConfig = normalizeGraphViewConfig({
+            ...(activeTab.graphViewConfig || {}),
+            showArrows: false,
+            showOrphans: false,
+            showLabels: false
+          });
+          graphViewConfig = activeTab.graphViewConfig;
+        }
+        delete activeTab.pendingLargeGraphDisplayDefaults;
+      }
       if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
       saveTabsToStorage(tabs);
       graphViewCanvas.querySelectorAll(".folder-tree-placeholder").forEach((node) => node.remove());
@@ -1936,6 +1953,10 @@
 
     function updateLabelVisibility() {
       if (!label) return;
+      if (graphViewConfig.showLabels === false) {
+        label.attr("opacity", 0);
+        return;
+      }
       const threshold = graphViewConfig.textFadeThreshold;
       const zoomScale = currentZoomTransform?.k || 1;
       const fullyHiddenZoom = 0.25 + threshold * 0.57;

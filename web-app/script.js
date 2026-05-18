@@ -80,6 +80,9 @@
   const graphZoomPercentElement = document.getElementById("graph-zoom-percent");
   const graphPointsStatusElement = document.getElementById("graph-points-status");
   const graphPointsCountElement = document.getElementById("graph-points-count");
+  const appStatusLineElement = document.querySelector(".app-status-line");
+  const folderFileCountElement = document.getElementById("folder-file-count");
+  const folderDirectoryCountElement = document.getElementById("folder-directory-count");
   const editorTextpadStatusElement = document.getElementById("editor-textpad-status");
   const editorTotalLengthElement = document.getElementById("editor-total-length");
   const editorTotalLinesElement = document.getElementById("editor-total-lines");
@@ -1766,6 +1769,7 @@
     resizeDivider,
     sidebarDropzoneResizer,
     sidebarWidthResizer,
+    appStatusLineElement,
     folderTreePane,
     sidebarDropzonePanel,
     editorPaneElement,
@@ -1849,6 +1853,7 @@
   const graphFileSearchFilter = document.getElementById("graph-file-search-filter");
   const graphDisplayArrows = document.getElementById("graph-display-arrows");
   const graphDisplayOrphans = document.getElementById("graph-display-orphans");
+  const graphDisplayLabels = document.getElementById("graph-display-labels");
   const graphTextFadeThreshold = document.getElementById("graph-text-fade-threshold");
   const graphNodeSize = document.getElementById("graph-node-size");
   const graphLinkThickness = document.getElementById("graph-link-thickness");
@@ -2186,6 +2191,7 @@ Markdown content is processed client-side in your browser and sanitized before p
   const GRAPH_DOCUMENT_TYPE_VIEW = "graph-view";
   const GRAPH_DOCUMENT_TYPE_EXPORT = "graph-export";
   const GRAPH_DOCUMENT_TYPES = new Set([GRAPH_DOCUMENT_TYPE_VIEW, GRAPH_DOCUMENT_TYPE_EXPORT]);
+  const LARGE_GRAPH_DISPLAY_NODE_LIMIT = 1500;
   const LIGHTWEIGHT_SAVED_GRAPH_TEXT_SEARCH_MESSAGE = "Text search is unavailable because this saved graph view does not contain file contents. Use Update graph to search current files, or open Export Folder to Graph.";
   const DEFAULT_GRAPH_VIEW_CONFIG = Object.freeze({
     showTags: false,
@@ -2196,6 +2202,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     searchQuery: "",
     showArrows: true,
     showOrphans: true,
+    showLabels: true,
     textFadeThreshold: 0.35,
     nodeSize: 0.8,
     linkThickness: 1,
@@ -2212,6 +2219,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     GRAPH_DOCUMENT_TYPE_VIEW,
     GRAPH_DOCUMENT_TYPE_EXPORT,
     GRAPH_DOCUMENT_TYPES,
+    LARGE_GRAPH_DISPLAY_NODE_LIMIT,
     STORAGE_KEY,
     ACTIVE_TAB_KEY,
     get activeTabId() { return activeTabId; },
@@ -2563,6 +2571,8 @@ Markdown content is processed client-side in your browser and sanitized before p
     get graphRenderCache() { return graphRenderCache; },
     get graphViewCanvas() { return graphViewCanvas; },
     normalizeEditorContent,
+    DEFAULT_GRAPH_VIEW_CONFIG,
+    LARGE_GRAPH_DISPLAY_NODE_LIMIT,
     normalizeGraphDocument,
     deserializeGraphDocument,
     serializeGraphTab,
@@ -2806,8 +2816,30 @@ Markdown content is processed client-side in your browser and sanitized before p
       folderTreeRoot.innerHTML = getClosedFolderPlaceholder();
     }
     renderTagManagementList();
+    updateFolderStatusLine();
     updateCloseFolderButtons();
     updateFolderTreeToolbarState();
+  }
+
+  function getFolderTreeStats(nodes) {
+    return (nodes || []).reduce(function(stats, node) {
+      if (!node) return stats;
+      if (node.kind === "directory") {
+        stats.folders += 1;
+        const childStats = getFolderTreeStats(node.children || []);
+        stats.files += childStats.files;
+        stats.folders += childStats.folders;
+      } else {
+        stats.files += 1;
+      }
+      return stats;
+    }, { files: 0, folders: 0 });
+  }
+
+  function updateFolderStatusLine() {
+    const stats = isFolderOpen ? getFolderTreeStats(currentFolderTreeNodes) : { files: 0, folders: 0 };
+    if (folderFileCountElement) folderFileCountElement.textContent = stats.files.toLocaleString();
+    if (folderDirectoryCountElement) folderDirectoryCountElement.textContent = stats.folders.toLocaleString();
   }
 
   function renderFolderTree(nodes, options = {}) {
@@ -2831,6 +2863,7 @@ Markdown content is processed client-side in your browser and sanitized before p
         : hasSelectedTagFilter
           ? '<p class="folder-tree-placeholder">No Markdown files match the selected tag filter.</p>'
           : '<p class="folder-tree-placeholder">No Markdown or graph files found in this folder.</p>';
+      updateFolderStatusLine();
       updateCloseFolderButtons();
       updateFolderTreeToolbarState();
       return;
@@ -2842,6 +2875,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     folderTreeRoot.appendChild(ul);
     updateCloseFolderButtons();
     updateFolderTreeToolbarState();
+    updateFolderStatusLine();
     syncFolderTreeSelectionToActiveTab({ scroll: false });
     renderLinkAutocomplete();
     if (!options.skipTagRefresh) {
@@ -3504,6 +3538,10 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
       saveGlobalState({ sidebarVisible: isVisible });
     }
 
+    if (appStatusLineElement) {
+      appStatusLineElement.classList.toggle("sidebar-hidden", !isVisible);
+    }
+
     updateSidebarToggleButtons();
 
     if (currentViewMode === 'split') {
@@ -3951,6 +3989,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get graphOnlySelectedTagButton() { return graphOnlySelectedTagButton; },
     get graphDisplayArrows() { return graphDisplayArrows; },
     get graphDisplayOrphans() { return graphDisplayOrphans; },
+    get graphDisplayLabels() { return graphDisplayLabels; },
     get graphTextFadeThreshold() { return graphTextFadeThreshold; },
     get graphNodeSize() { return graphNodeSize; },
     get graphLinkThickness() { return graphLinkThickness; },
@@ -4048,6 +4087,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get folderTreeRoot() { return folderTreeRoot; },
     get Neutralino() { return typeof Neutralino !== "undefined" ? Neutralino : undefined; },
     get NL_VERSION() { return typeof NL_VERSION !== "undefined" ? NL_VERSION : undefined; },
+    DEFAULT_GRAPH_VIEW_CONFIG,
+    LARGE_GRAPH_DISPLAY_NODE_LIMIT,
     normalizeGraphViewConfig,
     hideInactiveGraphRenders,
     updateStatusLine,

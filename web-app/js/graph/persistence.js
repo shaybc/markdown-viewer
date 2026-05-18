@@ -100,6 +100,7 @@
       searchQuery: String(source.searchQuery || "").trim().toLowerCase(),
       showArrows: source.showArrows !== false,
       showOrphans: source.showOrphans !== false,
+      showLabels: source.showLabels !== false,
       textFadeThreshold: clampGraphNumber(source.textFadeThreshold, DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold, 0, 1),
       nodeSize: clampGraphNumber(source.nodeSize, DEFAULT_GRAPH_VIEW_CONFIG.nodeSize, 0.4, 1.8),
       linkThickness: clampGraphNumber(source.linkThickness, DEFAULT_GRAPH_VIEW_CONFIG.linkThickness, 0.5, 4),

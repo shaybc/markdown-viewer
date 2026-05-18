@@ -7,9 +7,6 @@
       return;
     }
 
-    await refreshFolderFilesForGraphComparison?.();
-    await refreshOpenFolderGraphTabsFromFolderFiles?.();
-
     const folderName = activeFolderName || "Graph View";
     const graphScopeKey = getRootFolderGraphScopeKey();
     if (focusExistingFolderGraphTab(graphScopeKey, folderName)) return;
@@ -19,7 +16,7 @@
       return;
     }
 
-    const graphTab = createGraphTab(folderName, { graphViewConfig: null, graphScopeKey });
+    const graphTab = createGraphTab(folderName, { graphScopeKey });
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);

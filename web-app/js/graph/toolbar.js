@@ -715,6 +715,7 @@
     const graphControlInputs = [
       graphDisplayArrows,
       graphDisplayOrphans,
+      graphDisplayLabels,
       graphTextFadeThreshold,
       graphNodeSize,
       graphLinkThickness,
@@ -726,6 +727,7 @@
     graphControlInputs.forEach((input) => { input.disabled = !isGraphTab; });
     if (graphDisplayArrows) graphDisplayArrows.checked = graphViewConfig.showArrows;
     if (graphDisplayOrphans) graphDisplayOrphans.checked = graphViewConfig.showOrphans;
+    if (graphDisplayLabels) graphDisplayLabels.checked = graphViewConfig.showLabels;
     if (graphTextFadeThreshold) graphTextFadeThreshold.value = graphViewConfig.textFadeThreshold;
     if (graphNodeSize) graphNodeSize.value = graphViewConfig.nodeSize;
     if (graphLinkThickness) graphLinkThickness.value = graphViewConfig.linkThickness;
@@ -745,6 +747,7 @@
       groups: currentConfig.groups.map((group) => ({ ...group, enabled: false, hidden: false })),
       showArrows: DEFAULT_GRAPH_VIEW_CONFIG.showArrows,
       showOrphans: DEFAULT_GRAPH_VIEW_CONFIG.showOrphans,
+      showLabels: DEFAULT_GRAPH_VIEW_CONFIG.showLabels,
       textFadeThreshold: DEFAULT_GRAPH_VIEW_CONFIG.textFadeThreshold,
       nodeSize: DEFAULT_GRAPH_VIEW_CONFIG.nodeSize,
       linkThickness: DEFAULT_GRAPH_VIEW_CONFIG.linkThickness,
@@ -847,6 +850,7 @@
   }
   if (graphDisplayArrows) graphDisplayArrows.addEventListener("change", () => updateActiveGraphViewConfig({ showArrows: graphDisplayArrows.checked }));
   if (graphDisplayOrphans) graphDisplayOrphans.addEventListener("change", () => updateActiveGraphViewConfig({ showOrphans: graphDisplayOrphans.checked }));
+  if (graphDisplayLabels) graphDisplayLabels.addEventListener("change", () => updateActiveGraphViewConfig({ showLabels: graphDisplayLabels.checked }));
   const bindGraphRangeControl = (input, configKey) => {
     if (!input) return;
     input.addEventListener("input", () => updateActiveGraphViewConfig({ [configKey]: Number(input.value) }));
@@ -884,6 +888,7 @@
       ["#graph-add-group", "Add a color group. Groups use queries like path:, file:, tag:, links:, text:, and line: to color matching files."],
       ["#graph-display-arrows", "Toggle arrowheads on Markdown links to show link direction."],
       ["#graph-display-orphans", "Toggle graph points that do not have any visible connections."],
+      ["#graph-display-labels", "Toggle file and tag names drawn next to graph points."],
       ["#graph-text-fade-threshold", "Control how aggressively labels disappear while zooming out. At the default, labels are gone near 45% zoom and only larger points keep faded labels around 65%."],
       ["#graph-node-size", "Scale every graph point. Larger points are easier to hit and keep labels visible slightly longer while zoomed out."],
       ["#graph-link-thickness", "Adjust the stroke width of Markdown links between file points."],
