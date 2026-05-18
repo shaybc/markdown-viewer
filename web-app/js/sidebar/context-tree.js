@@ -2061,11 +2061,15 @@
     }
 
     if (folderPicker.shouldUseNativeDirectoryPicker(event)) {
+      let showedFolderLoadingState = false;
       try {
         const dirHandle = await window.showDirectoryPicker();
         activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
         activeFolderHandle = dirHandle || null;
         activeFolderPath = null;
+        renderFolderLoadingState?.(`Loading ${activeFolderName}...`);
+        showedFolderLoadingState = true;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
         const nodes = await listMarkdownTree(dirHandle);
         folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
         renderFolderTree(nodes);
@@ -2074,6 +2078,7 @@
         return;
       } catch (error) {
         if (error && error.name === "AbortError") return;
+        if (showedFolderLoadingState) renderFolderLoadingError?.("Unable to load this folder.");
         console.warn("Directory picker unavailable, using browser folder input.", error);
       }
     }

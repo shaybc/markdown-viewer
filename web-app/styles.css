@@ -1867,18 +1867,60 @@ body {
 }
 
 .graph-view-canvas {
+  position: relative;
   flex: 1;
   min-height: 560px;
 }
 
-.graph-loading-message {
-  display: grid;
-  place-items: center;
+.graph-loading-state {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
   min-height: inherit;
-  height: 100%;
-  margin: 0;
-  color: var(--disabled-text-color);
+  background:
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-color) 8%, transparent), transparent),
+    color-mix(in srgb, var(--preview-bg) 88%, transparent);
+  background-size: 220% 100%, 100% 100%;
+  color: var(--text-color);
   font-weight: 600;
+  backdrop-filter: blur(2px);
+  animation: graph-loading-sweep 1.6s ease-in-out infinite;
+}
+
+.graph-loading-spinner {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 3px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: graph-loading-spin 0.8s linear infinite;
+}
+
+@keyframes graph-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes graph-loading-sweep {
+  0% {
+    background-position: 0% 50%, 0 0;
+  }
+  100% {
+    background-position: 220% 50%, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-loading-state,
+  .graph-loading-spinner {
+    animation: none;
+  }
 }
 
 .graph-tab-render {
@@ -4949,6 +4991,57 @@ a:focus {
 .folder-tree-unsupported-file i { color: var(--disabled-text-color, #8b949e); opacity: 0.6; }
 .folder-tree-unsupported-file span { opacity: 0.66; }
 .folder-tree-placeholder { color: #8b949e; margin: 6px 2px; }
+
+.folder-loading-state {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.45rem 0.2rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--button-bg), var(--hover-bg), var(--button-bg));
+  background-size: 220% 100%;
+  color: var(--text-color);
+  font-size: 0.86rem;
+  animation: folder-loading-sweep 1.6s ease-in-out infinite;
+}
+
+.folder-loading-spinner {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  border: 2px solid color-mix(in srgb, var(--accent-color) 28%, transparent);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: folder-loading-spin 0.8s linear infinite;
+}
+
+.folder-loading-error {
+  color: var(--error-color, #dc3545);
+}
+
+@keyframes folder-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes folder-loading-sweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 220% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-loading-state,
+  .folder-loading-spinner {
+    animation: none;
+  }
+}
 
 
 

@@ -6,11 +6,18 @@
     activeFolderName = selectedPath.split(/[\\/]/).pop() || "Graph View";
     activeFolderHandle = null;
     activeFolderPath = selectedPath;
-    const nodes = await listMarkdownTreeNeutralino(selectedPath);
-    folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
-    renderFolderTree(nodes);
-    rememberRecentFolder({ name: activeFolderName, label: activeFolderName, path: selectedPath });
-    await promptActiveSavedGraphForCurrentFolder?.();
+    renderFolderLoadingState?.(`Loading ${activeFolderName}...`);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    try {
+      const nodes = await listMarkdownTreeNeutralino(selectedPath);
+      folderMarkdownFiles = await collectMarkdownFilesFromTreeNeutralino(nodes);
+      renderFolderTree(nodes);
+      rememberRecentFolder({ name: activeFolderName, label: activeFolderName, path: selectedPath });
+      await promptActiveSavedGraphForCurrentFolder?.();
+    } catch (error) {
+      renderFolderLoadingError?.("Unable to load this folder.");
+      throw error;
+    }
   }
 
   async function openMarkdownSourceFile(sourceFile) {

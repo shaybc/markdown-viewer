@@ -385,6 +385,8 @@
     get listMarkdownTreeNeutralino() { return listMarkdownTreeNeutralino; },
     get collectMarkdownFilesFromTreeNeutralino() { return collectMarkdownFilesFromTreeNeutralino; },
     get renderFolderTree() { return renderFolderTree; },
+    get renderFolderLoadingState() { return renderFolderLoadingState; },
+    get renderFolderLoadingError() { return renderFolderLoadingError; },
     get rememberRecentFolder() { return rememberRecentFolder; },
     get openSidebarFileInPermanentTab() { return openSidebarFileInPermanentTab; },
     get rememberRecentFile() { return rememberRecentFile; },
@@ -2891,8 +2893,36 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (folderDirectoryCountElement) folderDirectoryCountElement.textContent = stats.folders.toLocaleString();
   }
 
+  function renderFolderLoadingState(message = "Loading folder...") {
+    if (!folderTreeRoot) return;
+    folderTreeRoot.setAttribute("aria-busy", "true");
+    folderTreeRoot.innerHTML = "";
+    const loadingState = document.createElement("div");
+    loadingState.className = "folder-loading-state";
+    loadingState.setAttribute("role", "status");
+    loadingState.setAttribute("aria-live", "polite");
+    const spinner = document.createElement("span");
+    spinner.className = "folder-loading-spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.textContent = message;
+    loadingState.append(spinner, label);
+    folderTreeRoot.appendChild(loadingState);
+  }
+
+  function renderFolderLoadingError(message = "Unable to load this folder.") {
+    if (!folderTreeRoot) return;
+    folderTreeRoot.removeAttribute("aria-busy");
+    folderTreeRoot.innerHTML = "";
+    const errorMessage = document.createElement("p");
+    errorMessage.className = "folder-tree-placeholder folder-loading-error";
+    errorMessage.textContent = message;
+    folderTreeRoot.appendChild(errorMessage);
+  }
+
   function renderFolderTree(nodes, options = {}) {
     isFolderOpen = true;
+    folderTreeRoot.removeAttribute("aria-busy");
     if (!options.preserveNodes) {
       currentFolderTreeNodes = nodes || [];
       folderTreeFilterText = "";
@@ -3358,6 +3388,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     listMarkdownTreeNeutralino,
     collectMarkdownFilesFromTreeNeutralino,
     renderFolderTree,
+    renderFolderLoadingState,
+    renderFolderLoadingError,
     rememberRecentFile,
     rememberRecentFolder,
     updateCloseFolderButtons,
@@ -4009,16 +4041,29 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   if (folderInput) {
     folderInput.addEventListener("change", async function(e) {
       const files = e.target.files;
-      const firstRelativePath = Array.from(files || []).find((file) => file.webkitRelativePath)?.webkitRelativePath || "";
+      if (!files || !files.length) {
+        this.value = "";
+        return;
+      }
+      const firstRelativePath = Array.from(files).find((file) => file.webkitRelativePath)?.webkitRelativePath || "";
       activeFolderName = firstRelativePath.split("/")[0] || "Graph View";
       activeFolderHandle = null;
       activeFolderPath = null;
-      const nodes = await buildTreeFromFileList(files || []);
-      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
-      renderFolderTree(nodes);
-      rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
-      await promptActiveSavedGraphForCurrentFolder();
-      this.value = "";
+      renderFolderLoadingState(`Loading ${activeFolderName}...`);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      try {
+        const nodes = await buildTreeFromFileList(files);
+        folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
+        renderFolderTree(nodes);
+        rememberRecentFolder({ name: activeFolderName, label: activeFolderName });
+        await promptActiveSavedGraphForCurrentFolder();
+      } catch (error) {
+        console.error("Failed to open folder:", error);
+        renderFolderLoadingError("Unable to load this folder.");
+        alert("Unable to load this folder: " + (error?.message || error));
+      } finally {
+        this.value = "";
+      }
     });
   }
 
