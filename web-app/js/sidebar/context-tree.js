@@ -2031,46 +2031,46 @@
     return sortFolderTreeNodes(root);
   }
   async function openFolderTree(event) {
-  // Desktop app: use Neutralino native folder picker (no permission dialog)
-  if (typeof NL_VERSION !== "undefined") {
-    try {
-      const selectedPath = await Neutralino.os.showFolderDialog("Select a folder");
-      await openFolderTreeFromNeutralinoPath(selectedPath);
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-      console.error("Neutralino folder picker error:", error);
-    }
-    return;
-  }
-
-  if (folderPicker.shouldUseNativeDirectoryPicker(event)) {
-    try {
-      const dirHandle = await window.showDirectoryPicker();
-      activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
-      activeFolderHandle = dirHandle || null;
-      activeFolderPath = null;
-      const nodes = await listMarkdownTree(dirHandle);
-      folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
-      renderFolderTree(nodes);
-      rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle: dirHandle });
-      await promptActiveSavedGraphForCurrentFolder?.();
+    if (folderPicker.supportsDesktopFolderPicker?.()) {
+      try {
+        const selectedPath = await Neutralino.os.showFolderDialog("Select a folder");
+        await openFolderTreeFromNeutralinoPath(selectedPath);
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.error("Neutralino folder picker error:", error);
+        alert("Unable to open the desktop folder picker. Restart the desktop app and try again.");
+      }
       return;
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-      console.warn("Directory picker unavailable, using browser folder input.", error);
     }
-  }
 
-  if (folderInput) {
-    if (!shownFolderInputFallbackNotice) {
-      console.info(folderPicker.getFolderPickerFallbackMessage());
-      shownFolderInputFallbackNotice = true;
+    if (folderPicker.shouldUseNativeDirectoryPicker(event)) {
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        activeFolderName = dirHandle && dirHandle.name ? dirHandle.name : "Graph View";
+        activeFolderHandle = dirHandle || null;
+        activeFolderPath = null;
+        const nodes = await listMarkdownTree(dirHandle);
+        folderMarkdownFiles = await collectMarkdownFilesFromTree(nodes);
+        renderFolderTree(nodes);
+        rememberRecentFolder({ name: activeFolderName, label: activeFolderName, handle: dirHandle });
+        await promptActiveSavedGraphForCurrentFolder?.();
+        return;
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.warn("Directory picker unavailable, using browser folder input.", error);
+      }
     }
-    folderInput.click();
-  } else {
-    alert("Folder selection is not supported in this environment.");
+
+    if (folderInput) {
+      if (!shownFolderInputFallbackNotice) {
+        console.info(folderPicker.getFolderPickerFallbackMessage());
+        shownFolderInputFallbackNotice = true;
+      }
+      folderInput.click();
+    } else {
+      alert("Folder selection is not supported in this environment.");
+    }
   }
-}
 
 
 

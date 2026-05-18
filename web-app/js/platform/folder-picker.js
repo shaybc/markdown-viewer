@@ -4,6 +4,13 @@
   var fallbackMessage = "Browsers open folders with a read-only folder picker. Files stay on this device, but saving writes a downloaded copy unless you use the desktop app.";
 
   function registerFolderPicker(app) {
+    function supportsDesktopFolderPicker() {
+      return typeof window.Neutralino !== "undefined"
+        && !!window.Neutralino.os
+        && typeof window.Neutralino.os.showFolderDialog === "function"
+        && typeof window.Neutralino.filesystem !== "undefined";
+    }
+
     function supportsNativeDirectoryPicker() {
       return typeof window.showDirectoryPicker === "function";
     }
@@ -13,7 +20,7 @@
     }
 
     function shouldUseNativeDirectoryPicker() {
-      if (typeof window.NL_VERSION !== "undefined") return true;
+      if (supportsDesktopFolderPicker()) return false;
 
       var supported = supportsNativeDirectoryPicker();
       window.markdownViewerFolderPickerMode = supported ? "native" : "folder-input";
@@ -34,6 +41,7 @@
     var api = {
       getFolderPickerFallbackMessage: getFolderPickerFallbackMessage,
       shouldUseNativeDirectoryPicker: shouldUseNativeDirectoryPicker,
+      supportsDesktopFolderPicker: supportsDesktopFolderPicker,
       supportsNativeDirectoryPicker: supportsNativeDirectoryPicker,
       updateFolderImportHint: updateFolderImportHint,
     };
