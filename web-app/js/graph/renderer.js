@@ -87,7 +87,7 @@
       return;
     }
 
-    const graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
+    let graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
     const cachedRender = graphRenderCache.get(activeTab.id);
     if (cachedRender && cachedRender.signature === graphSignature && cachedRender.wrapper) {
       if (cachedRender.wrapper.parentElement !== graphViewCanvas) graphViewCanvas.appendChild(cachedRender.wrapper);
@@ -446,6 +446,153 @@
     if (graphViewConfig && graphViewConfig.mode === "full-network" && graphViewConfig.focusNodeId) {
       filterGraphToNodeIds(getFullNetworkNodeIds(graphViewConfig.focusNodeId));
     }
+
+    const LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT = 500;
+    const getVisibleFileNodeIdsForClustering = () => new Set(nodes
+      .filter((nodeData) => !isTagNode(nodeData) && !isClusterNode(nodeData))
+      .map((nodeData) => nodeData.id));
+    const getMarkdownFileAdjacencyForNodes = (fileNodeIds) => {
+      const adjacency = new Map(Array.from(fileNodeIds).map((nodeId) => [nodeId, new Set()]));
+      links.filter(isMarkdownLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (!sourceId || !targetId || sourceId === targetId) return;
+        if (!fileNodeIds.has(sourceId) || !fileNodeIds.has(targetId)) return;
+        adjacency.get(sourceId).add(targetId);
+        adjacency.get(targetId).add(sourceId);
+      });
+      return adjacency;
+    };
+    const getConnectedClusterSubsets = (candidateNodeIds, adjacency) => {
+      const candidates = new Set(candidateNodeIds);
+      const visited = new Set();
+      const subsets = [];
+      Array.from(candidates).sort((a, b) => a.localeCompare(b)).forEach((nodeId) => {
+        if (visited.has(nodeId)) return;
+        const subset = [];
+        const queue = [nodeId];
+        visited.add(nodeId);
+        while (queue.length) {
+          const currentNodeId = queue.shift();
+          subset.push(currentNodeId);
+          (adjacency.get(currentNodeId) || new Set()).forEach((nextNodeId) => {
+            if (!candidates.has(nextNodeId) || visited.has(nextNodeId)) return;
+            visited.add(nextNodeId);
+            queue.push(nextNodeId);
+          });
+        }
+        subsets.push(subset);
+      });
+      return subsets;
+    };
+    const detectGraphCommunities = () => {
+      const visibleFileNodeIds = getVisibleFileNodeIdsForClustering();
+      if (visibleFileNodeIds.size <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return [];
+      const adjacency = getMarkdownFileAdjacencyForNodes(visibleFileNodeIds);
+      const nodeIds = Array.from(adjacency.keys())
+        .filter((nodeId) => (adjacency.get(nodeId)?.size || 0) >= 2)
+        .sort((a, b) => a.localeCompare(b));
+      if (nodeIds.length <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return [];
+
+      const labels = new Map(nodeIds.map((id) => [id, id]));
+      const maxIterations = 20;
+      for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+        let changed = false;
+        nodeIds.forEach((id) => {
+          const counts = new Map();
+          (adjacency.get(id) || new Set()).forEach((neighborId) => {
+            if (!labels.has(neighborId)) return;
+            const label = labels.get(neighborId);
+            counts.set(label, (counts.get(label) || 0) + 1);
+          });
+          if (!counts.size) return;
+          const currentLabel = labels.get(id);
+          let bestLabel = currentLabel;
+          let bestCount = counts.get(currentLabel) || 0;
+          Array.from(counts.entries())
+            .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+            .forEach(([label, count]) => {
+              if (count > bestCount) {
+                bestLabel = label;
+                bestCount = count;
+              }
+            });
+          if (bestLabel !== currentLabel) {
+            labels.set(id, bestLabel);
+            changed = true;
+          }
+        });
+        if (!changed) break;
+      }
+
+      const nodeIdsByLabel = new Map();
+      nodeIds.forEach((nodeId) => {
+        const label = labels.get(nodeId);
+        if (!nodeIdsByLabel.has(label)) nodeIdsByLabel.set(label, []);
+        nodeIdsByLabel.get(label).push(nodeId);
+      });
+
+      const maxCommunitySize = Math.max(25, Math.min(300, Math.floor(nodeIds.length * 0.35)));
+      return Array.from(nodeIdsByLabel.values())
+        .flatMap((labelNodeIds) => getConnectedClusterSubsets(labelNodeIds, adjacency))
+        .filter((communityNodeIds) => communityNodeIds.length >= 4 && communityNodeIds.length <= maxCommunitySize)
+        .sort((a, b) => b.length - a.length || String(a[0] || "").localeCompare(String(b[0] || "")));
+    };
+    const createAutoCollapsedClustersForLargeGraph = () => {
+      const currentConfig = normalizeGraphViewConfig(activeTab.graphViewConfig);
+      if (currentConfig.autoCollapsedLargeGraph === true || (currentConfig.collapsedClusters || []).length) return [];
+      const communities = detectGraphCommunities();
+      if (!communities.length) return [];
+
+      const nodesById = new Map(nodes.map((nodeData) => [nodeData.id, nodeData]));
+      const outgoingCountsByNodeId = new Map();
+      links.filter(isMarkdownLink).forEach((link) => {
+        const sourceId = getLinkSourceId(link);
+        const targetId = getLinkTargetId(link);
+        if (!sourceId || !targetId || sourceId === targetId) return;
+        outgoingCountsByNodeId.set(sourceId, (outgoingCountsByNodeId.get(sourceId) || 0) + 1);
+      });
+      const usedNodeIds = new Set();
+      const clusters = [];
+      communities.forEach((communityNodeIds, index) => {
+        const memberNodeIds = communityNodeIds.filter((nodeId) => nodesById.has(nodeId) && !usedNodeIds.has(nodeId));
+        if (memberNodeIds.length < 4) return;
+        memberNodeIds.forEach((nodeId) => usedNodeIds.add(nodeId));
+        const seedNodeId = memberNodeIds
+          .slice()
+          .sort((a, b) => ((outgoingCountsByNodeId.get(b) || 0) - (outgoingCountsByNodeId.get(a) || 0)) || a.localeCompare(b))[0];
+        const seedNode = nodesById.get(seedNodeId) || {};
+        clusters.push({
+          id: createGraphGroupId(`auto-cluster:${activeTab.id}:${index}:${seedNodeId}:${memberNodeIds.join(",")}`),
+          label: getGraphNodeLabel(seedNode),
+          mode: "community",
+          auto: true,
+          seedNodeId,
+          memberNodeIds,
+          createdAt: Date.now()
+        });
+      });
+      return clusters;
+    };
+    const applyAutoCollapsedClustersForLargeGraph = () => {
+      const autoCollapsedClusters = createAutoCollapsedClustersForLargeGraph();
+      if (!autoCollapsedClusters.length) return;
+      graphViewConfig = normalizeGraphViewConfig({
+        ...(activeTab.graphViewConfig || {}),
+        collapsedClusters: autoCollapsedClusters,
+        autoCollapsedLargeGraph: true
+      });
+      activeTab.graphViewConfig = graphViewConfig;
+      if (activeTab.graphDocument && typeof activeTab.graphDocument === "object") {
+        activeTab.graphDocument.viewConfig = graphViewConfig;
+        activeTab.graphDocument.updatedAt = Date.now();
+      }
+      markGraphTabAsChanged(activeTab);
+      saveTabsToStorage(tabs);
+    };
+
+    applyAutoCollapsedClustersForLargeGraph();
+    graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
 
     const getClusterNodeId = (cluster) => cluster?.id || `cluster:${cluster?.seedNodeId || ""}`;
     const getClusterLabel = (cluster, memberNodes) => {
