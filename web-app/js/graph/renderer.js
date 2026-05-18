@@ -448,6 +448,9 @@
     }
 
     const LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT = 500;
+    const LARGE_GRAPH_AUTO_CLUSTER_VERSION = 2;
+    const getLargeGraphAutoClusterTarget = (nodeCount) => Math.min(1000, Math.max(500, Math.floor(nodeCount * 0.35)));
+    const getLargeGraphAutoClusterMaxSize = (nodeCount) => Math.max(80, Math.min(450, Math.ceil(nodeCount / 35)));
     const getVisibleFileNodeIdsForClustering = () => new Set(nodes
       .filter((nodeData) => !isTagNode(nodeData) && !isClusterNode(nodeData))
       .map((nodeData) => nodeData.id));
@@ -485,14 +488,55 @@
       });
       return subsets;
     };
+    const getBudgetedClusterChunks = (candidateNodeIds, adjacency, options = {}) => {
+      const maxClusterSize = Math.max(3, options.maxClusterSize || 160);
+      const minClusterSize = Math.max(3, options.minClusterSize || 3);
+      const degreeOf = (nodeId) => adjacency.get(nodeId)?.size || 0;
+      const remaining = new Set(candidateNodeIds);
+      const chunks = [];
+
+      const takeChunkFromSeed = (seedNodeId) => {
+        if (!remaining.has(seedNodeId)) return [];
+        const chunk = [];
+        const queued = new Set([seedNodeId]);
+        const queue = [seedNodeId];
+        while (queue.length && chunk.length < maxClusterSize) {
+          const currentNodeId = queue.shift();
+          queued.delete(currentNodeId);
+          if (!remaining.has(currentNodeId)) continue;
+          remaining.delete(currentNodeId);
+          chunk.push(currentNodeId);
+          Array.from(adjacency.get(currentNodeId) || [])
+            .filter((nextNodeId) => remaining.has(nextNodeId) && !queued.has(nextNodeId))
+            .sort((a, b) => degreeOf(b) - degreeOf(a) || a.localeCompare(b))
+            .forEach((nextNodeId) => {
+              if (chunk.length + queue.length >= maxClusterSize) return;
+              queued.add(nextNodeId);
+              queue.push(nextNodeId);
+            });
+        }
+        return chunk;
+      };
+
+      while (remaining.size) {
+        const seedNodeId = Array.from(remaining)
+          .sort((a, b) => degreeOf(b) - degreeOf(a) || a.localeCompare(b))[0];
+        const chunk = takeChunkFromSeed(seedNodeId);
+        if (chunk.length >= minClusterSize) {
+          chunks.push(chunk);
+        }
+      }
+
+      return chunks;
+    };
     const detectGraphCommunities = () => {
       const visibleFileNodeIds = getVisibleFileNodeIdsForClustering();
-      if (visibleFileNodeIds.size <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return [];
+      if (visibleFileNodeIds.size <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return { visibleFileNodeIds, adjacency: new Map(), communities: [] };
       const adjacency = getMarkdownFileAdjacencyForNodes(visibleFileNodeIds);
       const nodeIds = Array.from(adjacency.keys())
-        .filter((nodeId) => (adjacency.get(nodeId)?.size || 0) >= 2)
+        .filter((nodeId) => (adjacency.get(nodeId)?.size || 0) >= 1)
         .sort((a, b) => a.localeCompare(b));
-      if (nodeIds.length <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return [];
+      if (nodeIds.length <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return { visibleFileNodeIds, adjacency, communities: [] };
 
       const labels = new Map(nodeIds.map((id) => [id, id]));
       const maxIterations = 20;
@@ -532,17 +576,24 @@
         nodeIdsByLabel.get(label).push(nodeId);
       });
 
-      const maxCommunitySize = Math.max(25, Math.min(300, Math.floor(nodeIds.length * 0.35)));
-      return Array.from(nodeIdsByLabel.values())
+      const maxCommunitySize = getLargeGraphAutoClusterMaxSize(visibleFileNodeIds.size);
+      const communities = Array.from(nodeIdsByLabel.values())
         .flatMap((labelNodeIds) => getConnectedClusterSubsets(labelNodeIds, adjacency))
-        .filter((communityNodeIds) => communityNodeIds.length >= 4 && communityNodeIds.length <= maxCommunitySize)
+        .flatMap((communityNodeIds) => {
+          if (communityNodeIds.length <= maxCommunitySize) return [communityNodeIds];
+          return getBudgetedClusterChunks(communityNodeIds, adjacency, { maxClusterSize: maxCommunitySize, minClusterSize: 4 });
+        })
+        .filter((communityNodeIds) => communityNodeIds.length >= 4)
         .sort((a, b) => b.length - a.length || String(a[0] || "").localeCompare(String(b[0] || "")));
+      return { visibleFileNodeIds, adjacency, communities };
     };
     const createAutoCollapsedClustersForLargeGraph = () => {
       const currentConfig = normalizeGraphViewConfig(activeTab.graphViewConfig);
-      if (currentConfig.autoCollapsedLargeGraph === true || (currentConfig.collapsedClusters || []).length) return [];
-      const communities = detectGraphCommunities();
-      if (!communities.length) return [];
+      const existingAutoClusterVersion = Number(currentConfig.autoCollapsedLargeGraphVersion || 0);
+      if (currentConfig.autoCollapsedLargeGraph === true && existingAutoClusterVersion >= LARGE_GRAPH_AUTO_CLUSTER_VERSION) return null;
+      if ((currentConfig.collapsedClusters || []).length && currentConfig.autoCollapsedLargeGraph !== true) return null;
+      const { visibleFileNodeIds, adjacency, communities } = detectGraphCommunities();
+      if (visibleFileNodeIds.size <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return null;
 
       const nodesById = new Map(nodes.map((nodeData) => [nodeData.id, nodeData]));
       const outgoingCountsByNodeId = new Map();
@@ -554,16 +605,19 @@
       });
       const usedNodeIds = new Set();
       const clusters = [];
-      communities.forEach((communityNodeIds, index) => {
+      const targetNodeCount = getLargeGraphAutoClusterTarget(visibleFileNodeIds.size);
+      const requiredReduction = Math.max(0, visibleFileNodeIds.size - targetNodeCount);
+      let currentReduction = 0;
+      const addClusterCandidate = (communityNodeIds, index, source = "community") => {
         const memberNodeIds = communityNodeIds.filter((nodeId) => nodesById.has(nodeId) && !usedNodeIds.has(nodeId));
-        if (memberNodeIds.length < 4) return;
+        if (memberNodeIds.length < 3) return;
         memberNodeIds.forEach((nodeId) => usedNodeIds.add(nodeId));
         const seedNodeId = memberNodeIds
           .slice()
           .sort((a, b) => ((outgoingCountsByNodeId.get(b) || 0) - (outgoingCountsByNodeId.get(a) || 0)) || a.localeCompare(b))[0];
         const seedNode = nodesById.get(seedNodeId) || {};
         clusters.push({
-          id: createGraphGroupId(`auto-cluster:${activeTab.id}:${index}:${seedNodeId}:${memberNodeIds.join(",")}`),
+          id: createGraphGroupId(`auto-cluster:${activeTab.id}:${source}:${index}:${seedNodeId}:${memberNodeIds.join(",")}`),
           label: getGraphNodeLabel(seedNode),
           mode: "community",
           auto: true,
@@ -571,16 +625,39 @@
           memberNodeIds,
           createdAt: Date.now()
         });
+        currentReduction += memberNodeIds.length - 1;
+      };
+
+      communities.forEach((communityNodeIds, index) => {
+        if (currentReduction >= requiredReduction) return;
+        addClusterCandidate(communityNodeIds, index, "community");
       });
+
+      if (currentReduction < requiredReduction) {
+        const remainingConnectedNodeIds = Array.from(visibleFileNodeIds)
+          .filter((nodeId) => !usedNodeIds.has(nodeId) && (adjacency.get(nodeId)?.size || 0) > 0);
+        const fallbackChunks = getConnectedClusterSubsets(remainingConnectedNodeIds, adjacency)
+          .sort((a, b) => b.length - a.length || String(a[0] || "").localeCompare(String(b[0] || "")))
+          .flatMap((componentNodeIds) => getBudgetedClusterChunks(componentNodeIds, adjacency, {
+            maxClusterSize: getLargeGraphAutoClusterMaxSize(visibleFileNodeIds.size),
+            minClusterSize: 3
+          }));
+        fallbackChunks.forEach((chunkNodeIds, index) => {
+          if (currentReduction >= requiredReduction) return;
+          addClusterCandidate(chunkNodeIds, index, "budget");
+        });
+      }
+
       return clusters;
     };
     const applyAutoCollapsedClustersForLargeGraph = () => {
       const autoCollapsedClusters = createAutoCollapsedClustersForLargeGraph();
-      if (!autoCollapsedClusters.length) return;
+      if (!autoCollapsedClusters) return;
       graphViewConfig = normalizeGraphViewConfig({
         ...(activeTab.graphViewConfig || {}),
         collapsedClusters: autoCollapsedClusters,
-        autoCollapsedLargeGraph: true
+        autoCollapsedLargeGraph: true,
+        autoCollapsedLargeGraphVersion: LARGE_GRAPH_AUTO_CLUSTER_VERSION
       });
       activeTab.graphViewConfig = graphViewConfig;
       if (activeTab.graphDocument && typeof activeTab.graphDocument === "object") {
