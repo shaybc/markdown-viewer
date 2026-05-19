@@ -40,7 +40,8 @@
   function getDefaultGraphViewConfigForNodeCount(nodeCount) {
     const preferenceDefaults = typeof getGraphViewPreferenceDefaults === "function" ? getGraphViewPreferenceDefaults() : {};
     const config = { ...DEFAULT_GRAPH_VIEW_CONFIG, ...preferenceDefaults };
-    if (nodeCount > LARGE_GRAPH_DISPLAY_NODE_LIMIT) {
+    const largeGraphDisplayLimit = typeof getGraphRenderWarningThreshold === "function" ? getGraphRenderWarningThreshold() : LARGE_GRAPH_DISPLAY_NODE_LIMIT;
+    if (nodeCount > largeGraphDisplayLimit) {
       if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showArrows")) config.showArrows = false;
       if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showOrphans")) config.showOrphans = false;
       if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showLabels")) config.showLabels = false;
@@ -48,12 +49,20 @@
     return config;
   }
 
+  function shouldOpenGraphForNodeCount(nodeCount, folderName) {
+    const warningThreshold = typeof getGraphRenderWarningThreshold === "function" ? getGraphRenderWarningThreshold() : LARGE_GRAPH_DISPLAY_NODE_LIMIT;
+    if (!warningThreshold || nodeCount <= warningThreshold) return true;
+    return window.confirm(`Open graph "${folderName || "Graph View"}" with ${nodeCount} nodes?\n\nVery large graphs may be slow to render.`);
+  }
+
   function createGraphTab(folderName, options) {
     if (options === undefined) options = {};
+    const nodeCount = getGraphNodeCountForDisplayDefaults(options);
+    if (options.skipGraphRenderWarning !== true && !shouldOpenGraphForNodeCount(nodeCount, folderName || options.folderName)) return null;
     const hasExplicitViewConfig = options.graphViewConfig != null || options.graphDocument?.viewConfig != null;
     const viewConfig = hasExplicitViewConfig
       ? (options.graphViewConfig != null ? options.graphViewConfig : options.graphDocument?.viewConfig)
-      : getDefaultGraphViewConfigForNodeCount(getGraphNodeCountForDisplayDefaults(options));
+      : getDefaultGraphViewConfigForNodeCount(nodeCount);
     const graphDocument = normalizeGraphDocument({
       ...(options.graphDocument || {}),
       folderName: folderName || options.folderName || "Graph View",
@@ -70,7 +79,7 @@
     tab.graphDocument = graphData.graphDocument;
     if (options.graphScopeKey) tab.graphScopeKey = options.graphScopeKey;
     if (Object.prototype.hasOwnProperty.call(graphData, "graphLayout")) tab.graphLayout = graphData.graphLayout;
-    if (!hasExplicitViewConfig && getGraphNodeCountForDisplayDefaults(options) === 0) {
+    if (!hasExplicitViewConfig && nodeCount === 0) {
       tab.pendingLargeGraphDisplayDefaults = true;
     }
     return tab;

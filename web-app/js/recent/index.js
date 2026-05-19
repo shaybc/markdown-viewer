@@ -9,7 +9,7 @@
     const GLOBAL_PROFILE_FILE = "preferences.json";
     const RECENT_HANDLES_DB = "markdownViewerRecentHandles";
     const RECENT_HANDLES_STORE = "handles";
-    const MAX_RECENT_ITEMS = 10;
+    const DEFAULT_MAX_RECENT_ITEMS = 10;
     const recentFileHandles = new Map();
     const recentFolderHandles = new Map();
     const recentItemsCache = {
@@ -26,14 +26,25 @@
       return typeof NL_VERSION !== "undefined" && typeof Neutralino !== "undefined";
     }
 
-    function normalizeRecentItems(items) {
-      return Array.isArray(items) ? items.slice(0, MAX_RECENT_ITEMS) : [];
+    function getRecentItemLimit(storageKey) {
+      const getter = storageKey === RECENT_FOLDERS_KEY ? deps.getMaxRecentFolders : deps.getMaxRecentFiles;
+      try {
+        const value = Number(typeof getter === "function" ? getter() : DEFAULT_MAX_RECENT_ITEMS);
+        if (!Number.isFinite(value)) return DEFAULT_MAX_RECENT_ITEMS;
+        return Math.max(0, Math.min(100, Math.floor(value)));
+      } catch (_error) {
+        return DEFAULT_MAX_RECENT_ITEMS;
+      }
+    }
+
+    function normalizeRecentItems(items, storageKey) {
+      return Array.isArray(items) ? items.slice(0, getRecentItemLimit(storageKey)) : [];
     }
 
     function readRecentItemsFromLocalStorage(storageKey) {
       try {
         const items = JSON.parse(localStorage.getItem(storageKey) || "[]");
-        return normalizeRecentItems(items);
+        return normalizeRecentItems(items, storageKey);
       } catch (error) {
         console.warn("Failed to read recent items:", error);
         return [];
@@ -42,18 +53,18 @@
 
     function writeRecentItemsToLocalStorage(storageKey, items) {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(normalizeRecentItems(items)));
+        localStorage.setItem(storageKey, JSON.stringify(normalizeRecentItems(items, storageKey)));
       } catch (error) {
         console.warn("Failed to save recent items:", error);
       }
     }
 
     function readRecentItems(storageKey) {
-      return normalizeRecentItems(recentItemsCache[storageKey] || []);
+      return normalizeRecentItems(recentItemsCache[storageKey] || [], storageKey);
     }
 
     function writeRecentItems(storageKey, items) {
-      recentItemsCache[storageKey] = normalizeRecentItems(items);
+      recentItemsCache[storageKey] = normalizeRecentItems(items, storageKey);
       writeRecentItemsToLocalStorage(storageKey, recentItemsCache[storageKey]);
       scheduleRecentProfileWrite();
     }
@@ -205,7 +216,7 @@
 
       return Array.from(mergedByKey.values())
         .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
-        .slice(0, MAX_RECENT_ITEMS);
+        .slice(0, Math.max(getRecentItemLimit(RECENT_FILES_KEY), getRecentItemLimit(RECENT_FOLDERS_KEY)));
     }
 
     function getProfileSeparator(profileDir) {
@@ -439,14 +450,17 @@
         return;
       }
 
-      items.slice(0, MAX_RECENT_ITEMS).forEach((item) => {
+      items.slice(0, getRecentItemLimit(itemType === "folder" ? RECENT_FOLDERS_KEY : RECENT_FILES_KEY)).forEach((item) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "dropdown-item action-menu-item recent-menu-item";
         button.dataset.recentType = itemType;
         button.dataset.recentKey = getRecentItemKey(item);
         button.title = item.path || item.label || item.name;
-        button.innerHTML = `<span class="recent-menu-label">${deps.escapeHtml(item.label || item.name || item.path || "Untitled")}</span>`;
+        button.innerHTML = `
+          <span class="recent-menu-label">${deps.escapeHtml(item.label || item.name || item.path || "Untitled")}</span>
+          <span class="recent-menu-remove" role="button" tabindex="0" aria-label="Remove recent ${itemType}" title="Remove from recent ${itemType === "folder" ? "folders" : "files"}">×</span>
+        `;
         menu.appendChild(button);
       });
     }
@@ -464,7 +478,43 @@
       });
     }
 
+    function applyRecentItemLimits() {
+      writeRecentItems(RECENT_FILES_KEY, recentItemsCache[RECENT_FILES_KEY] || []);
+      writeRecentItems(RECENT_FOLDERS_KEY, recentItemsCache[RECENT_FOLDERS_KEY] || []);
+      renderRecentMenus();
+    }
+
+    function clearRecentHistory() {
+      recentItemsCache[RECENT_FILES_KEY] = [];
+      recentItemsCache[RECENT_FOLDERS_KEY] = [];
+      recentFileHandles.clear();
+      recentFolderHandles.clear();
+      writeRecentItemsToLocalStorage(RECENT_FILES_KEY, []);
+      writeRecentItemsToLocalStorage(RECENT_FOLDERS_KEY, []);
+      if (!isNeutralinoRuntime() && window.indexedDB?.deleteDatabase) {
+        try {
+          window.indexedDB.deleteDatabase(RECENT_HANDLES_DB);
+          recentHandlesDbPromise = null;
+        } catch (error) {
+          console.warn("Failed to clear recent handles database:", error);
+        }
+      }
+      renderRecentMenus();
+      scheduleRecentProfileWrite();
+    }
+
+    function removeRecentItem(storageKey, key) {
+      if (!key) return;
+      recentItemsCache[storageKey] = readRecentItems(storageKey).filter((item) => getRecentItemKey(item) !== key);
+      getRecentHandleStore(storageKey).delete(key);
+      writeRecentItemsToLocalStorage(storageKey, recentItemsCache[storageKey]);
+      renderRecentMenus();
+      scheduleRecentProfileWrite();
+    }
+
     const api = {
+      applyRecentItemLimits,
+      clearRecentHistory,
       ensureFileSystemHandlePermission,
       ensureRecentMenuContainers,
       getPersistedRecentHandle,
@@ -476,6 +526,7 @@
       readRecentItems,
       rememberRecentFile,
       rememberRecentFolder,
+      removeRecentItem,
       renderRecentMenus,
       scheduleGlobalProfileWrite,
       keys: {

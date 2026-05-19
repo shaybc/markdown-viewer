@@ -1429,6 +1429,8 @@
     applyGlobalPreferences: function(state) { return applyGlobalPreferences(state); },
     escapeHtml,
     getFileName,
+    getMaxRecentFiles: function() { return getMaxRecentFiles(); },
+    getMaxRecentFolders: function() { return getMaxRecentFolders(); },
     globalStateKey: "markdownViewerGlobalState",
     loadGlobalState: function() { return loadGlobalState(); }
   });
@@ -1444,6 +1446,8 @@
   const hydrateGlobalStateFromProfile = recentItems.hydrateGlobalStateFromProfile;
   const hydrateRecentHandlesFromIndexedDB = recentItems.hydrateRecentHandlesFromIndexedDB;
   const scheduleGlobalProfileWrite = recentItems.scheduleGlobalProfileWrite;
+  const applyRecentItemLimits = recentItems.applyRecentItemLimits;
+  const clearRecentHistory = recentItems.clearRecentHistory;
   const RECENT_FILES_KEY = recentItems.keys.files;
   const RECENT_FOLDERS_KEY = recentItems.keys.folders;
   const recentActions = window.registerMarkdownViewerRecentActions(app, {
@@ -1480,8 +1484,22 @@
   });
   const openRecentFile = recentActions.openRecentFile;
   const openRecentFolder = recentActions.openRecentFolder;
+  const removeRecentItem = recentItems.removeRecentItem;
 
   document.addEventListener("click", function(event) {
+    const recentRemoveButton = event.target.closest(".recent-menu-remove");
+    if (recentRemoveButton) {
+      const recentItem = recentRemoveButton.closest(".recent-menu-item");
+      if (!recentItem) return;
+      event.preventDefault();
+      event.stopPropagation();
+      removeRecentItem(
+        recentItem.dataset.recentType === "folder" ? RECENT_FOLDERS_KEY : RECENT_FILES_KEY,
+        recentItem.dataset.recentKey
+      );
+      return;
+    }
+
     const recentButton = event.target.closest(".recent-menu-item");
     if (!recentButton) return;
 
@@ -1492,6 +1510,13 @@
     } else {
       openRecentFile(recentButton.dataset.recentKey);
     }
+  });
+
+  document.addEventListener("keydown", function(event) {
+    const recentRemoveButton = event.target.closest?.(".recent-menu-remove");
+    if (!recentRemoveButton || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    recentRemoveButton.click();
   });
 
   markdownPreview.addEventListener("click", handlePreviewLinkClick);
@@ -1848,8 +1873,34 @@
   const welcomePageButtons = document.querySelectorAll(".open-welcome-page");
   const helpHomeButtons = document.querySelectorAll(".open-help-home");
   const aboutDialogButtons = document.querySelectorAll(".show-about-dialog");
+  const settingsDialogButtons = document.querySelectorAll(".open-settings-dialog");
+  const codeConverterDialogButtons = document.querySelectorAll(".open-code-converter-dialog");
   const aboutModal = document.getElementById("about-modal");
   const aboutModalClose = document.getElementById("about-modal-close");
+  const settingsModal = document.getElementById("settings-modal");
+  const settingsGraphAutoClusterThresholdInput = document.getElementById("settings-graph-auto-cluster-threshold");
+  const settingsGraphRenderWarningThresholdInput = document.getElementById("settings-graph-render-warning-threshold");
+  const settingsGraphShowFileExtensionsInput = document.getElementById("settings-graph-show-file-extensions");
+  const settingsConfirmOpenManyGraphNodesInput = document.getElementById("settings-confirm-open-many-graph-nodes");
+  const settingsConfirmDeleteFilesInput = document.getElementById("settings-confirm-delete-files");
+  const settingsConfirmResetStateInput = document.getElementById("settings-confirm-reset-state");
+  const settingsMaxRecentFilesInput = document.getElementById("settings-max-recent-files");
+  const settingsMaxRecentFoldersInput = document.getElementById("settings-max-recent-folders");
+  const settingsModalClose = document.getElementById("settings-modal-close");
+  const settingsModalCancel = document.getElementById("settings-modal-cancel");
+  const settingsModalSave = document.getElementById("settings-modal-save");
+  const settingsResetCacheButton = document.getElementById("settings-reset-cache");
+  const settingsResetPreferencesButton = document.getElementById("settings-reset-preferences");
+  const settingsResetRecentHistoryButton = document.getElementById("settings-reset-recent-history");
+  const settingsResetAllButton = document.getElementById("settings-reset-all");
+  const codeConverterModal = document.getElementById("code-converter-modal");
+  const codeConverterSourceRootInput = document.getElementById("code-converter-source-root");
+  const codeConverterDestinationRootInput = document.getElementById("code-converter-destination-root");
+  const codeConverterSourceBrowseButton = document.getElementById("code-converter-source-browse");
+  const codeConverterDestinationBrowseButton = document.getElementById("code-converter-destination-browse");
+  const codeConverterCancelButton = document.getElementById("code-converter-cancel");
+  const codeConverterRunButton = document.getElementById("code-converter-run");
+  const codeConverterStatus = document.getElementById("code-converter-status");
   const desktopOpenGraphButtons = document.querySelectorAll(".open-graph-view");
   const graphViewCanvas = document.getElementById("graph-view-canvas");
   const graphViewToolbar = document.querySelector(".graph-view-toolbar");
@@ -1905,12 +1956,24 @@
   // GLOBAL STATE (persisted across reloads)
   // ========================================
   const GLOBAL_STATE_KEY = 'markdownViewerGlobalState';
+  const DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD = 1000;
+  const DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD = 1500;
+  const DEFAULT_MAX_RECENT_FILES = 10;
+  const DEFAULT_MAX_RECENT_FOLDERS = 10;
   const DEFAULT_GLOBAL_STATE = Object.freeze({
     autoSelectFileEnabled: true,
     editorWidthPercent: 50,
     folderSortMode: "name-asc",
+    confirmDeleteFiles: true,
+    confirmOpenManyGraphNodes: true,
+    confirmResetState: true,
+    graphAutoClusterThreshold: DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD,
+    graphRenderWarningThreshold: DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD,
+    graphShowFileExtensions: false,
     graphMagneticEnabled: true,
     graphViewPreferences: {},
+    maxRecentFiles: DEFAULT_MAX_RECENT_FILES,
+    maxRecentFolders: DEFAULT_MAX_RECENT_FOLDERS,
     showUnsupportedFolderFiles: false,
     sidebarDropzoneVisible: true,
     sidebarVisible: true,
@@ -1930,6 +1993,46 @@
   const getDefaultGlobalState = themePreferences.getDefaultGlobalState;
   const updateThemeButtonLabels = themePreferences.updateThemeButtonLabels;
   themePreferences.initializeTheme();
+
+  function getGraphAutoClusterThreshold() {
+    const value = Number(loadGlobalState().graphAutoClusterThreshold);
+    if (!Number.isFinite(value)) return DEFAULT_GRAPH_AUTO_CLUSTER_THRESHOLD;
+    return Math.max(0, Math.min(100000, Math.floor(value)));
+  }
+
+  function getGraphRenderWarningThreshold() {
+    const value = Number(loadGlobalState().graphRenderWarningThreshold);
+    if (!Number.isFinite(value)) return DEFAULT_GRAPH_RENDER_WARNING_THRESHOLD;
+    return Math.max(0, Math.min(100000, Math.floor(value)));
+  }
+
+  function getGraphShowFileExtensions() {
+    return loadGlobalState().graphShowFileExtensions === true;
+  }
+
+  function shouldConfirmOpenManyGraphNodes() {
+    return loadGlobalState().confirmOpenManyGraphNodes !== false;
+  }
+
+  function shouldConfirmDeleteFiles() {
+    return loadGlobalState().confirmDeleteFiles !== false;
+  }
+
+  function shouldConfirmResetState() {
+    return loadGlobalState().confirmResetState !== false;
+  }
+
+  function getMaxRecentFiles() {
+    const value = Number(loadGlobalState().maxRecentFiles);
+    if (!Number.isFinite(value)) return DEFAULT_MAX_RECENT_FILES;
+    return Math.max(0, Math.min(100, Math.floor(value)));
+  }
+
+  function getMaxRecentFolders() {
+    const value = Number(loadGlobalState().maxRecentFolders);
+    if (!Number.isFinite(value)) return DEFAULT_MAX_RECENT_FOLDERS;
+    return Math.max(0, Math.min(100, Math.floor(value)));
+  }
 
   const rendererConfig = window.registerMarkdownViewerRendererConfig(app, {
     marked,
@@ -1960,6 +2063,7 @@
     loadGlobalState,
     saveGlobalState,
     getDefaultGlobalState,
+    shouldConfirmResetState,
     updateThemeButtonLabels,
     getValidFolderSortMode,
     updateDropzoneToggleButtons,
@@ -2507,6 +2611,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     markGraphTabAsChanged,
     saveTabsToStorage,
     isNeutralinoRuntime,
+    shouldConfirmDeleteFiles,
     joinPath,
     get toggleFolderTreeTagFilter() { return toggleFolderTreeTagFilter; },
     get renderFilteredFolderTree() { return renderFilteredFolderTree; },
@@ -2784,6 +2889,225 @@ Markdown content is processed client-side in your browser and sanitized before p
   function hideAboutDialog() {
     if (!aboutModal) return;
     aboutModal.style.display = "none";
+  }
+
+  function showSettingsDialog() {
+    if (!settingsModal) return;
+    if (settingsGraphAutoClusterThresholdInput) {
+      settingsGraphAutoClusterThresholdInput.value = String(getGraphAutoClusterThreshold());
+    }
+    if (settingsGraphRenderWarningThresholdInput) {
+      settingsGraphRenderWarningThresholdInput.value = String(getGraphRenderWarningThreshold());
+    }
+    if (settingsGraphShowFileExtensionsInput) {
+      settingsGraphShowFileExtensionsInput.checked = getGraphShowFileExtensions();
+    }
+    if (settingsConfirmOpenManyGraphNodesInput) {
+      settingsConfirmOpenManyGraphNodesInput.checked = shouldConfirmOpenManyGraphNodes();
+    }
+    if (settingsConfirmDeleteFilesInput) {
+      settingsConfirmDeleteFilesInput.checked = shouldConfirmDeleteFiles();
+    }
+    if (settingsConfirmResetStateInput) {
+      settingsConfirmResetStateInput.checked = shouldConfirmResetState();
+    }
+    if (settingsMaxRecentFilesInput) {
+      settingsMaxRecentFilesInput.value = String(getMaxRecentFiles());
+    }
+    if (settingsMaxRecentFoldersInput) {
+      settingsMaxRecentFoldersInput.value = String(getMaxRecentFolders());
+    }
+    settingsModal.style.display = "flex";
+    settingsGraphAutoClusterThresholdInput?.focus();
+    settingsGraphAutoClusterThresholdInput?.select();
+  }
+
+  function hideSettingsDialog() {
+    if (!settingsModal) return;
+    settingsModal.style.display = "none";
+  }
+
+  function saveSettingsDialog() {
+    const threshold = Number(settingsGraphAutoClusterThresholdInput?.value);
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      alert("Enter a graph auto-clustering threshold of 0 or higher.");
+      return;
+    }
+    const graphRenderWarningThreshold = Number(settingsGraphRenderWarningThresholdInput?.value);
+    if (!Number.isFinite(graphRenderWarningThreshold) || graphRenderWarningThreshold < 0) {
+      alert("Enter a graph render node warning threshold of 0 or higher.");
+      return;
+    }
+    const maxRecentFiles = Number(settingsMaxRecentFilesInput?.value);
+    if (!Number.isFinite(maxRecentFiles) || maxRecentFiles < 0) {
+      alert("Enter a maximum recent files value of 0 or higher.");
+      return;
+    }
+    const maxRecentFolders = Number(settingsMaxRecentFoldersInput?.value);
+    if (!Number.isFinite(maxRecentFolders) || maxRecentFolders < 0) {
+      alert("Enter a maximum recent folders value of 0 or higher.");
+      return;
+    }
+    saveGlobalState({
+      graphAutoClusterThreshold: Math.min(100000, Math.floor(threshold)),
+      graphRenderWarningThreshold: Math.min(100000, Math.floor(graphRenderWarningThreshold)),
+      graphShowFileExtensions: !!settingsGraphShowFileExtensionsInput?.checked,
+      confirmOpenManyGraphNodes: !!settingsConfirmOpenManyGraphNodesInput?.checked,
+      confirmDeleteFiles: !!settingsConfirmDeleteFilesInput?.checked,
+      confirmResetState: !!settingsConfirmResetStateInput?.checked,
+      maxRecentFiles: Math.min(100, Math.floor(maxRecentFiles)),
+      maxRecentFolders: Math.min(100, Math.floor(maxRecentFolders))
+    });
+    hideSettingsDialog();
+    applyRecentItemLimits();
+    const activeGraphTab = tabs.find((tab) => tab.id === activeTabId && tab.type === "graph");
+    if (activeGraphTab) {
+      graphRenderCache.delete(activeGraphTab.id);
+      renderGraphView();
+    }
+  }
+
+  async function clearAppCacheFromSettings(options = {}) {
+    const shouldConfirm = options.confirm !== false && shouldConfirmResetState();
+    if (shouldConfirm && !window.confirm("Clear app cache? Open documents, preferences, and recent history will not be removed.")) return false;
+
+    graphRenderCache.forEach((entry) => {
+      if (entry?.simulation) entry.simulation.stop();
+      if (entry?.wrapper) entry.wrapper.remove();
+    });
+    graphRenderCache.clear();
+
+    if (window.caches?.keys) {
+      try {
+        const cacheNames = await window.caches.keys();
+        await Promise.all(cacheNames.map((cacheName) => window.caches.delete(cacheName)));
+      } catch (error) {
+        console.warn("Failed to clear browser caches:", error);
+      }
+    }
+
+    if (tabs.some((tab) => tab.id === activeTabId && tab.type === "graph")) {
+      renderGraphView();
+    }
+
+    if (options.notify !== false) window.alert("Cache cleared.");
+    return true;
+  }
+
+  function clearPreferencesFromSettings(options = {}) {
+    const restored = restoreDefaultPreferences({
+      confirm: options.confirm !== false,
+      notify: options.notify !== false,
+      message: "Clear preferences and restore defaults? Open documents and recent history are not removed."
+    });
+    if (restored && settingsModal?.style.display !== "none") {
+      showSettingsDialog();
+    }
+    return restored;
+  }
+
+  function clearRecentHistoryFromSettings(options = {}) {
+    const shouldConfirm = options.confirm !== false && shouldConfirmResetState();
+    if (shouldConfirm && !window.confirm("Clear recent file and folder history? Open documents and preferences are not removed.")) return false;
+    clearRecentHistory();
+    if (options.notify !== false) window.alert("Recent history cleared.");
+    return true;
+  }
+
+  async function resetAllFromSettings() {
+    if (shouldConfirmResetState() && !window.confirm("Reset all settings data? This clears cache, preferences, and recent file/folder history. Open documents are not removed.")) return;
+    await clearAppCacheFromSettings({ confirm: false, notify: false });
+    clearRecentHistoryFromSettings({ confirm: false, notify: false });
+    clearPreferencesFromSettings({ confirm: false, notify: false });
+    showSettingsDialog();
+    window.alert("Cache, preferences, and recent history reset.");
+  }
+
+  function setCodeConverterStatus(message) {
+    if (codeConverterStatus) codeConverterStatus.textContent = message || "";
+  }
+
+  function showCodeConverterDialog() {
+    if (!codeConverterModal) return;
+    setCodeConverterStatus("");
+    codeConverterModal.style.display = "flex";
+    codeConverterSourceRootInput?.focus();
+  }
+
+  function hideCodeConverterDialog() {
+    if (!codeConverterModal) return;
+    codeConverterModal.style.display = "none";
+  }
+
+  async function browseCodeConverterFolder(input, title) {
+    if (!input) return;
+    if (typeof Neutralino === "undefined" || !Neutralino.os?.showFolderDialog) {
+      alert("Code conversion requires the desktop app so folders can be selected from disk.");
+      return;
+    }
+    try {
+      const selectedPath = await Neutralino.os.showFolderDialog(title);
+      if (selectedPath) input.value = selectedPath;
+    } catch (error) {
+      console.warn("Failed to choose code converter folder:", error);
+      setCodeConverterStatus("Unable to choose that folder.");
+    }
+  }
+
+  function getCodeConverterScriptPath() {
+    const basePath = String(window.NL_PATH || "").replace(/\\/g, "/").replace(/\/+$/, "");
+    if (!basePath) return "resources/code_converter/dependency-md-generator.js";
+    return `${basePath}/resources/code_converter/dependency-md-generator.js`;
+  }
+
+  function quoteCommandArg(value) {
+    return `"${String(value || "").replace(/\\/g, "/").replace(/"/g, '\\"')}"`;
+  }
+
+  async function runCodeConverter() {
+    if (typeof Neutralino === "undefined" || !Neutralino.os?.execCommand) {
+      alert("Code conversion requires the desktop app because it runs the local Node.js converter.");
+      return;
+    }
+
+    const sourceRoot = (codeConverterSourceRootInput?.value || "").trim();
+    const destinationRoot = (codeConverterDestinationRootInput?.value || "").trim();
+    if (!sourceRoot) {
+      setCodeConverterStatus("Choose a source root folder.");
+      codeConverterSourceRootInput?.focus();
+      return;
+    }
+    if (!destinationRoot) {
+      setCodeConverterStatus("Choose a destination MD root folder.");
+      codeConverterDestinationRootInput?.focus();
+      return;
+    }
+
+    const command = [
+      "node",
+      quoteCommandArg(getCodeConverterScriptPath()),
+      quoteCommandArg(sourceRoot),
+      quoteCommandArg(destinationRoot)
+    ].join(" ");
+
+    try {
+      if (codeConverterRunButton) codeConverterRunButton.disabled = true;
+      setCodeConverterStatus("Converting code dependencies...");
+      const result = await Neutralino.os.execCommand(command);
+      const exitCode = Number(result?.exitCode ?? result?.code ?? 0);
+      if (exitCode !== 0) {
+        const errorText = result?.stdErr || result?.stderr || result?.output || "The converter failed.";
+        setCodeConverterStatus(String(errorText).trim());
+        return;
+      }
+      const output = result?.stdOut || result?.stdout || result?.output || `Markdown files created in ${destinationRoot}.`;
+      setCodeConverterStatus(String(output).trim());
+    } catch (error) {
+      console.error("Failed to run code converter:", error);
+      setCodeConverterStatus("Unable to run the code converter. Make sure Node.js is installed and available on PATH.");
+    } finally {
+      if (codeConverterRunButton) codeConverterRunButton.disabled = false;
+    }
   }
 
   async function listMarkdownTree(dirHandle, parentPath = "") {
@@ -3272,6 +3596,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     showGraph: { label: "Show graph", icon: "bi bi-diagram-3" },
     showLocalGraph: { label: "Show local graph", icon: "bi bi-diagram-2" },
     showFullLocalGraph: { label: "Show full local graph", icon: "bi bi-diagram-3" },
+    showFullGraph: { label: "Show full graph", icon: "bi bi-diagram-3" },
     showFullNetwork: { label: "Show full network", icon: "bi bi-diagram-3" },
     showExpandedCluster: { label: "Show expanded cluster", icon: "bi bi-arrows-angle-expand" },
     tags: { label: "Tags", icon: "bi bi-tags" },
@@ -3370,6 +3695,8 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     get switchTab() { return switchTab; },
     get pinTemporaryTab() { return pinTemporaryTab; },
     get createGraphTab() { return createGraphTab; },
+    createFolderGraphScopeKey,
+    focusExistingFolderGraphTab,
     getGraphTitleFromFileName,
     getGraphDisplayLabel,
     resolveGraphTargetId,
@@ -3971,6 +4298,26 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     });
   });
 
+  settingsDialogButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      showSettingsDialog();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
+
+  codeConverterDialogButtons.forEach(function(button) {
+    button.addEventListener("click", function(e) {
+      e.preventDefault();
+      showCodeConverterDialog();
+      if (button.classList.contains("mobile-menu-item")) {
+        closeMobileMenu();
+      }
+    });
+  });
+
   if (aboutModalClose) {
     aboutModalClose.addEventListener("click", hideAboutDialog);
   }
@@ -3978,6 +4325,89 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
   if (aboutModal) {
     aboutModal.addEventListener("click", function(e) {
       if (e.target === aboutModal) hideAboutDialog();
+    });
+  }
+
+  if (settingsModalCancel) {
+    settingsModalCancel.addEventListener("click", hideSettingsDialog);
+  }
+
+  if (settingsModalClose) {
+    settingsModalClose.addEventListener("click", hideSettingsDialog);
+  }
+
+  if (settingsModalSave) {
+    settingsModalSave.addEventListener("click", saveSettingsDialog);
+  }
+
+  if (settingsResetCacheButton) {
+    settingsResetCacheButton.addEventListener("click", function() {
+      clearAppCacheFromSettings();
+    });
+  }
+
+  if (settingsResetPreferencesButton) {
+    settingsResetPreferencesButton.addEventListener("click", function() {
+      clearPreferencesFromSettings();
+    });
+  }
+
+  if (settingsResetRecentHistoryButton) {
+    settingsResetRecentHistoryButton.addEventListener("click", function() {
+      clearRecentHistoryFromSettings();
+    });
+  }
+
+  if (settingsResetAllButton) {
+    settingsResetAllButton.addEventListener("click", function() {
+      resetAllFromSettings();
+    });
+  }
+
+  if (settingsGraphAutoClusterThresholdInput) {
+    settingsGraphAutoClusterThresholdInput.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") saveSettingsDialog();
+      if (e.key === "Escape") hideSettingsDialog();
+    });
+  }
+
+  [settingsGraphRenderWarningThresholdInput, settingsMaxRecentFilesInput, settingsMaxRecentFoldersInput].forEach(function(input) {
+    if (!input) return;
+    input.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") saveSettingsDialog();
+      if (e.key === "Escape") hideSettingsDialog();
+    });
+  });
+
+  if (settingsModal) {
+    settingsModal.addEventListener("click", function(e) {
+      if (e.target === settingsModal) hideSettingsDialog();
+    });
+  }
+
+  if (codeConverterSourceBrowseButton) {
+    codeConverterSourceBrowseButton.addEventListener("click", function() {
+      browseCodeConverterFolder(codeConverterSourceRootInput, "Select source code root folder");
+    });
+  }
+
+  if (codeConverterDestinationBrowseButton) {
+    codeConverterDestinationBrowseButton.addEventListener("click", function() {
+      browseCodeConverterFolder(codeConverterDestinationRootInput, "Select destination Markdown root folder");
+    });
+  }
+
+  if (codeConverterCancelButton) {
+    codeConverterCancelButton.addEventListener("click", hideCodeConverterDialog);
+  }
+
+  if (codeConverterRunButton) {
+    codeConverterRunButton.addEventListener("click", runCodeConverter);
+  }
+
+  if (codeConverterModal) {
+    codeConverterModal.addEventListener("click", function(e) {
+      if (e.target === codeConverterModal) hideCodeConverterDialog();
     });
   }
 
@@ -4217,6 +4647,11 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     DEFAULT_GRAPH_VIEW_CONFIG,
     LARGE_GRAPH_DISPLAY_NODE_LIMIT,
     getGraphViewPreferenceDefaults,
+    getGraphAutoClusterThreshold,
+    getGraphRenderWarningThreshold,
+    getGraphShowFileExtensions,
+    shouldConfirmOpenManyGraphNodes,
+    shouldConfirmDeleteFiles,
     normalizeGraphViewConfig,
     hideInactiveGraphRenders,
     updateStatusLine,

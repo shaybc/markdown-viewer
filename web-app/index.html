@@ -126,6 +126,12 @@
                                     </button>
                                 </div>
                             </div>
+                            <button class="dropdown-item action-menu-item open-settings-dialog" type="button" title="Open settings">
+                                <i class="bi bi-gear me-2"></i> Settings
+                            </button>
+                            <button class="dropdown-item action-menu-item open-code-converter-dialog" type="button" title="Convert code dependencies to Markdown">
+                                <i class="bi bi-filetype-md me-2"></i> Convert Code to MD
+                            </button>
                             <button class="dropdown-item action-menu-item open-graph-view" title="Open Graph View">
                                 <i class="bi bi-diagram-3 me-2"></i> Graph View
                             </button>
@@ -250,6 +256,14 @@
                                 <i class="bi bi-arrow-counterclockwise me-2"></i> Restore Defaults
                             </button>
 
+                            <button class="mobile-menu-item open-settings-dialog" type="button" title="Open settings">
+                                <i class="bi bi-gear me-2"></i> Settings
+                            </button>
+
+                            <button class="mobile-menu-item open-code-converter-dialog" type="button" title="Convert code dependencies to Markdown">
+                                <i class="bi bi-filetype-md me-2"></i> Convert Code to MD
+                            </button>
+
                             <button class="mobile-menu-item toggle-dropzone-panel" type="button" title="Hide Dropzone Panel">
                                 <i class="bi bi-layout-sidebar-inset me-2"></i><span class="dropzone-toggle-label">Hide Dropzone Panel</span>
                             </button>
@@ -362,6 +376,158 @@
             <div class="reset-modal-actions">
               <button class="reset-modal-btn reset-modal-cancel" id="github-import-cancel">Cancel</button>
               <button class="reset-modal-btn" id="github-import-submit">Import</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="settings-modal" class="reset-modal-overlay settings-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" style="display:none;">
+          <div class="reset-modal-box settings-modal-box">
+            <div class="settings-modal-header">
+              <div>
+                <p class="settings-modal-eyebrow">MD-Editor</p>
+                <h2 id="settings-modal-title" class="settings-modal-title">Settings</h2>
+              </div>
+              <button class="settings-modal-close" id="settings-modal-close" type="button" aria-label="Close settings">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+
+            <div class="settings-modal-body">
+              <section class="settings-panel" aria-labelledby="settings-graph-title">
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-graph-title" class="settings-panel-title">Graph View</h3>
+                    <p class="settings-panel-description">Control graph density, warnings, and node labels.</p>
+                  </div>
+                </div>
+
+                <div class="settings-field-grid">
+                  <label class="settings-field" for="settings-graph-auto-cluster-threshold">
+                    <span class="settings-field-label">Auto-clustering threshold</span>
+                    <input type="number" id="settings-graph-auto-cluster-threshold" class="rename-modal-input settings-number-input" min="0" max="100000" step="1" value="1000" />
+                  </label>
+                  <label class="settings-field" for="settings-graph-render-warning-threshold">
+                    <span class="settings-field-label">Render warning threshold</span>
+                    <input type="number" id="settings-graph-render-warning-threshold" class="rename-modal-input settings-number-input" min="0" max="100000" step="1" value="1500" />
+                  </label>
+                </div>
+
+                <label class="settings-switch-row" for="settings-graph-show-file-extensions">
+                  <span>
+                    <span class="settings-switch-title">Show file extensions</span>
+                    <span class="settings-switch-description">Include extensions in graph node labels.</span>
+                  </span>
+                  <input type="checkbox" id="settings-graph-show-file-extensions" class="settings-switch-input" />
+                  <span class="settings-switch" aria-hidden="true"></span>
+                </label>
+              </section>
+
+              <section class="settings-panel" aria-labelledby="settings-recent-title">
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-recent-title" class="settings-panel-title">Recent Items</h3>
+                    <p class="settings-panel-description">Set how many files and folders stay in the menu.</p>
+                  </div>
+                </div>
+
+                <div class="settings-field-grid">
+                  <label class="settings-field" for="settings-max-recent-files">
+                    <span class="settings-field-label">Maximum recent files</span>
+                    <input type="number" id="settings-max-recent-files" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="10" />
+                  </label>
+                  <label class="settings-field" for="settings-max-recent-folders">
+                    <span class="settings-field-label">Maximum recent folders</span>
+                    <input type="number" id="settings-max-recent-folders" class="rename-modal-input settings-number-input" min="0" max="100" step="1" value="10" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-panel" aria-labelledby="settings-confirmation-title">
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-confirmation-title" class="settings-panel-title">Confirmations</h3>
+                    <p class="settings-panel-description">Choose which high-impact actions should ask first.</p>
+                  </div>
+                </div>
+
+                <div class="settings-switch-list" role="group" aria-label="Confirmation preferences">
+                  <label class="settings-switch-row" for="settings-confirm-open-many-graph-nodes">
+                    <span>
+                      <span class="settings-switch-title">Opening many graph nodes</span>
+                      <span class="settings-switch-description">Ask before loading a very large graph selection.</span>
+                    </span>
+                    <input type="checkbox" id="settings-confirm-open-many-graph-nodes" class="settings-switch-input" checked />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
+                  <label class="settings-switch-row" for="settings-confirm-delete-files">
+                    <span>
+                      <span class="settings-switch-title">Deleting files or folders</span>
+                      <span class="settings-switch-description">Ask before removing content from disk.</span>
+                    </span>
+                    <input type="checkbox" id="settings-confirm-delete-files" class="settings-switch-input" checked />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
+                  <label class="settings-switch-row" for="settings-confirm-reset-state">
+                    <span>
+                      <span class="settings-switch-title">Resetting state</span>
+                      <span class="settings-switch-description">Ask before clearing preferences, cache, or history.</span>
+                    </span>
+                    <input type="checkbox" id="settings-confirm-reset-state" class="settings-switch-input" checked />
+                    <span class="settings-switch" aria-hidden="true"></span>
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-panel settings-reset-section" aria-labelledby="settings-reset-title">
+                <div class="settings-panel-heading">
+                  <span class="settings-panel-icon settings-panel-icon-danger"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></span>
+                  <div>
+                    <h3 id="settings-reset-title" class="settings-panel-title">Reset</h3>
+                    <p class="settings-panel-description">Clear stored state without touching open documents.</p>
+                  </div>
+                </div>
+                <div class="settings-reset-actions">
+                  <button class="reset-modal-btn settings-secondary-action" id="settings-reset-cache" type="button">Clear cache</button>
+                  <button class="reset-modal-btn settings-secondary-action" id="settings-reset-preferences" type="button">Clear preferences</button>
+                  <button class="reset-modal-btn settings-secondary-action" id="settings-reset-recent-history" type="button">Clear recent history</button>
+                  <button class="reset-modal-btn reset-modal-confirm settings-danger-action" id="settings-reset-all" type="button">Reset all</button>
+                </div>
+              </section>
+            </div>
+
+            <div class="settings-modal-footer">
+              <button class="reset-modal-btn settings-secondary-action" id="settings-modal-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn settings-primary-action" id="settings-modal-save" type="button">Save settings</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="code-converter-modal" class="reset-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="code-converter-title" style="display:none;">
+          <div class="reset-modal-box">
+            <p id="code-converter-title" class="reset-modal-message">Convert Code to MD</p>
+            <p class="editor-link-modal-label">
+              Generates Markdown files from a source code folder. Each output file represents one source file and lists the local code dependencies it imports or references, so the generated folder can be opened as a dependency map in the graph view.
+            </p>
+            <p class="editor-link-modal-label">
+              Supported languages: JavaScript, TypeScript, Python, and Java. Supported extensions: .js, .jsx, .mjs, .cjs, .ts, .tsx, .py, and .java.
+            </p>
+            <label class="editor-link-modal-label" for="code-converter-source-root">Source root folder</label>
+            <div class="input-group mb-2">
+              <input type="text" id="code-converter-source-root" class="rename-modal-input form-control" readonly placeholder="Choose source folder" />
+              <button class="reset-modal-btn" id="code-converter-source-browse" type="button">Browse</button>
+            </div>
+            <label class="editor-link-modal-label" for="code-converter-destination-root">Destination MD root folder</label>
+            <div class="input-group mb-2">
+              <input type="text" id="code-converter-destination-root" class="rename-modal-input form-control" readonly placeholder="Choose destination folder" />
+              <button class="reset-modal-btn" id="code-converter-destination-browse" type="button">Browse</button>
+            </div>
+            <p id="code-converter-status" class="editor-link-modal-label" role="status" aria-live="polite"></p>
+            <div class="reset-modal-actions">
+              <button class="reset-modal-btn reset-modal-cancel" id="code-converter-cancel" type="button">Cancel</button>
+              <button class="reset-modal-btn" id="code-converter-run" type="button">Convert</button>
             </div>
           </div>
         </div>

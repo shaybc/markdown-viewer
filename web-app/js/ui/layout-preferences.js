@@ -26,11 +26,13 @@
     }
   }
 
-  function restoreDefaultPreferences() {
-    const confirmed = window.confirm(
-      "Restore default preferences? This resets saved view, theme, layout, graph, folder, sync, and tag preferences. Open documents and recent items are not removed."
+  function restoreDefaultPreferences(options = {}) {
+    const shouldConfirm = options.confirm !== false && (typeof shouldConfirmResetState !== "function" || shouldConfirmResetState());
+    const shouldNotify = options.notify !== false;
+    const confirmed = !shouldConfirm || window.confirm(
+      options.message || "Restore default preferences? This resets saved view, theme, layout, graph, folder, sync, and tag preferences. Open documents and recent items are not removed."
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
 
     try {
       localStorage.removeItem(GLOBAL_STATE_KEY);
@@ -61,7 +63,8 @@
     renderMarkdown();
     scheduleGlobalProfileWrite();
 
-    window.alert("Preferences restored to defaults.");
+    if (shouldNotify) window.alert("Preferences restored to defaults.");
+    return true;
   }
 
   function applyGlobalPreferences(state = loadGlobalState()) {

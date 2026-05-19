@@ -70,7 +70,8 @@
       activeTab.graphSnapshot = graphSnapshot;
       delete activeTab.graphComparisonSnapshot;
       if (activeTab.pendingLargeGraphDisplayDefaults) {
-        if ((graphSnapshot.nodes || []).length > LARGE_GRAPH_DISPLAY_NODE_LIMIT) {
+        const largeGraphDisplayLimit = typeof getGraphRenderWarningThreshold === "function" ? getGraphRenderWarningThreshold() : LARGE_GRAPH_DISPLAY_NODE_LIMIT;
+        if ((graphSnapshot.nodes || []).length > largeGraphDisplayLimit) {
           const preferenceDefaults = typeof getGraphViewPreferenceDefaults === "function" ? getGraphViewPreferenceDefaults() : {};
           const largeGraphDefaults = {};
           if (!Object.prototype.hasOwnProperty.call(preferenceDefaults, "showArrows")) largeGraphDefaults.showArrows = false;
@@ -181,16 +182,33 @@
     const isClusterNode = (nodeData) => getGraphNodeType(nodeData) === "cluster";
     const isTagLink = (linkData) => getGraphLinkType(linkData) === "tag";
     const isMarkdownLink = (linkData) => !isTagLink(linkData);
-    const getGraphNodeLabel = (nodeData) => {
-      const labelText = nodeData?.label || nodeData?.id || "";
-      if (!isTagNode(nodeData)) return labelText;
-      const tagName = nodeData?.tag || String(labelText).replace(/^#/, "");
-      return `#${tagName}`;
-    };
     const getLinkSourceId = (link) => link?.source?.id || link?.source;
     const getLinkTargetId = (link) => link?.target?.id || link?.target;
     const snapshotFilesById = new Map((graphSnapshot.files || []).map((file) => [file.id, file]));
     const graphNodesById = new Map(nodes.map((node) => [node.id, node]));
+    const stripGraphNodeFileExtension = (labelText) => {
+      const source = String(labelText || "");
+      const stripped = source.replace(/\.[^/.]+$/, "");
+      return stripped || source;
+    };
+    const getGraphNodeFileLabelSource = (nodeData) => {
+      const snapshotFile = snapshotFilesById.get(nodeData?.id) || {};
+      const source = snapshotFile.name || snapshotFile.path || snapshotFile.fullPath || nodeData?.name || nodeData?.path || nodeData?.fullPath || nodeData?.label || nodeData?.id || "";
+      const normalized = String(source).replace(/\\/g, "/").replace(/\/+/g, "/");
+      return normalized.split("/").pop() || normalized;
+    };
+    const getGraphNodeLabel = (nodeData) => {
+      const labelText = nodeData?.label || nodeData?.id || "";
+      if (isTagNode(nodeData)) {
+        const tagName = nodeData?.tag || String(labelText).replace(/^#/, "");
+        return `#${tagName}`;
+      }
+      if (!isClusterNode(nodeData)) {
+        const fileLabel = getGraphNodeFileLabelSource(nodeData);
+        return getGraphShowFileExtensions?.() ? fileLabel : stripGraphNodeFileExtension(fileLabel);
+      }
+      return getGraphShowFileExtensions?.() ? labelText : stripGraphNodeFileExtension(labelText);
+    };
     const fileLinkTextById = new Map();
     const appendFileLinkText = (fileId, textParts) => {
       if (!fileId) return;
@@ -477,7 +495,9 @@
       filterGraphToNodeIds(new Set(graphViewConfig.clusterNodeIds));
     }
 
-    const LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT = 500;
+    const getLargeGraphAutoClusterMinNodeCount = () => (
+      typeof getGraphAutoClusterThreshold === "function" ? getGraphAutoClusterThreshold() : 1000
+    );
     const LARGE_GRAPH_AUTO_CLUSTER_VERSION = 4;
     const LARGE_GRAPH_RENDER_NODE_BUDGET = 650;
     const getLargeGraphAutoClusterTarget = (nodeCount) => Math.min(LARGE_GRAPH_RENDER_NODE_BUDGET, Math.max(350, Math.floor(nodeCount * 0.05)));
@@ -571,13 +591,14 @@
     };
     const detectGraphCommunities = async () => {
       const visibleFileNodeIds = getVisibleFileNodeIdsForClustering();
-      if (visibleFileNodeIds.size <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return { visibleFileNodeIds, adjacency: new Map(), communities: [] };
+      const autoClusterMinNodeCount = getLargeGraphAutoClusterMinNodeCount();
+      if (visibleFileNodeIds.size < autoClusterMinNodeCount) return { visibleFileNodeIds, adjacency: new Map(), communities: [] };
       const adjacency = getMarkdownFileAdjacencyForNodes(visibleFileNodeIds);
       await yieldGraphRenderWork();
       const nodeIds = Array.from(adjacency.keys())
         .filter((nodeId) => (adjacency.get(nodeId)?.size || 0) >= 1)
         .sort((a, b) => a.localeCompare(b));
-      if (nodeIds.length <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return { visibleFileNodeIds, adjacency, communities: [] };
+      if (nodeIds.length < autoClusterMinNodeCount) return { visibleFileNodeIds, adjacency, communities: [] };
 
       const labels = new Map(nodeIds.map((id) => [id, id]));
       const maxIterations = 20;
@@ -633,11 +654,13 @@
     const createAutoCollapsedClustersForLargeGraph = async () => {
       const currentConfig = normalizeGraphViewConfig(activeTab.graphViewConfig);
       if (currentConfig.mode === "cluster") return null;
+      const { visibleFileNodeIds, adjacency, communities } = await detectGraphCommunities();
+      if (visibleFileNodeIds.size < getLargeGraphAutoClusterMinNodeCount()) {
+        return currentConfig.autoCollapsedLargeGraph === true && (currentConfig.collapsedClusters || []).length ? [] : null;
+      }
       const existingAutoClusterVersion = Number(currentConfig.autoCollapsedLargeGraphVersion || 0);
       if (currentConfig.autoCollapsedLargeGraph === true && existingAutoClusterVersion >= LARGE_GRAPH_AUTO_CLUSTER_VERSION) return null;
       if ((currentConfig.collapsedClusters || []).length && currentConfig.autoCollapsedLargeGraph !== true) return null;
-      const { visibleFileNodeIds, adjacency, communities } = await detectGraphCommunities();
-      if (visibleFileNodeIds.size <= LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT) return null;
 
       const nodesById = new Map(nodes.map((nodeData) => [nodeData.id, nodeData]));
       const outgoingCountsByNodeId = new Map();
@@ -778,7 +801,7 @@
       graphViewConfig = normalizeGraphViewConfig({
         ...(activeTab.graphViewConfig || {}),
         collapsedClusters: autoCollapsedClusters,
-        autoCollapsedLargeGraph: true,
+        autoCollapsedLargeGraph: autoCollapsedClusters.length > 0,
         autoCollapsedLargeGraphVersion: LARGE_GRAPH_AUTO_CLUSTER_VERSION
       });
       activeTab.graphViewConfig = graphViewConfig;
@@ -1694,7 +1717,7 @@
         alert("There are no visible file points to open.");
         return;
       }
-      if (fileNodes.length > 20) {
+      if (fileNodes.length > 20 && (typeof shouldConfirmOpenManyGraphNodes !== "function" || shouldConfirmOpenManyGraphNodes())) {
         const shouldContinue = window.confirm(`Open ${fileNodes.length} files in editor tabs?\n\nThis might slow down your computer or crash the app.`);
         if (!shouldContinue) return;
       }
@@ -1712,15 +1735,31 @@
       }
     };
 
-    const hideGraphPoint = (nodeId) => {
+    const getHiddenNodeIdsForGraphPoint = (graphNode) => {
+      if (!graphNode) return [];
+      if (isClusterNode(graphNode)) {
+        return Array.from(new Set(graphNode.memberNodeIds || [])).filter(Boolean);
+      }
+      return graphNode.id ? [graphNode.id] : [];
+    };
+
+    const hideGraphPoint = (graphNode) => {
+      const nodeIds = getHiddenNodeIdsForGraphPoint(graphNode);
+      if (!nodeIds.length) return;
       simulation.stop();
 
       // Re-render by reusing temporary in-memory file graph and hiding this node for this tab view only.
       const activeGraphTab = getActiveGraphTab();
       if (activeGraphTab) {
+        const currentConfig = normalizeGraphViewConfig(activeGraphTab.graphViewConfig);
+        const hiddenNodeIds = Array.from(new Set([...(currentConfig.hiddenNodeIds || []), ...nodeIds]));
+        const targetClusterId = isClusterNode(graphNode) ? (graphNode.clusterId || graphNode.id) : "";
         activeGraphTab.graphViewConfig = {
-          ...(activeGraphTab.graphViewConfig || {}),
-          hiddenNodeIds: Array.from(new Set([...(activeGraphTab.graphViewConfig?.hiddenNodeIds || []), nodeId]))
+          ...currentConfig,
+          hiddenNodeIds,
+          collapsedClusters: targetClusterId
+            ? (currentConfig.collapsedClusters || []).filter((cluster) => getClusterNodeId(cluster) !== targetClusterId)
+            : currentConfig.collapsedClusters
         };
         markGraphTabAsChanged(activeGraphTab);
         saveTabsToStorage(tabs);
@@ -2711,9 +2750,9 @@
 
     hidePointBtn.addEventListener("click", () => {
       if (!contextTargetNode) return;
-      const nodeId = contextTargetNode.id;
+      const targetNode = contextTargetNode;
       hideContextMenu();
-      hideGraphPoint(nodeId);
+      hideGraphPoint(targetNode);
     });
 
     addTagBtn.addEventListener("click", async (event) => {
@@ -2782,7 +2821,9 @@
         alert("Deleting files is available only in the desktop app for files opened from disk.");
         return;
       }
-      const confirmed = window.confirm(`Delete "${getNodeFileName(nodeId)}" from disk? This action cannot be undone.`);
+      const confirmed = typeof shouldConfirmDeleteFiles === "function" && !shouldConfirmDeleteFiles()
+        ? true
+        : window.confirm(`Delete "${getNodeFileName(nodeId)}" from disk? This action cannot be undone.`);
       if (!confirmed) return;
       try {
         const snapshotFile = getSnapshotFileForNode(targetNode);
@@ -2818,6 +2859,7 @@
         },
         graphLayout: activeGraphTab?.graphLayout || null
       });
+      if (!localGraphTab) return;
       tabs.push(localGraphTab);
       saveTabsToStorage(tabs);
       hideContextMenu();
@@ -2851,6 +2893,7 @@
         },
         graphLayout: activeGraphTab?.graphLayout || null
       });
+      if (!clusterGraphTab) return;
       tabs.push(clusterGraphTab);
       saveTabsToStorage(tabs);
       hideContextMenu();

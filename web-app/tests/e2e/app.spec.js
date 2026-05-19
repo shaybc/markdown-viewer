@@ -514,6 +514,169 @@ test("opens help and about from the action menu", async ({ page }) => {
   await expect(aboutModal.locator(".about-modal-logo")).toBeVisible();
 });
 
+test("settings menu updates graph auto-clustering threshold", async ({ page }) => {
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-settings-dialog").first().click();
+  await expect(page.locator("#settings-modal")).toBeVisible();
+  await expect(page.locator("#settings-graph-auto-cluster-threshold")).toHaveValue("1000");
+  await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1500");
+  await expect(page.locator("#settings-graph-show-file-extensions")).not.toBeChecked();
+  await expect(page.locator("#settings-confirm-open-many-graph-nodes")).toBeChecked();
+  await expect(page.locator("#settings-confirm-delete-files")).toBeChecked();
+  await expect(page.locator("#settings-confirm-reset-state")).toBeChecked();
+  await expect(page.locator("#settings-max-recent-files")).toHaveValue("10");
+  await expect(page.locator("#settings-max-recent-folders")).toHaveValue("10");
+
+  await page.locator("#settings-graph-auto-cluster-threshold").fill("1200");
+  await page.locator("#settings-graph-render-warning-threshold").fill("1800");
+  await page.locator("#settings-graph-show-file-extensions").check();
+  await page.locator("#settings-confirm-open-many-graph-nodes").uncheck();
+  await page.locator("#settings-confirm-delete-files").uncheck();
+  await page.locator("#settings-confirm-reset-state").uncheck();
+  await page.locator("#settings-max-recent-files").fill("7");
+  await page.locator("#settings-max-recent-folders").fill("5");
+  await page.locator("#settings-modal-save").click();
+  await expect(page.locator("#settings-modal")).toBeHidden();
+  await expect.poll(() => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("markdownViewerGlobalState") || "{}");
+    return {
+      threshold: state.graphAutoClusterThreshold,
+      renderWarningThreshold: state.graphRenderWarningThreshold,
+      showFileExtensions: state.graphShowFileExtensions,
+      confirmOpenManyGraphNodes: state.confirmOpenManyGraphNodes,
+      confirmDeleteFiles: state.confirmDeleteFiles,
+      confirmResetState: state.confirmResetState,
+      maxRecentFiles: state.maxRecentFiles,
+      maxRecentFolders: state.maxRecentFolders
+    };
+  })).toEqual({
+    threshold: 1200,
+    renderWarningThreshold: 1800,
+    showFileExtensions: true,
+    confirmOpenManyGraphNodes: false,
+    confirmDeleteFiles: false,
+    confirmResetState: false,
+    maxRecentFiles: 7,
+    maxRecentFolders: 5
+  });
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-settings-dialog").first().click();
+  await expect(page.locator("#settings-graph-auto-cluster-threshold")).toHaveValue("1200");
+  await expect(page.locator("#settings-graph-render-warning-threshold")).toHaveValue("1800");
+  await expect(page.locator("#settings-graph-show-file-extensions")).toBeChecked();
+  await expect(page.locator("#settings-confirm-open-many-graph-nodes")).not.toBeChecked();
+  await expect(page.locator("#settings-confirm-delete-files")).not.toBeChecked();
+  await expect(page.locator("#settings-confirm-reset-state")).not.toBeChecked();
+  await expect(page.locator("#settings-max-recent-files")).toHaveValue("7");
+  await expect(page.locator("#settings-max-recent-folders")).toHaveValue("5");
+});
+
+test("settings menu toggles graph node file extensions", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "graph_label_extensions_e2e",
+      title: "Label Extensions Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Label Extensions Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        collapsedClusters: [],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Label Extensions Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "notes/alpha", label: "alpha", type: "file", status: "current" }
+        ],
+        links: [],
+        files: [
+          { id: "notes/alpha", path: "notes/alpha.md", name: "alpha.md", content: "# Alpha", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+  await page.goto("/");
+  await expect(page.locator(".graph-label-file")).toHaveText("alpha");
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-settings-dialog").first().click();
+  await page.locator("#settings-graph-show-file-extensions").check();
+  await page.locator("#settings-modal-save").click();
+
+  await expect(page.locator(".graph-label-file")).toHaveText("alpha.md");
+});
+
+test("code converter dialog browses folders and runs converter", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_PATH = "C:/GitHub/shaybc/markdown-viewer/desktop-app";
+    window.NL_VERSION = "test";
+    window.__folderDialogTitles = [];
+    window.__execCommands = [];
+    const folderSelections = ["C:/src/project", "C:/docs/project-md"];
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async (title) => {
+          window.__folderDialogTitles.push(title);
+          return folderSelections.shift();
+        },
+        execCommand: async (command) => {
+          window.__execCommands.push(command);
+          return { exitCode: 0, stdOut: "Created 3 markdown file(s) in C:/docs/project-md" };
+        }
+      }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-code-converter-dialog").first().click();
+  const modal = page.locator("#code-converter-modal");
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText("Generates Markdown files from a source code folder");
+  await expect(modal).toContainText("Supported languages: JavaScript, TypeScript, Python, and Java");
+
+  await page.locator("#code-converter-source-browse").click();
+  await page.locator("#code-converter-destination-browse").click();
+  await expect(page.locator("#code-converter-source-root")).toHaveValue("C:/src/project");
+  await expect(page.locator("#code-converter-destination-root")).toHaveValue("C:/docs/project-md");
+
+  await page.locator("#code-converter-run").click();
+  await expect(page.locator("#code-converter-status")).toHaveText("Created 3 markdown file(s) in C:/docs/project-md");
+  await expect.poll(() => page.evaluate(() => ({
+    titles: window.__folderDialogTitles,
+    commands: window.__execCommands
+  }))).toEqual({
+    titles: ["Select source code root folder", "Select destination Markdown root folder"],
+    commands: ['node "C:/GitHub/shaybc/markdown-viewer/desktop-app/resources/code_converter/dependency-md-generator.js" "C:/src/project" "C:/docs/project-md"']
+  });
+});
+
 test("toggles theme and persists it across reloads", async ({ page }) => {
   await openApp(page);
 
@@ -1822,6 +1985,101 @@ test("graph context menu removes visible leaf nodes generation by generation", a
     .toEqual(["leaf.md", "mid.md"]);
 });
 
+test("graph context menu removes collapsed clusters with their child points", async ({ page }) => {
+  await page.addInitScript(() => {
+    const graphTab = {
+      id: "graph_cluster_remove_e2e",
+      title: "Cluster Remove Graph",
+      content: "",
+      scrollPos: 0,
+      viewMode: "preview",
+      createdAt: Date.now(),
+      isTemporary: false,
+      type: "graph",
+      folderName: "Cluster Remove Graph",
+      graphViewConfig: {
+        showTags: false,
+        hiddenTagIds: [],
+        hiddenNodeIds: [],
+        selectedTagIds: [],
+        groups: [],
+        collapsedClusters: [
+          {
+            id: "cluster_root",
+            label: "root.md",
+            mode: "direct-outgoing",
+            seedNodeId: "root.md",
+            memberNodeIds: ["root.md", "alpha.md", "beta.md"],
+            createdAt: Date.now()
+          }
+        ],
+        searchQuery: "",
+        showArrows: true,
+        showOrphans: true,
+        showLabels: true,
+        textFadeThreshold: 0.35,
+        nodeSize: 0.8,
+        linkThickness: 1,
+        centerForce: 1,
+        repelForce: 650,
+        linkForce: 0.4,
+        linkDistance: 170
+      },
+      graphSnapshot: {
+        version: 1,
+        folderName: "Cluster Remove Graph",
+        createdAt: Date.now(),
+        nodes: [
+          { id: "root.md", label: "root.md", type: "file", status: "current" },
+          { id: "alpha.md", label: "alpha.md", type: "file", status: "current" },
+          { id: "beta.md", label: "beta.md", type: "file", status: "current" },
+          { id: "outside.md", label: "outside.md", type: "file", status: "current" }
+        ],
+        links: [
+          { source: "root.md", target: "alpha.md", type: "link", status: "current" },
+          { source: "root.md", target: "beta.md", type: "link", status: "current" },
+          { source: "outside.md", target: "root.md", type: "link", status: "current" }
+        ],
+        files: [
+          { id: "root.md", path: "root.md", name: "root.md", content: "[[alpha]]\n[[beta]]", status: "current" },
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "# Alpha", status: "current" },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta", status: "current" },
+          { id: "outside.md", path: "outside.md", name: "outside.md", content: "[[root]]", status: "current" }
+        ]
+      }
+    };
+    localStorage.setItem("markdownViewerTabs", JSON.stringify([graphTab]));
+    localStorage.setItem("markdownViewerActiveTab", graphTab.id);
+  });
+
+  await page.goto("/");
+  await expect(page.locator(".graph-tab-render")).toBeVisible();
+  await expect(page.locator(".graph-node-cluster")).toHaveCount(1);
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+
+  await page.locator(".graph-node-cluster").dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 260,
+    clientY: 260
+  });
+  await page.locator(".graph-context-menu-item", { hasText: "Remove this point" }).click();
+
+  await expect(page.locator(".graph-node-cluster")).toHaveCount(0);
+  await expect(page.locator(".graph-node-file")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => {
+    const config = JSON.parse(localStorage.getItem("markdownViewerTabs"))[0].graphViewConfig;
+    return {
+      hiddenNodeIds: config.hiddenNodeIds.sort(),
+      collapsedClusters: config.collapsedClusters
+    };
+  })).toEqual({
+    hiddenNodeIds: ["alpha.md", "beta.md", "root.md"],
+    collapsedClusters: []
+  });
+});
+
 test("desktop graph context menu can update file tags", async ({ page }) => {
   await page.addInitScript(() => {
     window.NL_VERSION = "test";
@@ -2107,6 +2365,76 @@ test("desktop tree context menu can update file tags", async ({ page }) => {
   await expect(page.locator(".graph-link-tag")).toHaveCount(3);
 });
 
+test("tree file context menu opens a recursive full graph for that file", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.NL_VERSION = "test";
+    window.NL_OS = "Windows";
+    window.__alerts = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    const files = new Map([
+      ["alpha.md", "# Alpha\n\n[[beta]]"],
+      ["beta.md", "# Beta\n\n[[gamma]]"],
+      ["gamma.md", "# Gamma"],
+      ["delta.md", "# Delta\n\n[[alpha]]"],
+      ["isolated.md", "# Isolated"]
+    ]);
+    const getName = (path) => String(path || "").split(/[\\/]/).pop();
+    window.Neutralino = {
+      os: {
+        showFolderDialog: async () => "C:/vault",
+        open: async () => {},
+        execCommand: async () => {}
+      },
+      filesystem: {
+        readDirectory: async (path) => {
+          if (path === "C:/vault") {
+            return Array.from(files.keys()).map((entry) => ({ entry, type: "FILE" }));
+          }
+          return [];
+        },
+        getStats: async () => ({ modifiedAt: 1, createdAt: 1 }),
+        readFile: async (path) => {
+          const name = getName(path);
+          if (files.has(name)) return files.get(name);
+          throw new Error("Unexpected read path: " + path);
+        }
+      },
+      clipboard: { writeText: async () => {} }
+    };
+  });
+  await openApp(page);
+
+  await page.locator("#import-from-folder").click();
+  const alphaFile = page.locator(".folder-tree-file", { hasText: "alpha.md" });
+  await expect(alphaFile).toBeVisible();
+  await alphaFile.dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 90,
+    clientY: 180
+  });
+
+  const treeMenu = page.locator(".sidebar-file-context-menu:not(.hidden)");
+  await expect(treeMenu.locator(".graph-context-menu-item", { hasText: "Show full graph" })).toBeVisible();
+  await treeMenu.locator(".graph-context-menu-item", { hasText: "Show full graph" }).evaluate((button) => button.click());
+
+  await expect.poll(() => page.evaluate(() => {
+    const tabs = JSON.parse(localStorage.getItem("markdownViewerTabs") || "[]");
+    const graphTab = tabs.find((tab) => tab.type === "graph" && tab.title === "Full Graph: alpha.md");
+    return {
+      mode: graphTab?.graphViewConfig?.mode,
+      focusNodeId: graphTab?.graphViewConfig?.focusNodeId,
+      snapshotNodeIds: (graphTab?.graphSnapshot?.nodes || []).map((node) => node.id).sort()
+    };
+  })).toEqual({
+    mode: "full-network",
+    focusNodeId: "alpha",
+    snapshotNodeIds: ["alpha", "beta", "delta", "gamma", "isolated"]
+  });
+  await expect.poll(() => page.evaluate(() => window.__alerts)).toEqual([]);
+});
+
 test("renders recent files in the action menu", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("markdownViewerRecentFiles", JSON.stringify([
@@ -2117,6 +2445,128 @@ test("renders recent files in the action menu", async ({ page }) => {
 
   await expect(page.locator(".recent-files-menu .recent-menu-item")).toHaveCount(1);
   await expect(page.locator(".recent-files-menu .recent-menu-item")).toContainText("notes.md");
+});
+
+test("removes recent file and folder entries from the action menu", async ({ page }) => {
+  await page.addInitScript(() => {
+    const now = Date.now();
+    localStorage.setItem("markdownViewerRecentFiles", JSON.stringify([
+      { name: "one.md", label: "one.md", path: "docs/one.md", updatedAt: now },
+      { name: "two.md", label: "two.md", path: "docs/two.md", updatedAt: now - 1 }
+    ]));
+    localStorage.setItem("markdownViewerRecentFolders", JSON.stringify([
+      { name: "Vault One", label: "Vault One", path: "C:/vault-one", updatedAt: now },
+      { name: "Vault Two", label: "Vault Two", path: "C:/vault-two", updatedAt: now - 1 }
+    ]));
+  });
+  await openApp(page);
+
+  await page.locator(".recent-files-menu .recent-menu-item", { hasText: "one.md" }).locator(".recent-menu-remove").click();
+  await expect(page.locator(".recent-files-menu .recent-menu-item")).toHaveCount(1);
+  await expect(page.locator(".recent-files-menu .recent-menu-item")).toContainText("two.md");
+
+  await page.locator(".recent-folders-menu .recent-menu-item", { hasText: "Vault One" }).locator(".recent-menu-remove").click();
+  await expect(page.locator(".recent-folders-menu .recent-menu-item")).toHaveCount(1);
+  await expect(page.locator(".recent-folders-menu .recent-menu-item")).toContainText("Vault Two");
+  await expect.poll(() => page.evaluate(() => ({
+    files: JSON.parse(localStorage.getItem("markdownViewerRecentFiles") || "[]").map((item) => item.name),
+    folders: JSON.parse(localStorage.getItem("markdownViewerRecentFolders") || "[]").map((item) => item.name)
+  }))).toEqual({
+    files: ["two.md"],
+    folders: ["Vault Two"]
+  });
+});
+
+test("settings menu limits remembered recent files and folders", async ({ page }) => {
+  await page.addInitScript(() => {
+    const now = Date.now();
+    localStorage.setItem("markdownViewerRecentFiles", JSON.stringify([
+      { name: "one.md", label: "one.md", path: "docs/one.md", updatedAt: now },
+      { name: "two.md", label: "two.md", path: "docs/two.md", updatedAt: now - 1 },
+      { name: "three.md", label: "three.md", path: "docs/three.md", updatedAt: now - 2 }
+    ]));
+    localStorage.setItem("markdownViewerRecentFolders", JSON.stringify([
+      { name: "Vault One", label: "Vault One", path: "C:/vault-one", updatedAt: now },
+      { name: "Vault Two", label: "Vault Two", path: "C:/vault-two", updatedAt: now - 1 },
+      { name: "Vault Three", label: "Vault Three", path: "C:/vault-three", updatedAt: now - 2 }
+    ]));
+  });
+  await openApp(page);
+  await expect(page.locator(".recent-files-menu .recent-menu-item")).toHaveCount(3);
+  await expect(page.locator(".recent-folders-menu .recent-menu-item")).toHaveCount(3);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-settings-dialog").first().click();
+  await page.locator("#settings-max-recent-files").fill("2");
+  await page.locator("#settings-max-recent-folders").fill("1");
+  await page.locator("#settings-modal-save").click();
+
+  await expect(page.locator(".recent-files-menu .recent-menu-item")).toHaveCount(2);
+  await expect(page.locator(".recent-folders-menu .recent-menu-item")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => ({
+    files: JSON.parse(localStorage.getItem("markdownViewerRecentFiles") || "[]").map((item) => item.name),
+    folders: JSON.parse(localStorage.getItem("markdownViewerRecentFolders") || "[]").map((item) => item.name)
+  }))).toEqual({
+    files: ["one.md", "two.md"],
+    folders: ["Vault One"]
+  });
+});
+
+test("settings reset all clears cache preferences and recent history", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__alerts = [];
+    window.__confirms = [];
+    window.alert = (message) => window.__alerts.push(String(message));
+    window.confirm = (message) => {
+      window.__confirms.push(String(message));
+      return true;
+    };
+    localStorage.setItem("markdownViewerGlobalState", JSON.stringify({
+      graphAutoClusterThreshold: 1200,
+      graphShowFileExtensions: true,
+      maxRecentFiles: 2,
+      maxRecentFolders: 1,
+      sidebarVisible: false
+    }));
+    localStorage.setItem("markdownViewerRecentFiles", JSON.stringify([
+      { name: "one.md", label: "one.md", path: "docs/one.md", updatedAt: Date.now() }
+    ]));
+    localStorage.setItem("markdownViewerRecentFolders", JSON.stringify([
+      { name: "Vault One", label: "Vault One", path: "C:/vault-one", updatedAt: Date.now() }
+    ]));
+  });
+  await openApp(page);
+  await page.evaluate(async () => {
+    const cache = await caches.open("markdown-viewer-test-cache");
+    await cache.put("/cached-test", new Response("cached"));
+  });
+  await expect.poll(() => page.evaluate(async () => (await caches.keys()).includes("markdown-viewer-test-cache"))).toBe(true);
+
+  await page.locator("#desktopActionMenu").click();
+  await page.locator(".open-settings-dialog").first().click();
+  await page.locator("#settings-reset-all").click();
+
+  await expect(page.locator("#settings-graph-auto-cluster-threshold")).toHaveValue("1000");
+  await expect(page.locator("#settings-graph-show-file-extensions")).not.toBeChecked();
+  await expect(page.locator("#settings-max-recent-files")).toHaveValue("10");
+  await expect(page.locator("#settings-max-recent-folders")).toHaveValue("10");
+  await expect(page.locator(".recent-files-menu .recent-empty-item")).toHaveText("No recent files");
+  await expect(page.locator(".recent-folders-menu .recent-empty-item")).toHaveText("No recent folders");
+  await expect.poll(() => page.evaluate(async () => ({
+    cacheKeys: await caches.keys(),
+    globalState: JSON.parse(localStorage.getItem("markdownViewerGlobalState") || "{}"),
+    recentFiles: JSON.parse(localStorage.getItem("markdownViewerRecentFiles") || "[]"),
+    recentFolders: JSON.parse(localStorage.getItem("markdownViewerRecentFolders") || "[]"),
+    confirms: window.__confirms,
+    alerts: window.__alerts
+  }))).toEqual({
+    cacheKeys: [],
+    globalState: {},
+    recentFiles: [],
+    recentFolders: [],
+    confirms: ["Reset all settings data? This clears cache, preferences, and recent file/folder history. Open documents are not removed."],
+    alerts: ["Cache, preferences, and recent history reset."]
+  });
 });
 
 test("shows active dropzone state during drag", async ({ page }) => {

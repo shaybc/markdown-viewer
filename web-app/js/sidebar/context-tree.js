@@ -1037,6 +1037,12 @@
       CONTEXT_MENU_ACTIONS.revealInFileExplorer.icon,
       "Open the file's folder in the system file explorer and select this file when supported."
     );
+    const showFullGraphBtn = createFileContextMenuButton(
+      CONTEXT_MENU_ACTIONS.showFullGraph?.label || "Show full graph",
+      CONTEXT_MENU_ACTIONS.showFullGraph?.icon || CONTEXT_MENU_ACTIONS.showFullNetwork?.icon || "bi bi-diagram-3",
+      "Open a graph view with every recursive incoming and outgoing Markdown connection for this file."
+    );
+    showFullGraphBtn.classList.add("sidebar-show-full-graph");
     const renameFileBtn = createFileContextMenuButton(
       CONTEXT_MENU_ACTIONS.rename.label,
       CONTEXT_MENU_ACTIONS.rename.icon,
@@ -1121,6 +1127,7 @@
       openFileBtn,
       openDefaultAppBtn,
       revealFileBtn,
+      showFullGraphBtn,
       renameFileBtn,
       tagsSubmenu,
       copySubmenu,
@@ -1188,6 +1195,18 @@
       } catch (error) {
         console.error("Failed to reveal sidebar file:", error);
         alert("Unable to reveal this file in the file explorer.");
+      }
+    });
+
+    showFullGraphBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const target = sidebarContextTarget;
+      hideSidebarFileContextMenu();
+      try {
+        await openSidebarFileFullGraphView(target);
+      } catch (error) {
+        console.error("Failed to open sidebar file full graph:", error);
+        alert("Unable to open a full graph for this file.");
       }
     });
 
@@ -1290,7 +1309,9 @@
         alert("Deleting files is available only in the desktop app for files opened from disk.");
         return;
       }
-      const confirmed = window.confirm(`Delete "${target.name}" from disk? This action cannot be undone.`);
+      const confirmed = typeof shouldConfirmDeleteFiles === "function" && !shouldConfirmDeleteFiles()
+        ? true
+        : window.confirm(`Delete "${target.name}" from disk? This action cannot be undone.`);
       if (!confirmed) return;
       try {
         await Neutralino.filesystem.remove(filePath);
@@ -1348,6 +1369,80 @@
     return folderPath ? `Graph View: ${folderPath}` : `Graph View: ${node?.name || "Folder"}`;
   }
 
+  function getSidebarMarkdownFileEntry(node, files = folderMarkdownFiles) {
+    if (!node) return null;
+    const nodePathKey = getFolderTreeNodePathKey(node);
+    return (files || []).find((entry) => {
+      if (entry?.handle && node.handle && entry.handle === node.handle) return true;
+      const entryPathKey = getComparableFilePath(entry.fullPath || entry.path || entry.file?.webkitRelativePath || entry.file?.name || entry.name || "");
+      return entryPathKey && nodePathKey && entryPathKey === nodePathKey;
+    }) || null;
+  }
+
+  async function getOpenFolderMarkdownFilesForGraph() {
+    if ((folderMarkdownFiles || []).length) return folderMarkdownFiles;
+    if (!(currentFolderTreeNodes || []).length) return [];
+    folderMarkdownFiles = isNeutralinoRuntime()
+      ? await collectMarkdownFilesFromTreeNeutralino(currentFolderTreeNodes)
+      : await collectMarkdownFilesFromTree(currentFolderTreeNodes);
+    return folderMarkdownFiles;
+  }
+
+  function getSidebarFileGraphNodeId(node, files) {
+    const matchingEntry = getSidebarMarkdownFileEntry(node, files);
+    if (matchingEntry) {
+      return matchingEntry.id || normalizeGraphNodeName(matchingEntry.path || matchingEntry.fullPath || matchingEntry.file?.webkitRelativePath || matchingEntry.file?.name || matchingEntry.name || "");
+    }
+    return normalizeGraphNodeName(node?.path || node?.file?.webkitRelativePath || node?.fullPath || node?.name || "");
+  }
+
+  async function openSidebarFileFullGraphView(node) {
+    if (!node || node.kind !== "file" || !isMarkdownPath(node.name || node.path || node.fullPath || "")) return;
+
+    const files = await getOpenFolderMarkdownFilesForGraph();
+    if (!files.length) {
+      alert("Open a folder first to build a full graph for this file.");
+      return;
+    }
+
+    const focusNodeId = getSidebarFileGraphNodeId(node, files);
+    if (!focusNodeId) {
+      alert("Unable to match this file to a graph point.");
+      return;
+    }
+
+    const graphTitle = `Full Graph: ${node.name || focusNodeId}`;
+    const scopeSeed = `${activeFolderPath || activeFolderName || "folder"}:${getSidebarNodeClipboardPath(node) || focusNodeId}`;
+    const graphScopeKey = createFolderGraphScopeKey("sidebar-file-full-graph", scopeSeed);
+    if (focusExistingFolderGraphTab(graphScopeKey, graphTitle)) return;
+
+    if (tabs.length >= 20) {
+      alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+      return;
+    }
+
+    const graphSnapshot = await createGraphSnapshot(files, activeFolderName || "Graph View");
+    const snapshotNodeIds = new Set((graphSnapshot.nodes || []).map((graphNode) => graphNode.id));
+    if (!snapshotNodeIds.has(focusNodeId)) {
+      alert("Unable to find this file in the current folder graph.");
+      return;
+    }
+
+    const graphTab = createGraphTab(graphTitle, {
+      graphSnapshot,
+      graphScopeKey,
+      graphViewConfig: {
+        mode: "full-network",
+        focusNodeId,
+        hiddenNodeIds: []
+      }
+    });
+    if (!graphTab) return;
+    tabs.push(graphTab);
+    switchTab(graphTab.id);
+    saveTabsToStorage(tabs);
+  }
+
   async function collectMarkdownFilesForSidebarFolder(node) {
     if (!node || node.kind !== "directory") return [];
     const parentPath = node.path || node.name || "";
@@ -1381,6 +1476,7 @@
 
     const graphSnapshot = await createGraphSnapshot(folderFiles, folderName);
     const graphTab = createGraphTab(folderName, { graphSnapshot, graphScopeKey });
+    if (!graphTab) return;
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);
@@ -1412,7 +1508,9 @@
       alert("Deleting folders is available only in the desktop app for folders opened from disk.");
       return;
     }
-    const confirmed = window.confirm(`Delete folder "${node.name}" and its contents from disk? This action cannot be undone.`);
+    const confirmed = typeof shouldConfirmDeleteFiles === "function" && !shouldConfirmDeleteFiles()
+      ? true
+      : window.confirm(`Delete folder "${node.name}" and its contents from disk? This action cannot be undone.`);
     if (!confirmed) return;
     await Neutralino.filesystem.remove(folderPath);
     closeTabsForDeletedPath(folderPath, { kind: "folder" });
@@ -1635,7 +1733,9 @@
     if (title) title.textContent = node.name || "File";
     const tagsSubmenu = menu.querySelector(".tags-context-submenu");
     const tagsSubmenuPanel = menu.querySelector(".tags-context-submenu-panel");
+    const showFullGraphBtn = menu.querySelector(".sidebar-show-full-graph");
     const canManageTags = isMarkdownPath(node.name || node.path || node.fullPath || "");
+    if (showFullGraphBtn) showFullGraphBtn.classList.toggle("hidden", !canManageTags);
     if (tagsSubmenu) tagsSubmenu.classList.toggle("hidden", !canManageTags);
     if (canManageTags) {
       const renderSidebarTags = (currentTags) => {

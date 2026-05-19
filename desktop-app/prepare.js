@@ -68,6 +68,9 @@ console.log("✓ Copied assets/ → resources/assets/");
 copyDirSync(path.join(ROOT_DIR, "wiki"), path.join(RESOURCES_DIR, "wiki"));
 console.log("Copied wiki/ -> resources/wiki/");
 
+copyDirSync(path.join(ROOT_DIR, "code_converter"), path.join(RESOURCES_DIR, "code_converter"));
+console.log("Copied code_converter/ -> resources/code_converter/");
+
 let html = fs.readFileSync(path.join(WEB_APP_DIR, "index.html"), "utf-8");
 
 for (const asset of VENDOR_ASSETS) {

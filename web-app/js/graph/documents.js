@@ -17,6 +17,7 @@
     }
 
     const graphTab = createGraphTab(folderName, { graphScopeKey });
+    if (!graphTab) return;
     tabs.push(graphTab);
     switchTab(graphTab.id);
     saveTabsToStorage(tabs);
@@ -25,7 +26,8 @@
   function getGraphExportContent(graphSnapshot, folderName, graphViewConfig) {
     const graphTab = createGraphTab(folderName || graphSnapshot?.folderName || "Graph View", {
       graphSnapshot,
-      graphViewConfig: graphViewConfig || null
+      graphViewConfig: graphViewConfig || null,
+      skipGraphRenderWarning: true
     });
     const graphDocument = serializeGraphExportDocument(graphTab);
     return JSON.stringify(graphDocument, null, 2);
@@ -242,6 +244,7 @@
     const graphData = deserializeGraphDocument(graphDocumentForTab);
     const fallbackName = getGraphTitleFromFileName(name) || "Saved Graph";
     const graphTab = createGraphTab(graphData.folderName || fallbackName, { graphDocument: graphData.graphDocument });
+    if (!graphTab) return;
     graphTab.keepSavedGraphMode = graphDocumentKind.documentType === GRAPH_DOCUMENT_TYPE_VIEW;
     graphTab.sourceFileName = name;
     graphTab.title = fallbackName;
