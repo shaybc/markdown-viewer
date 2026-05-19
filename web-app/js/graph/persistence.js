@@ -3,7 +3,9 @@
     let graphLayoutSaveTimeout = null;
     const api = {};
     const GRAPH_SNAPSHOT_READ_CONCURRENCY = 12;
+    const GRAPH_SNAPSHOT_CACHE_LIMIT = 12;
     const graphParsedFileCache = new Map();
+    const graphSnapshotCache = new Map();
 
     with (deps) {
   function normalizeGraphTagNodeId(value) {
@@ -1134,14 +1136,27 @@
     tab.graphHasUnsavedChanges = false;
   }
 
+  function getGraphContentHash(content) {
+    const source = String(content || "");
+    let hash = 2166136261;
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
   function getGraphFileSignature(files) {
     return (files || []).map((fileEntry) => {
       const file = fileEntry.file || fileEntry;
+      const content = typeof fileEntry.content === "string" ? fileEntry.content : "";
       return {
         path: fileEntry.path || fileEntry.fullPath || file?.webkitRelativePath || file?.name || "",
         name: file?.name || "",
         size: fileEntry.size || file?.size || 0,
-        lastModified: fileEntry.modifiedAt || file?.lastModified || 0
+        lastModified: fileEntry.modifiedAt || file?.lastModified || 0,
+        contentLength: content.length,
+        contentHash: content ? getGraphContentHash(content) : ""
       };
     });
   }
@@ -1168,7 +1183,26 @@
     if (!stablePath) return "";
     const size = Number(fileEntry.size ?? fileEntry.file?.size ?? 0) || 0;
     const modifiedAt = Number(fileEntry.modifiedAt ?? fileEntry.file?.lastModified ?? 0) || 0;
-    return `${stablePath}|${size}|${modifiedAt}`;
+    const content = typeof fileEntry.content === "string" ? fileEntry.content : "";
+    const contentHash = content ? `${content.length}:${getGraphContentHash(content)}` : "";
+    return `${stablePath}|${size}|${modifiedAt}|${contentHash}`;
+  }
+
+  function getGraphSnapshotCacheKey(files, folderName) {
+    return JSON.stringify({
+      folderName: folderName || "Graph View",
+      files: getGraphFileSignature(files)
+    });
+  }
+
+  function rememberGraphSnapshot(cacheKey, snapshot) {
+    if (!cacheKey || !snapshot) return;
+    graphSnapshotCache.delete(cacheKey);
+    graphSnapshotCache.set(cacheKey, cloneGraphPersistenceValue(snapshot));
+    while (graphSnapshotCache.size > GRAPH_SNAPSHOT_CACHE_LIMIT) {
+      const oldestKey = graphSnapshotCache.keys().next().value;
+      graphSnapshotCache.delete(oldestKey);
+    }
   }
 
   async function mapGraphFilesWithConcurrency(files, worker, options = {}) {
@@ -1197,6 +1231,12 @@
 
   async function createGraphSnapshot(files, folderName, options = {}) {
     const snapshotStart = typeof performance !== "undefined" ? performance.now() : 0;
+    const snapshotCacheKey = options.skipSnapshotCache ? "" : getGraphSnapshotCacheKey(files, folderName);
+    const cachedSnapshot = snapshotCacheKey ? graphSnapshotCache.get(snapshotCacheKey) : null;
+    if (cachedSnapshot) {
+      logGraphPerf("graph snapshot cache hit", snapshotStart, { files: (files || []).length });
+      return cloneGraphPersistenceValue(cachedSnapshot);
+    }
     const nodes = [];
     const links = [];
     const seenEdges = new Set();
@@ -1300,6 +1340,7 @@
       links,
       files: snapshotFiles.map(({ markdownLinks, ...snapshotFile }) => snapshotFile)
     };
+    rememberGraphSnapshot(snapshotCacheKey, snapshot);
     logGraphPerf("graph snapshot total", snapshotStart, { files: sourceFiles.length, nodes: nodes.length, links: links.length });
     return snapshot;
   }

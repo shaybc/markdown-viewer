@@ -473,6 +473,10 @@
       filterGraphToNodeIds(getFullNetworkNodeIds(graphViewConfig.focusNodeId));
     }
 
+    if (graphViewConfig && graphViewConfig.mode === "cluster" && Array.isArray(graphViewConfig.clusterNodeIds)) {
+      filterGraphToNodeIds(new Set(graphViewConfig.clusterNodeIds));
+    }
+
     const LARGE_GRAPH_AUTO_CLUSTER_NODE_LIMIT = 500;
     const LARGE_GRAPH_AUTO_CLUSTER_VERSION = 4;
     const LARGE_GRAPH_RENDER_NODE_BUDGET = 650;
@@ -628,6 +632,7 @@
     };
     const createAutoCollapsedClustersForLargeGraph = async () => {
       const currentConfig = normalizeGraphViewConfig(activeTab.graphViewConfig);
+      if (currentConfig.mode === "cluster") return null;
       const existingAutoClusterVersion = Number(currentConfig.autoCollapsedLargeGraphVersion || 0);
       if (currentConfig.autoCollapsedLargeGraph === true && existingAutoClusterVersion >= LARGE_GRAPH_AUTO_CLUSTER_VERSION) return null;
       if ((currentConfig.collapsedClusters || []).length && currentConfig.autoCollapsedLargeGraph !== true) return null;
@@ -1301,7 +1306,13 @@
       CONTEXT_MENU_ACTIONS.showFullNetwork.icon,
       "Open a graph containing every recursive backlink and outgoing dependency reachable from this point."
     );
-    [localGraphBtn, fullLocalGraphBtn, fullNetworkBtn].forEach((button) => showGraphSubmenuPanel.appendChild(button));
+    const expandedClusterGraphBtn = createContextMenuButton(
+      CONTEXT_MENU_ACTIONS.showExpandedCluster.label,
+      CONTEXT_MENU_ACTIONS.showExpandedCluster.icon,
+      "Open a new graph tab that shows the original points hidden inside this cluster."
+    );
+    expandedClusterGraphBtn.classList.add("hidden");
+    [localGraphBtn, fullLocalGraphBtn, fullNetworkBtn, expandedClusterGraphBtn].forEach((button) => showGraphSubmenuPanel.appendChild(button));
     showGraphSubmenu.appendChild(showGraphSubmenuBtn);
     showGraphSubmenu.appendChild(showGraphSubmenuPanel);
     const addTagBtn = createContextMenuButton(
@@ -2392,7 +2403,10 @@
       const isCluster = isClusterNode(d);
       const isFileNode = !isTag && !isCluster;
       const keepSavedMode = isKeepSavedGraphMode(activeTab);
-      [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, sharePointBtn, showGraphSubmenu, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      [openFileBtn, openDefaultAppBtn, revealFileBtn, revealTreeViewBtn, copySubmenu, sharePointBtn, exportSubmenu].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      showGraphSubmenu.classList.toggle("hidden", !(isFileNode || isCluster));
+      [localGraphBtn, fullLocalGraphBtn, fullNetworkBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode));
+      expandedClusterGraphBtn.classList.toggle("hidden", !isCluster);
       [renameFileBtn, deleteFileBtn].forEach((item) => item.classList.toggle("hidden", !isFileNode || keepSavedMode));
       tagsSubmenu.classList.toggle("hidden", !isFileNode || keepSavedMode);
       collapseToClusterBtn.classList.toggle("hidden", !isFileNode || getCollapsibleClusterMemberIds(d.id).length < 3);
@@ -2810,6 +2824,39 @@
       switchTab(localGraphTab.id);
     };
 
+    const openExpandedClusterGraphTab = () => {
+      if (!contextTargetNode || !isClusterNode(contextTargetNode)) return;
+      const memberNodeIds = Array.from(new Set(contextTargetNode.memberNodeIds || [])).filter(Boolean);
+      if (!memberNodeIds.length) {
+        alert("This cluster does not have any points to show.");
+        return;
+      }
+      if (tabs.length >= 20) {
+        alert('Maximum of 20 tabs reached. Please close an existing tab to open a new one.');
+        return;
+      }
+      const activeGraphTab = tabs.find((tab) => tab.id === activeTabId);
+      const parentConfig = normalizeGraphViewConfig(activeGraphTab?.graphViewConfig);
+      const clusterId = contextTargetNode.clusterId || contextTargetNode.id;
+      const hiddenNodeIds = (parentConfig.hiddenNodeIds || []).filter((nodeId) => !memberNodeIds.includes(nodeId));
+      const collapsedClusters = (parentConfig.collapsedClusters || []).filter((cluster) => getClusterNodeId(cluster) !== clusterId);
+      const clusterGraphTab = createGraphTab(`Expanded Cluster: ${contextTargetNode.label}`, {
+        graphSnapshot: activeGraphTab?.graphSnapshot || null,
+        graphViewConfig: {
+          ...parentConfig,
+          mode: "cluster",
+          clusterNodeIds: memberNodeIds,
+          hiddenNodeIds,
+          collapsedClusters
+        },
+        graphLayout: activeGraphTab?.graphLayout || null
+      });
+      tabs.push(clusterGraphTab);
+      saveTabsToStorage(tabs);
+      hideContextMenu();
+      switchTab(clusterGraphTab.id);
+    };
+
     localGraphBtn.addEventListener("click", () => {
       openLocalGraphTab("local", "Local Graph");
     });
@@ -2820,6 +2867,10 @@
 
     fullNetworkBtn.addEventListener("click", () => {
       openLocalGraphTab("full-network", "Full Network");
+    });
+
+    expandedClusterGraphBtn.addEventListener("click", () => {
+      openExpandedClusterGraphTab();
     });
 
     let hoveredGraphNode = null;

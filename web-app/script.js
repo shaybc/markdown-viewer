@@ -3014,7 +3014,11 @@ Markdown content is processed client-side in your browser and sanitized before p
     return false;
   }
 
+  let openFolderGraphRefreshRequestId = 0;
+
   const refreshOpenFolderGraphTabsFromFolderFiles = async function() {
+    const refreshRequestId = ++openFolderGraphRefreshRequestId;
+    const refreshFolderPath = activeFolderPath || "";
     const graphTabs = tabs.filter((tab) => (
       tab
       && tab.type === "graph"
@@ -3028,6 +3032,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     for (const tab of graphTabs) {
       const currentSnapshot = tab.graphSnapshot || null;
       const nextSnapshot = await createGraphSnapshot(folderMarkdownFiles || [], currentSnapshot?.folderName || tab.folderName || tab.title);
+      if (refreshRequestId !== openFolderGraphRefreshRequestId || refreshFolderPath !== (activeFolderPath || "")) return false;
       if (currentSnapshot?.createdAt) nextSnapshot.createdAt = currentSnapshot.createdAt;
       tab.graphSnapshot = nextSnapshot;
       syncGraphTabDocument(tab);
@@ -3268,6 +3273,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     showLocalGraph: { label: "Show local graph", icon: "bi bi-diagram-2" },
     showFullLocalGraph: { label: "Show full local graph", icon: "bi bi-diagram-3" },
     showFullNetwork: { label: "Show full network", icon: "bi bi-diagram-3" },
+    showExpandedCluster: { label: "Show expanded cluster", icon: "bi bi-arrows-angle-expand" },
     tags: { label: "Tags", icon: "bi bi-tags" },
     tagLocalGraph: { label: "Tag Local Graph", icon: "bi bi-tags" },
     addTag: { label: "Add tag…", icon: "bi bi-tag" },
