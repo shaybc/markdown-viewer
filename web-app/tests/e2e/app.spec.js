@@ -1120,11 +1120,11 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
         folderName: "Graph E2E",
         createdAt: Date.now(),
         nodes: [
-          { id: "alpha.md", label: "alpha.md", fullPath: "alpha.md", type: "file", status: "current", tags: ["defined"] },
-          { id: "beta.md", label: "beta.md", fullPath: "beta.md", type: "file", status: "current", tags: [] },
-          { id: "delta.md", label: "delta.md", fullPath: "delta.md", type: "file", status: "current", tags: [] },
-          { id: "epsilon.md", label: "epsilon.md", fullPath: "epsilon.md", type: "file", status: "current", tags: [] },
-          { id: "gamma.md", label: "gamma.md", fullPath: "gamma.md", type: "file", status: "current", tags: [] },
+          { id: "alpha.md", label: "alpha.md", fullPath: "C:/vault/alpha.md", type: "file", status: "current", tags: ["defined"] },
+          { id: "beta.md", label: "beta.md", fullPath: "C:/vault/beta.md", type: "file", status: "current", tags: [] },
+          { id: "delta.md", label: "delta.md", fullPath: "C:/vault/delta.md", type: "file", status: "current", tags: [] },
+          { id: "epsilon.md", label: "epsilon.md", fullPath: "C:/vault/epsilon.md", type: "file", status: "current", tags: [] },
+          { id: "gamma.md", label: "gamma.md", fullPath: "C:/vault/gamma.md", type: "file", status: "current", tags: [] },
           { id: "tag:defined", label: "#defined", type: "tag", status: "current", tag: "defined" }
         ],
         links: [
@@ -1135,11 +1135,11 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
           { source: "alpha.md", target: "tag:defined", type: "tag", status: "current" }
         ],
         files: [
-          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha\n\n[[beta]]", fullPath: "alpha.md", status: "current", tags: ["defined"] },
-          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta\n\n[[delta]]", fullPath: "beta.md", status: "current", tags: [] },
-          { id: "delta.md", path: "delta.md", name: "delta.md", content: "# Delta", fullPath: "delta.md", status: "current", tags: [] },
-          { id: "epsilon.md", path: "epsilon.md", name: "epsilon.md", content: "# Epsilon\n\n[[gamma]]", fullPath: "epsilon.md", status: "current", tags: [] },
-          { id: "gamma.md", path: "gamma.md", name: "gamma.md", content: "# Gamma\n\n[[alpha]]", fullPath: "gamma.md", status: "current", tags: [] }
+          { id: "alpha.md", path: "alpha.md", name: "alpha.md", content: "---\ntags: [defined]\n---\n# Alpha\n\n[[beta]]", fullPath: "C:/vault/alpha.md", status: "current", tags: ["defined"] },
+          { id: "beta.md", path: "beta.md", name: "beta.md", content: "# Beta\n\n[[delta]]", fullPath: "C:/vault/beta.md", status: "current", tags: [] },
+          { id: "delta.md", path: "delta.md", name: "delta.md", content: "# Delta", fullPath: "C:/vault/delta.md", status: "current", tags: [] },
+          { id: "epsilon.md", path: "epsilon.md", name: "epsilon.md", content: "# Epsilon\n\n[[gamma]]", fullPath: "C:/vault/epsilon.md", status: "current", tags: [] },
+          { id: "gamma.md", path: "gamma.md", name: "gamma.md", content: "# Gamma\n\n[[alpha]]", fullPath: "C:/vault/gamma.md", status: "current", tags: [] }
         ]
       }
     };
@@ -1206,7 +1206,7 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
   await page.locator(".graph-context-menu-item", { hasText: "Copy path" }).dispatchEvent("click");
-  await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toBe("alpha.md");
+  await expect.poll(async () => page.evaluate(() => navigator.clipboard.readText())).toBe("C:/vault/alpha.md");
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -1249,8 +1249,8 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientY: 220
   });
   await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
-  await page.locator(".graph-context-menu-item", { hasText: "Copy full network" }).dispatchEvent("click");
-  await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("gamma.md\nepsilon.md\nbeta.md\ndelta.md");
+  await page.locator(".graph-context-menu-item", { hasText: "Copy full dependencies" }).dispatchEvent("click");
+  await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("C:/vault/alpha.md\nC:/vault/beta.md\nC:/vault/delta.md");
 
   await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
     bubbles: true,
@@ -1259,7 +1259,19 @@ test("saved graph remains interactive and filters only graph snapshot tags", asy
     clientX: 220,
     clientY: 220
   });
-  await page.locator(".graph-context-menu-item", { hasText: "Show full network" }).click();
+  await page.locator(".graph-context-menu-submenu", { hasText: "Copy" }).hover();
+  await page.locator(".graph-context-menu-item", { hasText: "Copy full network" }).dispatchEvent("click");
+  await expect.poll(async () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n"))).toBe("C:/vault/alpha.md\nC:/vault/gamma.md\nC:/vault/epsilon.md\nC:/vault/beta.md\nC:/vault/delta.md");
+
+  await page.locator(".graph-node").first().dispatchEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 220,
+    clientY: 220
+  });
+  await page.locator(".graph-context-menu-submenu", { hasText: "Show graph" }).hover();
+  await page.locator(".graph-context-menu-item", { hasText: "Show full network" }).dispatchEvent("click");
   await expect(page.locator("#tab-list .tab-item.active")).toContainText("Full Network: alpha.md");
   const activeGraph = page.locator(".graph-tab-render:not(.hidden)");
   await expect(activeGraph.locator(".graph-node-file")).toHaveCount(5);
