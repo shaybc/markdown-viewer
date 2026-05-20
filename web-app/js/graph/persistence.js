@@ -6,6 +6,7 @@
     const GRAPH_SNAPSHOT_CACHE_LIMIT = 12;
     const graphParsedFileCache = new Map();
     const graphSnapshotCache = new Map();
+    let graphTabStorageCompactMode = false;
 
     with (deps) {
   function normalizeGraphTagNodeId(value) {
@@ -938,9 +939,10 @@
     return !!(snapshotFile?.fullPath && isNeutralinoRuntime());
   }
 
-  function stripGraphSnapshotContent(snapshot) {
+  function stripGraphSnapshotContent(snapshot, options = {}) {
     const strippedSnapshot = cloneGraphPersistenceValue(snapshot || null);
     if (!strippedSnapshot || typeof strippedSnapshot !== "object") return strippedSnapshot;
+    const preserveFullPath = options.preserveFullPath !== false;
 
     strippedSnapshot.nodes = Array.isArray(strippedSnapshot.nodes) ? cloneGraphPersistenceValue(strippedSnapshot.nodes) : [];
     strippedSnapshot.links = Array.isArray(strippedSnapshot.links) ? cloneGraphPersistenceValue(strippedSnapshot.links) : [];
@@ -953,7 +955,7 @@
           name: source.name || getFileName(source.path || source.fullPath || "document.md"),
           tags: normalizeFileTagList(source.tags || [])
         };
-        if (shouldPreserveGraphSnapshotFullPath(source)) strippedFile.fullPath = source.fullPath;
+        if (preserveFullPath && shouldPreserveGraphSnapshotFullPath(source)) strippedFile.fullPath = source.fullPath;
         return strippedFile;
       });
 
@@ -1178,6 +1180,45 @@
     console.info(`[Perf] ${label}: ${duration}ms`, details);
   }
 
+  function createGraphPerfSession(label, details = {}) {
+    if (!isGraphPerfLoggingEnabled() || typeof performance === "undefined") {
+      return null;
+    }
+    const startTime = performance.now();
+    let lastMarkTime = startTime;
+    let ended = false;
+    const marks = [];
+    const roundMs = (value) => Math.round(value * 10) / 10;
+    return {
+      mark(name, markDetails = {}) {
+        if (ended) return;
+        const now = performance.now();
+        marks.push({
+          step: name,
+          totalMs: roundMs(now - startTime),
+          deltaMs: roundMs(now - lastMarkTime),
+          ...markDetails
+        });
+        lastMarkTime = now;
+      },
+      end(endDetails = {}) {
+        if (ended) return;
+        ended = true;
+        const durationMs = roundMs(performance.now() - startTime);
+        const summary = { ...details, ...endDetails, durationMs };
+        if (typeof console.groupCollapsed === "function") {
+          console.groupCollapsed(`[Perf] ${label}: ${durationMs}ms`, summary);
+          if (marks.length && typeof console.table === "function") console.table(marks);
+          else marks.forEach((mark) => console.info("[Perf]", mark.step, mark));
+          console.info("[Perf] summary", summary);
+          console.groupEnd();
+        } else {
+          console.info(`[Perf] ${label}: ${durationMs}ms`, summary, marks);
+        }
+      }
+    };
+  }
+
   function getGraphFileCacheKey(fileEntry, path) {
     const stablePath = fileEntry.fullPath || path || fileEntry.path || fileEntry.file?.webkitRelativePath || fileEntry.file?.name || "";
     if (!stablePath) return "";
@@ -1210,7 +1251,10 @@
     const results = new Array(sourceFiles.length);
     let nextIndex = 0;
     let completed = 0;
-    const concurrency = Math.max(1, Math.min(Number(options.concurrency) || GRAPH_SNAPSHOT_READ_CONCURRENCY, sourceFiles.length || 1));
+    const defaultConcurrency = isNeutralinoRuntime && sourceFiles.some((fileEntry) => fileEntry?.fullPath)
+      ? Math.max(GRAPH_SNAPSHOT_READ_CONCURRENCY, 128)
+      : GRAPH_SNAPSHOT_READ_CONCURRENCY;
+    const concurrency = Math.max(1, Math.min(Number(options.concurrency) || defaultConcurrency, sourceFiles.length || 1));
 
     async function runWorker() {
       while (nextIndex < sourceFiles.length) {
@@ -1221,7 +1265,7 @@
         if (typeof options.onProgress === "function") {
           options.onProgress({ phase: "reading", completed, total: sourceFiles.length });
         }
-        if (completed % 25 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+        if (completed % 100 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       }
     }
 
@@ -1242,6 +1286,9 @@
     const seenEdges = new Set();
     const nodeIndex = new Map();
     let snapshotFiles = [];
+    let graphFileReadDuration = 0;
+    let graphFileParseDuration = 0;
+    let graphFileCacheHits = 0;
 
     const sourceFiles = files || [];
     const readStart = typeof performance !== "undefined" ? performance.now() : 0;
@@ -1253,17 +1300,23 @@
       if (!parsedFile) {
         let content = "";
         try {
+          const fileReadStart = typeof performance !== "undefined" ? performance.now() : 0;
           content = await readFolderMarkdownFileContent(fileEntry);
+          if (typeof performance !== "undefined") graphFileReadDuration += performance.now() - fileReadStart;
         } catch (error) {
           console.warn("Failed to read graph file:", path, error);
         }
         const fileContent = content || "";
+        const fileParseStart = typeof performance !== "undefined" ? performance.now() : 0;
         parsedFile = {
           content: fileContent,
           tags: getFileTagsFromContent(fileContent),
           markdownLinks: extractMarkdownLinks(fileContent)
         };
+        if (typeof performance !== "undefined") graphFileParseDuration += performance.now() - fileParseStart;
         if (cacheKey) graphParsedFileCache.set(cacheKey, parsedFile);
+      } else {
+        graphFileCacheHits += 1;
       }
       const id = normalizeGraphNodeName(path);
       return {
@@ -1277,8 +1330,14 @@
         markdownLinks: (parsedFile.markdownLinks || []).slice()
       };
     }, options);
-    logGraphPerf("graph snapshot file reads", readStart, { files: sourceFiles.length });
+    logGraphPerf("graph snapshot file reads", readStart, {
+      files: sourceFiles.length,
+      cacheHits: graphFileCacheHits,
+      diskReadMs: Math.round(graphFileReadDuration * 10) / 10,
+      parseMs: Math.round(graphFileParseDuration * 10) / 10
+    });
 
+    const fileNodeStart = typeof performance !== "undefined" ? performance.now() : 0;
     snapshotFiles.forEach((snapshotFile) => {
       nodeIndex.set(snapshotFile.id, snapshotFile.path);
       nodes.push({
@@ -1290,11 +1349,14 @@
         tags: snapshotFile.tags
       });
     });
+    logGraphPerf("graph snapshot file node build", fileNodeStart, { files: snapshotFiles.length, nodes: nodes.length });
+    const graphTargetLookup = typeof createGraphTargetLookup === "function" ? createGraphTargetLookup(nodeIndex) : nodeIndex;
 
     const tagIndex = new Map();
 
+    const tagRelationStart = typeof performance !== "undefined" ? performance.now() : 0;
     for (let index = 0; index < snapshotFiles.length; index += 1) {
-      if (index > 0 && index % 250 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      if (index > 0 && index % 1000 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       const snapshotFile = snapshotFiles[index];
       const source = snapshotFile.id;
       (snapshotFile.tags || []).forEach((tag) => {
@@ -1317,13 +1379,15 @@
         links.push({ source, target: tagNodeId, type: "tag", status: "current" });
       });
     }
+    logGraphPerf("graph snapshot tag relation build", tagRelationStart, { tags: tagIndex.size, links: links.length });
 
+    const linkRelationStart = typeof performance !== "undefined" ? performance.now() : 0;
     for (let index = 0; index < snapshotFiles.length; index += 1) {
-      if (index > 0 && index % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      if (index > 0 && index % 1000 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       const snapshotFile = snapshotFiles[index];
       const source = snapshotFile.id;
       (snapshotFile.markdownLinks || extractMarkdownLinks(snapshotFile.content)).forEach((ref) => {
-        const target = resolveGraphTargetId(ref, snapshotFile.path, nodeIndex);
+        const target = resolveGraphTargetId(ref, snapshotFile.path, graphTargetLookup);
         if (!target || target === source) return;
         const edgeKey = `${source}->${target}:link`;
         if (seenEdges.has(edgeKey)) return;
@@ -1331,6 +1395,7 @@
         links.push({ source, target, type: "link", status: "current" });
       });
     }
+    logGraphPerf("graph snapshot markdown link resolution", linkRelationStart, { files: snapshotFiles.length, links: links.length });
 
     const snapshot = {
       version: 1,
@@ -1491,12 +1556,54 @@
     }
   }
 
+  function getPersistableTab(tab) {
+    if (!tab || tab.type !== "graph") return tab;
+    const persistedTab = { ...tab };
+    delete persistedTab.savedGraphComparisonDetails;
+    if (persistedTab.graphSnapshot) persistedTab.graphSnapshot = stripGraphSnapshotContent(persistedTab.graphSnapshot, { preserveFullPath: false });
+    if (persistedTab.graphComparisonSnapshot) persistedTab.graphComparisonSnapshot = stripGraphSnapshotContent(persistedTab.graphComparisonSnapshot, { preserveFullPath: false });
+    if (persistedTab.graphDocument && typeof persistedTab.graphDocument === "object") {
+      persistedTab.graphDocument = {
+        ...persistedTab.graphDocument,
+        snapshot: stripGraphSnapshotContent(persistedTab.graphDocument.snapshot || persistedTab.graphSnapshot, { preserveFullPath: false })
+      };
+    }
+    return persistedTab;
+  }
+
+  function getCompactPersistableTab(tab) {
+    if (!tab || tab.type !== "graph") return tab;
+    const persistedTab = getPersistableTab(tab);
+    delete persistedTab.graphSnapshot;
+    delete persistedTab.graphComparisonSnapshot;
+    if (persistedTab.graphDocument && typeof persistedTab.graphDocument === "object") {
+      persistedTab.graphDocument = {
+        ...persistedTab.graphDocument,
+        snapshot: null
+      };
+    }
+    delete persistedTab.graphLayout;
+    delete persistedTab.graphComparisonLayout;
+    return persistedTab;
+  }
+
   function saveTabsToStorage(tabsArr) {
     try {
       (tabsArr || []).forEach((tab) => syncGraphTabDocument(tab));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tabsArr));
+      const persistableTabs = (tabsArr || []).map(graphTabStorageCompactMode ? getCompactPersistableTab : getPersistableTab);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persistableTabs));
     } catch (e) {
-      console.warn('Failed to save tabs to localStorage:', e);
+      if (e?.name === "QuotaExceededError") {
+        try {
+          graphTabStorageCompactMode = true;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify((tabsArr || []).map(getCompactPersistableTab)));
+          return;
+        } catch (compactError) {
+          console.warn('Failed to save compact tabs to localStorage:', compactError);
+        }
+      } else {
+        console.warn('Failed to save tabs to localStorage:', e);
+      }
     }
   }
 
@@ -1595,6 +1702,9 @@
       clearGraphTabUnsavedChanges,
       getGraphFileSignature,
       getGraphViewSignature,
+      isGraphPerfLoggingEnabled,
+      logGraphPerf,
+      createGraphPerfSession,
       createGraphSnapshot,
       getGraphSnapshotSignature,
       toFiniteNumber,

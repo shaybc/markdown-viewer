@@ -7,6 +7,21 @@
     if (!graphViewCanvas) return;
     const renderRequestId = ++graphRenderRequestId;
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    const graphPerf = typeof createGraphPerfSession === "function"
+      ? createGraphPerfSession("graph render", {
+        tabId: activeTab?.id || "",
+        title: activeTab?.title || "",
+        skipToolbar: Boolean(options.skipToolbar)
+      })
+      : null;
+    let graphInteractiveAt = 0;
+    const loggedGraphInteractions = new Set();
+    const logGraphInteractionPerf = (name, details = {}) => {
+      if (!graphPerf || !graphInteractiveAt || loggedGraphInteractions.has(name) || typeof performance === "undefined") return;
+      loggedGraphInteractions.add(name);
+      const afterRenderMs = Math.round((performance.now() - graphInteractiveAt) * 10) / 10;
+      console.info(`[Perf] graph interaction ${name}: ${afterRenderMs}ms after render`, details);
+    };
     let graphViewConfig = activeTab && activeTab.type === "graph" ? normalizeGraphViewConfig(activeTab.graphViewConfig) : normalizeGraphViewConfig(null);
     if (activeTab && activeTab.type === "graph") activeTab.graphViewConfig = graphViewConfig;
     hideInactiveGraphRenders(activeTab?.id);
@@ -39,17 +54,24 @@
       updateStatusLine({ visiblePointCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
       updateGraphTagToolbar(null, null);
       renderTagManagementList();
+      graphPerf?.end({ reason: "no-active-graph-tab" });
       return;
     }
 
     renderTagManagementList();
     let graphSnapshot = activeTab.graphComparisonSnapshot || activeTab.graphSnapshot || null;
     if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
+    graphPerf?.mark("initial graph tab state", {
+      hasSnapshot: Boolean(graphSnapshot),
+      folderFiles: folderMarkdownFiles.length,
+      savedGraphMode: Boolean(isKeepSavedGraphMode(activeTab))
+    });
     if (!graphSnapshot && folderMarkdownFiles.length && !isKeepSavedGraphMode(activeTab)) {
       const snapshotFiles = folderMarkdownFiles.slice();
       await showGraphLoadingState("Building graph view...");
       if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
         removeGraphLoadingState();
+        graphPerf?.end({ cancelled: true, reason: "stale-before-snapshot" });
         return;
       }
       graphSnapshot = await createGraphSnapshot(snapshotFiles, activeTab.folderName || activeTab.title, {
@@ -63,8 +85,14 @@
           }
         }
       });
+      graphPerf?.mark("snapshot ready", {
+        files: graphSnapshot?.files?.length || 0,
+        nodes: graphSnapshot?.nodes?.length || 0,
+        links: graphSnapshot?.links?.length || 0
+      });
       if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
         removeGraphLoadingState();
+        graphPerf?.end({ cancelled: true, reason: "stale-after-snapshot" });
         return;
       }
       activeTab.graphSnapshot = graphSnapshot;
@@ -103,6 +131,7 @@
       if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
       updateStatusLine({ visiblePointCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
       graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">This graph tab does not have a saved graph snapshot.</p>';
+      graphPerf?.end({ reason: "empty-snapshot" });
       return;
     }
 
@@ -125,6 +154,12 @@
         graphClusterCount: activeTab.graphClusterCount,
         graphCollapsedNodeCount: activeTab.graphCollapsedNodeCount
       });
+      graphPerf?.end({
+        reason: "render-cache-hit",
+        nodes: cachedRender.visiblePointCount || 0,
+        clusters: cachedRender.graphClusterCount || 0,
+        collapsed: cachedRender.graphCollapsedNodeCount || 0
+      });
       return;
     }
 
@@ -134,10 +169,14 @@
       graphRenderCache.delete(activeTab.id);
     }
 
-    if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) return;
+    if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
+      graphPerf?.end({ cancelled: true, reason: "stale-before-layout" });
+      return;
+    }
     await showGraphLoadingState("Laying out graph...");
     if (renderRequestId !== graphRenderRequestId || activeTabId !== activeTab.id) {
       removeGraphLoadingState();
+      graphPerf?.end({ cancelled: true, reason: "stale-after-layout-state" });
       return;
     }
     removeGraphRenderForTab(activeTab.id);
@@ -175,6 +214,7 @@
       type: link?.type || "link",
       status: link?.status || "current"
     }));
+    graphPerf?.mark("clone snapshot model", { nodes: nodes.length, links: links.length });
     const getGraphNodeType = (nodeData) => nodeData?.type || "file";
     const getGraphLinkType = (linkData) => linkData?.type || "link";
     const getGraphItemStatus = (itemData) => itemData?.status || "current";
@@ -312,6 +352,11 @@
       links.length = 0;
       links.push(...searchLinks);
     }
+    graphPerf?.mark("search filter", {
+      enabled: Boolean(graphViewConfig?.searchQuery),
+      nodes: nodes.length,
+      links: links.length
+    });
 
     if (graphViewConfig && Array.isArray(graphViewConfig.allowedNodeIds) && graphViewConfig.allowedNodeIds.length) {
       const allowedNodeIds = new Set(graphViewConfig.allowedNodeIds);
@@ -322,6 +367,11 @@
       links.length = 0;
       links.push(...allowedLinks);
     }
+    graphPerf?.mark("allowed nodes filter", {
+      enabled: Boolean(graphViewConfig?.allowedNodeIds?.length),
+      nodes: nodes.length,
+      links: links.length
+    });
 
     if (graphViewConfig && Array.isArray(graphViewConfig.selectedTagIds) && graphViewConfig.selectedTagIds.length) {
       const selectedTagIds = new Set(normalizeGraphTagNodeIds(graphViewConfig.selectedTagIds));
@@ -352,6 +402,11 @@
       links.length = 0;
       links.push(...selectedLinks);
     }
+    graphPerf?.mark("selected tag filter", {
+      enabled: Boolean(graphViewConfig?.selectedTagIds?.length),
+      nodes: nodes.length,
+      links: links.length
+    });
 
     if (graphViewConfig && graphViewConfig.showTags === false) {
       const fileNodes = nodes.filter((n) => !isTagNode(n));
@@ -361,6 +416,11 @@
       links.length = 0;
       links.push(...nonTagLinks);
     }
+    graphPerf?.mark("tag visibility filter", {
+      showTags: graphViewConfig?.showTags !== false,
+      nodes: nodes.length,
+      links: links.length
+    });
 
     if (graphViewConfig && Array.isArray(graphViewConfig.groups) && graphViewConfig.groups.some((group) => group?.hidden === true)) {
       const hiddenGroupNodeIds = new Set();
@@ -386,6 +446,11 @@
         links.push(...visibleLinks);
       }
     }
+    graphPerf?.mark("hidden group filter", {
+      hiddenGroups: (graphViewConfig?.groups || []).filter((group) => group?.hidden === true).length,
+      nodes: nodes.length,
+      links: links.length
+    });
 
     if (graphViewConfig && Array.isArray(graphViewConfig.hiddenTagIds) && graphViewConfig.hiddenTagIds.length) {
       const hiddenTagIds = new Set(normalizeGraphTagNodeIds(graphViewConfig.hiddenTagIds));
@@ -396,6 +461,11 @@
       links.length = 0;
       links.push(...visibleLinks);
     }
+    graphPerf?.mark("hidden tag filter", {
+      hiddenTags: graphViewConfig?.hiddenTagIds?.length || 0,
+      nodes: nodes.length,
+      links: links.length
+    });
 
     if (graphViewConfig && Array.isArray(graphViewConfig.hiddenNodeIds) && graphViewConfig.hiddenNodeIds.length) {
       const hiddenNodeIds = new Set(graphViewConfig.hiddenNodeIds);
@@ -406,6 +476,11 @@
       links.length = 0;
       links.push(...visibleLinks);
     }
+    graphPerf?.mark("hidden node filter", {
+      hiddenNodes: graphViewConfig?.hiddenNodeIds?.length || 0,
+      nodes: nodes.length,
+      links: links.length
+    });
 
     if (graphViewConfig && graphViewConfig.showOrphans === false) {
       const connectedNodeIds = new Set();
@@ -423,6 +498,11 @@
       links.length = 0;
       links.push(...visibleLinks);
     }
+    graphPerf?.mark("orphan filter", {
+      showOrphans: graphViewConfig?.showOrphans !== false,
+      nodes: nodes.length,
+      links: links.length
+    });
 
     const filterGraphToNodeIds = (nodeIds) => {
       const filteredNodes = nodes.filter((n) => nodeIds.has(n.id));
@@ -494,6 +574,11 @@
     if (graphViewConfig && graphViewConfig.mode === "cluster" && Array.isArray(graphViewConfig.clusterNodeIds)) {
       filterGraphToNodeIds(new Set(graphViewConfig.clusterNodeIds));
     }
+    graphPerf?.mark("graph mode filter", {
+      mode: graphViewConfig?.mode || "global",
+      nodes: nodes.length,
+      links: links.length
+    });
 
     const getLargeGraphAutoClusterMinNodeCount = () => (
       typeof getGraphAutoClusterThreshold === "function" ? getGraphAutoClusterThreshold() : 1000
@@ -814,6 +899,11 @@
     };
 
     await applyAutoCollapsedClustersForLargeGraph();
+    graphPerf?.mark("auto cluster update", {
+      mode: graphViewConfig?.mode || "global",
+      collapsedClusters: graphViewConfig?.collapsedClusters?.length || 0,
+      autoCollapsed: Boolean(graphViewConfig?.autoCollapsedLargeGraph)
+    });
     graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
 
     const getClusterNodeId = (cluster) => cluster?.id || `cluster:${cluster?.seedNodeId || ""}`;
@@ -903,6 +993,11 @@
     };
 
     applyCollapsedClustersToGraph();
+    graphPerf?.mark("apply collapsed clusters", {
+      nodes: nodes.length,
+      links: links.length,
+      collapsedClusters: graphViewConfig?.collapsedClusters?.length || 0
+    });
 
     nodes.forEach((nodeData) => {
       if (isTagNode(nodeData)) {
@@ -924,6 +1019,10 @@
         delete nodeData.groupColor;
         delete nodeData.groupName;
       }
+    });
+    graphPerf?.mark("group assignment", {
+      groups: graphViewConfig?.groups?.length || 0,
+      groupedNodes: nodes.filter((nodeData) => nodeData.groupId).length
     });
 
     const clusterNodes = nodes.filter(isClusterNode);
@@ -947,6 +1046,10 @@
     if (typeof activeGraphLayout?.magneticEnabled === "boolean") {
       graphSettings.magneticEnabled = activeGraphLayout.magneticEnabled;
     }
+    graphPerf?.mark("saved layout restore", {
+      nodes: nodes.length,
+      hasSavedZoom: Boolean(getSavedGraphZoomTransform(activeGraphLayout))
+    });
 
     const outgoingAdjacency = new Map();
     const outgoingDegree = new Map();
@@ -995,6 +1098,13 @@
     const useStaticLargeGraphLayout = nodes.length > LARGE_GRAPH_RENDER_NODE_BUDGET;
     const svg = d3.select(graphRenderWrapper).append("svg").attr("width", width).attr("height", height);
     const graphLayer = svg.append("g").attr("class", "graph-layer");
+    graphPerf?.mark("d3 svg created", {
+      nodes: nodes.length,
+      links: links.length,
+      width,
+      height,
+      staticLargeGraph: useStaticLargeGraphLayout
+    });
 
     let currentZoomTransform = d3.zoomIdentity;
     activeTab.graphZoomScale = currentZoomTransform.k;
@@ -1115,6 +1225,10 @@
       .force("collision", baseCollisionForce)
       .force("groupCluster", useStaticLargeGraphLayout ? null : baseGroupClusterForce);
     if (useStaticLargeGraphLayout) simulation.stop();
+    graphPerf?.mark("d3 forces configured", {
+      staticLargeGraph: useStaticLargeGraphLayout,
+      magneticEnabled: Boolean(graphSettings.magneticEnabled)
+    });
     // Keep the former marker dimensions: 9x8 viewBox scaled into a 5x5 marker viewport.
     const arrowheadLength = 5;
     const arrowheadHalfHeight = 20 / 9;
@@ -1142,6 +1256,7 @@
           d.fy = d.y;
         })
         .on("drag", (event, d) => {
+          logGraphInteractionPerf("drag", { nodeId: d?.id || "" });
           d.x = event.x;
           d.y = event.y;
           d.fx = event.x;
@@ -1160,6 +1275,11 @@
           markGraphTabAsChanged(activeTab);
           saveTabsToStorage(tabs);
         }));
+    graphPerf?.mark("d3 elements bound", {
+      nodes: nodes.length,
+      links: links.length,
+      arrows: graphViewConfig.showArrows ? links.filter(isMarkdownLink).length : 0
+    });
     maxNodeRadius = Math.max(1, ...nodes.map((d) => nodeRadius(d.id)));
     const graphTooltipPathsById = new Map((graphSnapshot.files || []).map((file) => [file.id, file.fullPath || file.path]));
     const getGraphNodeTooltip = (nodeData) => {
@@ -2742,6 +2862,7 @@
     };
 
     graphRenderWrapper.addEventListener("contextmenu", (event) => {
+      logGraphInteractionPerf("background-context-menu");
       event.preventDefault();
       contextTargetNode = null;
       contextMenuTitle.classList.add("hidden");
@@ -2755,6 +2876,7 @@
     });
 
     node.on("contextmenu", (event, d) => {
+      logGraphInteractionPerf("node-context-menu", { nodeId: d?.id || "" });
       event.preventDefault();
       event.stopPropagation();
       contextTargetNode = d;
@@ -3409,6 +3531,7 @@
 
     node
       .on("mouseenter", (event, d) => {
+        logGraphInteractionPerf("hover", { nodeId: d?.id || "" });
         hoveredGraphNode = d;
         updateHoveredGraphHighlight(event);
       })
@@ -3488,9 +3611,24 @@
         applyMagneticSetting();
       }
     });
+    graphPerf?.mark("render cache stored", {
+      nodes: nodes.length,
+      links: links.length,
+      clusters: graphClusterCount,
+      collapsed: graphCollapsedNodeCount
+    });
 
     removeGraphLoadingState();
     applyMagneticSetting();
+    graphInteractiveAt = typeof performance !== "undefined" ? performance.now() : 0;
+    graphPerf?.end({
+      reason: "render-complete",
+      nodes: nodes.length,
+      links: links.length,
+      clusters: graphClusterCount,
+      collapsed: graphCollapsedNodeCount,
+      staticLargeGraph: useStaticLargeGraphLayout
+    });
   }
 
     }

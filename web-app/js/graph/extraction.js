@@ -25,10 +25,24 @@
     return fileName.replace(/\.[^/.]+$/, "") || fileName;
   }
 
+  function createGraphTargetLookup(nodeIndex) {
+    const sourceIndex = nodeIndex instanceof Map ? nodeIndex : new Map();
+    const suffixMatchesByBasename = new Map();
+    sourceIndex.forEach((_path, id) => {
+      const basename = normalizeGraphNodeName(String(id || "").split("/").pop() || "");
+      if (!basename) return;
+      if (!suffixMatchesByBasename.has(basename)) suffixMatchesByBasename.set(basename, []);
+      suffixMatchesByBasename.get(basename).push(id);
+    });
+    return { nodeIndex: sourceIndex, suffixMatchesByBasename };
+  }
+
   function resolveGraphTargetId(reference, sourcePath, nodeIndex) {
     const ref = (reference || "").trim();
     if (!ref) return null;
     if (/^(https?:)?\/\//i.test(ref)) return null;
+    const sourceIndex = nodeIndex?.nodeIndex instanceof Map ? nodeIndex.nodeIndex : nodeIndex;
+    if (!(sourceIndex instanceof Map)) return null;
 
     const cleanedRef = ref
       .replace(/^\.\//, "")
@@ -37,15 +51,16 @@
 
     const sourceDir = (sourcePath || "").split("/").slice(0, -1).join("/");
     const relativeCandidate = normalizeGraphNodeName(sourceDir ? `${sourceDir}/${cleanedRef}` : cleanedRef);
-    if (nodeIndex.has(relativeCandidate)) return relativeCandidate;
+    if (sourceIndex.has(relativeCandidate)) return relativeCandidate;
 
     const directCandidate = normalizeGraphNodeName(cleanedRef);
-    if (nodeIndex.has(directCandidate)) return directCandidate;
+    if (sourceIndex.has(directCandidate)) return directCandidate;
 
     const basenameCandidate = normalizeGraphNodeName(cleanedRef.split("/").pop() || "");
     if (!basenameCandidate) return null;
 
-    const suffixMatches = Array.from(nodeIndex.keys()).filter((id) =>
+    const indexedMatches = nodeIndex?.suffixMatchesByBasename?.get(basenameCandidate);
+    const suffixMatches = indexedMatches || Array.from(sourceIndex.keys()).filter((id) =>
       id === basenameCandidate || id.endsWith(`/${basenameCandidate}`)
     );
 
@@ -257,6 +272,7 @@ ${body}`;
       api.normalizeGraphNodeName = normalizeGraphNodeName;
       api.getGraphDisplayLabel = getGraphDisplayLabel;
       api.getGraphContextMenuTitle = getGraphContextMenuTitle;
+      api.createGraphTargetLookup = createGraphTargetLookup;
       api.resolveGraphTargetId = resolveGraphTargetId;
       api.stripMarkdownCodeForLinkExtraction = stripMarkdownCodeForLinkExtraction;
       api.getMarkdownLinkTarget = getMarkdownLinkTarget;

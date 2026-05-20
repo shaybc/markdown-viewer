@@ -468,6 +468,7 @@
   const normalizeGraphNodeName = graphExtraction.normalizeGraphNodeName;
   const getGraphDisplayLabel = graphExtraction.getGraphDisplayLabel;
   const getGraphContextMenuTitle = graphExtraction.getGraphContextMenuTitle;
+  const createGraphTargetLookup = graphExtraction.createGraphTargetLookup;
   const resolveGraphTargetId = graphExtraction.resolveGraphTargetId;
   const stripMarkdownCodeForLinkExtraction = graphExtraction.stripMarkdownCodeForLinkExtraction;
   const getMarkdownLinkTarget = graphExtraction.getMarkdownLinkTarget;
@@ -2494,6 +2495,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     set tabs(value) { tabs = value; },
     normalizeGraphNodeName,
     getGraphDisplayLabel,
+    createGraphTargetLookup,
     resolveGraphTargetId,
     normalizeTagName,
     normalizeFileTagList,
@@ -2586,6 +2588,7 @@ Markdown content is processed client-side in your browser and sanitized before p
     clearGraphTabUnsavedChanges,
     getGraphFileSignature,
     getGraphViewSignature,
+    createGraphPerfSession,
     createGraphSnapshot,
     getGraphSnapshotSignature,
     toFiniteNumber,
@@ -3269,27 +3272,36 @@ Markdown content is processed client-side in your browser and sanitized before p
   }
 
   async function collectMarkdownFilesFromTree(nodes, parentPath = "") {
+    const perfSession = !parentPath && typeof createGraphPerfSession === "function"
+      ? createGraphPerfSession("folder markdown file discovery", { runtime: "browser" })
+      : null;
     const files = [];
     let processedNodes = 0;
-    for (const node of (nodes || [])) {
-      processedNodes += 1;
-      if (processedNodes % 100 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
-      const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
-      if (node.kind === "directory") {
-        const nestedFiles = await collectMarkdownFilesFromTree(node.children || [], currentPath);
-        files.push(...nestedFiles);
-      } else if (node.kind === "file" && isMarkdownPath(node.name)) {
-        if (node.file) {
-          files.push({ path: currentPath, file: node.file, handle: node.handle || null, size: Number(node.file.size || node.size || 0), modifiedAt: Number(node.file.lastModified || node.modifiedAt || 0) });
-        } else if (node.handle) {
-          try {
-            const file = await node.handle.getFile();
-            files.push({ path: currentPath, file, handle: node.handle, size: Number(file.size || 0), modifiedAt: Number(file.lastModified || node.modifiedAt || 0) });
-          } catch (error) {
-            console.warn("Failed to read file handle for graph view:", currentPath, error);
+    try {
+      for (const node of (nodes || [])) {
+        processedNodes += 1;
+        if (processedNodes % 100 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+        const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+        if (node.kind === "directory") {
+          const nestedFiles = await collectMarkdownFilesFromTree(node.children || [], currentPath);
+          files.push(...nestedFiles);
+        } else if (node.kind === "file" && isMarkdownPath(node.name)) {
+          if (node.file) {
+            files.push({ path: currentPath, file: node.file, handle: node.handle || null, size: Number(node.file.size || node.size || 0), modifiedAt: Number(node.file.lastModified || node.modifiedAt || 0) });
+          } else if (node.handle) {
+            try {
+              const file = await node.handle.getFile();
+              files.push({ path: currentPath, file, handle: node.handle, size: Number(file.size || 0), modifiedAt: Number(file.lastModified || node.modifiedAt || 0) });
+            } catch (error) {
+              console.warn("Failed to read file handle for graph view:", currentPath, error);
+            }
           }
         }
       }
+      perfSession?.end({ files: files.length, rootEntries: (nodes || []).length });
+    } catch (error) {
+      perfSession?.end({ failed: true, files: files.length, rootEntries: (nodes || []).length });
+      throw error;
     }
     return files;
   }
@@ -3647,18 +3659,11 @@ async function listMarkdownTreeNeutralino(dirPath) {
       if (index > 0 && index % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
       if (item.entry === "." || item.entry === "..") continue;
       const fullPath = `${dirPath}/${item.entry}`;
-      let stats = null;
-      try {
-        stats = await Neutralino.filesystem.getStats(fullPath);
-      } catch (error) {
-        console.warn("Failed to read file metadata:", fullPath, error);
-      }
       if (item.type === "DIRECTORY") {
         const children = await listMarkdownTreeNeutralino(fullPath);
-        entries.push({ kind: "directory", name: item.entry, children, fullPath, createdAt: Number(stats?.createdAt || 0), modifiedAt: Number(stats?.modifiedAt || 0), size: Number(stats?.size || 0) });
+        entries.push({ kind: "directory", name: item.entry, children, fullPath, createdAt: 0, modifiedAt: 0, size: 0 });
       } else if (item.type === "FILE") {
-        const isGraphDocumentFile = await neutralinoPathContainsGraphDocument(fullPath);
-        entries.push({ kind: "file", name: item.entry, fullPath, createdAt: Number(stats?.createdAt || stats?.modifiedAt || 0), modifiedAt: Number(stats?.modifiedAt || 0), size: Number(stats?.size || 0), isGraphDocumentFile });
+        entries.push({ kind: "file", name: item.entry, fullPath, createdAt: 0, modifiedAt: 0, size: 0, isGraphDocumentFile: isGraphFilePath(fullPath) });
       }
     }
   } catch (error) {
@@ -3668,23 +3673,32 @@ async function listMarkdownTreeNeutralino(dirPath) {
 }
 
 async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
+  const perfSession = !parentPath && typeof createGraphPerfSession === "function"
+    ? createGraphPerfSession("folder markdown file discovery", { runtime: "neutralino" })
+    : null;
   const files = [];
-  for (let index = 0; index < (nodes || []).length; index += 1) {
-    const node = (nodes || [])[index];
-    if (index > 0 && index % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
-    const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
-    if (node.kind === "directory") {
-      const nestedFiles = await collectMarkdownFilesFromTreeNeutralino(node.children || [], currentPath);
-      files.push(...nestedFiles);
-    } else if (node.kind === "file" && isMarkdownPath(node.name)) {
-      files.push({
-        path: currentPath,
-        fullPath: node.fullPath,
-        name: node.name,
-        size: Number(node.size || 0),
-        modifiedAt: Number(node.modifiedAt || 0)
-      });
+  try {
+    for (let index = 0; index < (nodes || []).length; index += 1) {
+      const node = (nodes || [])[index];
+      if (index > 0 && index % 50 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+      if (node.kind === "directory") {
+        const nestedFiles = await collectMarkdownFilesFromTreeNeutralino(node.children || [], currentPath);
+        files.push(...nestedFiles);
+      } else if (node.kind === "file" && isMarkdownPath(node.name)) {
+        files.push({
+          path: currentPath,
+          fullPath: node.fullPath,
+          name: node.name,
+          size: Number(node.size || 0),
+          modifiedAt: Number(node.modifiedAt || 0)
+        });
+      }
     }
+    perfSession?.end({ files: files.length, rootEntries: (nodes || []).length });
+  } catch (error) {
+    perfSession?.end({ failed: true, files: files.length, rootEntries: (nodes || []).length });
+    throw error;
   }
   return files;
 }
@@ -4789,6 +4803,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     getGraphShowFileExtensions,
     shouldConfirmOpenManyGraphNodes,
     shouldConfirmDeleteFiles,
+    createGraphPerfSession,
     normalizeGraphViewConfig,
     hideInactiveGraphRenders,
     updateStatusLine,
