@@ -143,10 +143,6 @@
 
   async function saveGraphTabToSource(graphTab) {
     if (!graphTab || (!graphTab.sourceFileHandle && !graphTab.sourceFilePath)) return false;
-    if (graphTab.graphBuildState?.status === "building" || graphTab.graphSnapshot?.buildStatus === "building") {
-      alert("Wait for the graph to finish building before saving it.");
-      return false;
-    }
 
     try {
       const content = getActiveGraphSaveContent(graphTab);
@@ -181,10 +177,6 @@
 
   async function saveGraphTabWithSaveDialog(graphTab) {
     if (!graphTab) {
-      return false;
-    }
-    if (graphTab.graphBuildState?.status === "building" || graphTab.graphSnapshot?.buildStatus === "building") {
-      alert("Wait for the graph to finish building before saving it.");
       return false;
     }
 
