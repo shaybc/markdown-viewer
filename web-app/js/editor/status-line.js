@@ -15,6 +15,7 @@
     const graphPointsStatusElement = deps.graphPointsStatusElement;
     const graphPointsCountElement = deps.graphPointsCountElement;
     const graphCollapsedNodesStatusElement = deps.graphCollapsedNodesStatusElement;
+    const graphEdgesCountElement = deps.graphEdgesCountElement;
     const graphClustersCountElement = deps.graphClustersCountElement;
     const graphClustersLabelElement = deps.graphClustersLabelElement;
     const graphCollapsedNodesCountElement = deps.graphCollapsedNodesCountElement;
@@ -95,6 +96,9 @@
       const graphCollapsedNodeCount = typeof options.graphCollapsedNodeCount === "number"
         ? options.graphCollapsedNodeCount
         : (typeof activeGraphTab?.graphCollapsedNodeCount === "number" ? activeGraphTab.graphCollapsedNodeCount : 0);
+      const graphEdgeCount = typeof options.graphEdgeCount === "number"
+        ? options.graphEdgeCount
+        : (typeof activeGraphTab?.graphEdgeCount === "number" ? activeGraphTab.graphEdgeCount : 0);
 
       if (statusTipElement) {
         statusTipElement.textContent = getPreviewHoveredLinkUrl() || (activeGraphTab
@@ -113,10 +117,11 @@
       }
 
       if (graphCollapsedNodesStatusElement && graphClustersCountElement && graphCollapsedNodesCountElement) {
+        if (graphEdgesCountElement) graphEdgesCountElement.textContent = graphEdgeCount.toLocaleString();
         graphClustersCountElement.textContent = graphClusterCount.toLocaleString();
         if (graphClustersLabelElement) graphClustersLabelElement.textContent = graphClusterCount === 1 ? "cluster" : "clusters";
         graphCollapsedNodesCountElement.textContent = graphCollapsedNodeCount.toLocaleString();
-        graphCollapsedNodesStatusElement.classList.toggle("hidden", !activeGraphTab || graphClusterCount <= 0 || graphCollapsedNodeCount <= 0);
+        graphCollapsedNodesStatusElement.classList.toggle("hidden", !activeGraphTab);
       }
 
       if (graphSelectedNodesStatusElement && graphSelectedNodesCountElement) {

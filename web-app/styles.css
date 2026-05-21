@@ -2249,9 +2249,8 @@ body {
 
 .graph-node-cluster {
   fill: #f59e0b;
-  stroke: var(--preview-bg);
-  stroke-width: 3px;
-  stroke-dasharray: 3 2;
+  stroke: var(--accent-color);
+  stroke-width: 2px;
 }
 
 .graph-node-status-saved-only {
@@ -2312,6 +2311,11 @@ body {
 .graph-node.dimmed,
 .graph-label.dimmed {
   opacity: 0.2;
+}
+
+.graph-label.hover-hidden {
+  opacity: 0 !important;
+  visibility: hidden;
 }
 
 .graph-link.dimmed,

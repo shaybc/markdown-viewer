@@ -81,6 +81,7 @@
   const graphPointsStatusElement = document.getElementById("graph-points-status");
   const graphPointsCountElement = document.getElementById("graph-points-count");
   const graphCollapsedNodesStatusElement = document.getElementById("graph-collapsed-nodes-status");
+  const graphEdgesCountElement = document.getElementById("graph-edges-count");
   const graphClustersCountElement = document.getElementById("graph-clusters-count");
   const graphClustersLabelElement = document.getElementById("graph-clusters-label");
   const graphCollapsedNodesCountElement = document.getElementById("graph-collapsed-nodes-count");
@@ -303,6 +304,7 @@
     graphZoomPercentElement,
     graphPointsStatusElement,
     graphPointsCountElement,
+    graphEdgesCountElement,
     graphSelectedNodesStatusElement,
     graphSelectedNodesCountElement,
     editorTextpadStatusElement,
@@ -3083,8 +3085,11 @@ Markdown content is processed client-side in your browser and sanitized before p
     if (shouldConfirm && !window.confirm("Clear app cache? Open documents, preferences, and recent history will not be removed.")) return false;
 
     graphRenderCache.forEach((entry) => {
-      if (entry?.simulation) entry.simulation.stop();
-      if (entry?.wrapper) entry.wrapper.remove();
+      if (typeof entry?.destroy === "function") entry.destroy();
+      else {
+        if (entry?.simulation) entry.simulation.stop();
+        if (entry?.wrapper) entry.wrapper.remove();
+      }
     });
     graphRenderCache.clear();
 
@@ -4231,6 +4236,7 @@ async function collectMarkdownFilesFromTreeNeutralino(nodes, parentPath = "") {
     graphPointsStatusElement,
     graphPointsCountElement,
     graphCollapsedNodesStatusElement,
+    graphEdgesCountElement,
     graphClustersCountElement,
     graphClustersLabelElement,
     graphCollapsedNodesCountElement,

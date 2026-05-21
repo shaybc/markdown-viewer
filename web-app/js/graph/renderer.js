@@ -1,6 +1,7 @@
 ﻿(function(global) {
   global.registerMarkdownViewerGraphRenderer = function registerMarkdownViewerGraphRenderer(app, deps) {
     let renderGraphView;
+    const GRAPH_RENDERER_D3 = "d3";
 
     with (deps) {
     renderGraphView = async function renderGraphView(options = {}) {
@@ -20,7 +21,7 @@
       if (!graphPerf || !graphInteractiveAt || loggedGraphInteractions.has(name) || typeof performance === "undefined") return;
       loggedGraphInteractions.add(name);
       const afterRenderMs = Math.round((performance.now() - graphInteractiveAt) * 10) / 10;
-      console.info(`[Perf] graph interaction ${name}: ${afterRenderMs}ms after render`, details);
+      console.info(`[Perf] first graph interaction ${name} observed ${afterRenderMs}ms after render`, details);
     };
     let graphViewConfig = activeTab && activeTab.type === "graph" ? normalizeGraphViewConfig(activeTab.graphViewConfig) : normalizeGraphViewConfig(null);
     if (activeTab && activeTab.type === "graph") activeTab.graphViewConfig = graphViewConfig;
@@ -51,7 +52,7 @@
     };
     removeGraphLoadingState();
     if (!activeTab || activeTab.type !== "graph") {
-      updateStatusLine({ visiblePointCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
+      updateStatusLine({ visiblePointCount: 0, graphEdgeCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
       updateGraphTagToolbar(null, null);
       renderTagManagementList();
       graphPerf?.end({ reason: "no-active-graph-tab" });
@@ -121,34 +122,41 @@
 
     if (!graphSnapshot || !graphSnapshot.nodes?.length) {
       graphRenderCache.forEach((entry) => {
-        if (entry?.simulation) entry.simulation.stop();
-        if (entry?.wrapper) entry.wrapper.remove();
+        if (typeof entry?.destroy === "function") entry.destroy();
+        else {
+          if (entry?.simulation) entry.simulation.stop();
+          if (entry?.wrapper) entry.wrapper.remove();
+        }
       });
       graphRenderCache.clear();
       activeTab.visiblePointCount = 0;
+      activeTab.graphEdgeCount = 0;
       activeTab.graphClusterCount = 0;
       activeTab.graphCollapsedNodeCount = 0;
       if (!options.skipToolbar) updateGraphTagToolbar(activeTab, graphSnapshot);
-      updateStatusLine({ visiblePointCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
+      updateStatusLine({ visiblePointCount: 0, graphEdgeCount: 0, graphClusterCount: 0, graphCollapsedNodeCount: 0 });
       graphViewCanvas.innerHTML = '<p class="folder-tree-placeholder">This graph tab does not have a saved graph snapshot.</p>';
       graphPerf?.end({ reason: "empty-snapshot" });
       return;
     }
 
+    const graphRendererType = GRAPH_RENDERER_D3;
     let graphSignature = getGraphSnapshotSignature(graphSnapshot, graphViewConfig);
     const cachedRender = graphRenderCache.get(activeTab.id);
-    if (cachedRender && cachedRender.signature === graphSignature && cachedRender.wrapper) {
+    if (cachedRender && cachedRender.renderer === graphRendererType && cachedRender.signature === graphSignature && cachedRender.wrapper) {
       if (cachedRender.wrapper.parentElement !== graphViewCanvas) graphViewCanvas.appendChild(cachedRender.wrapper);
       cachedRender.wrapper.classList.remove("hidden");
       hideInactiveGraphRenders(activeTab.id);
       removeGraphLoadingState();
       activeTab.visiblePointCount = cachedRender.visiblePointCount || 0;
+      activeTab.graphEdgeCount = cachedRender.graphEdgeCount || 0;
       activeTab.graphZoomScale = cachedRender.zoomScale || getGraphZoomScaleFromLayout(activeTab.graphLayout);
       activeTab.selectedGraphNodeCount = 0;
       activeTab.graphClusterCount = cachedRender.graphClusterCount || 0;
       activeTab.graphCollapsedNodeCount = cachedRender.graphCollapsedNodeCount || 0;
       updateStatusLine({
         visiblePointCount: activeTab.visiblePointCount,
+        graphEdgeCount: activeTab.graphEdgeCount,
         graphZoomScale: activeTab.graphZoomScale,
         selectedGraphNodeCount: 0,
         graphClusterCount: activeTab.graphClusterCount,
@@ -157,6 +165,7 @@
       graphPerf?.end({
         reason: "render-cache-hit",
         nodes: cachedRender.visiblePointCount || 0,
+        links: cachedRender.graphEdgeCount || 0,
         clusters: cachedRender.graphClusterCount || 0,
         collapsed: cachedRender.graphCollapsedNodeCount || 0
       });
@@ -164,8 +173,11 @@
     }
 
     if (cachedRender) {
-      if (cachedRender.simulation) cachedRender.simulation.stop();
-      if (cachedRender.wrapper) cachedRender.wrapper.remove();
+      if (typeof cachedRender.destroy === "function") cachedRender.destroy();
+      else {
+        if (cachedRender.simulation) cachedRender.simulation.stop();
+        if (cachedRender.wrapper) cachedRender.wrapper.remove();
+      }
       graphRenderCache.delete(activeTab.id);
     }
 
@@ -228,7 +240,8 @@
     const graphNodesById = new Map(nodes.map((node) => [node.id, node]));
     const stripGraphNodeFileExtension = (labelText) => {
       const source = String(labelText || "");
-      const stripped = source.replace(/\.[^/.]+$/, "");
+      const withoutMarkdownExtension = source.replace(/\.(md|markdown)$/i, "");
+      const stripped = withoutMarkdownExtension.replace(/\.[^/.]+$/, "");
       return stripped || source;
     };
     const getGraphNodeFileLabelSource = (nodeData) => {
@@ -965,6 +978,7 @@
 
       const visibleNodes = nodes.filter((nodeData) => !memberToCluster.has(nodeData.id));
       const visibleNodeIds = new Set(visibleNodes.map((nodeData) => nodeData.id));
+      const clusterNodeIds = new Set(clusterNodes.map((nodeData) => nodeData.id));
       const rewrittenLinksByKey = new Map();
       links.forEach((linkData) => {
         const sourceId = getLinkSourceId(linkData);
@@ -972,10 +986,13 @@
         const rewrittenSource = memberToCluster.get(sourceId) || sourceId;
         const rewrittenTarget = memberToCluster.get(targetId) || targetId;
         if (!rewrittenSource || !rewrittenTarget || rewrittenSource === rewrittenTarget) return;
-        const sourceVisible = visibleNodeIds.has(rewrittenSource) || clusterNodes.some((nodeData) => nodeData.id === rewrittenSource);
-        const targetVisible = visibleNodeIds.has(rewrittenTarget) || clusterNodes.some((nodeData) => nodeData.id === rewrittenTarget);
+        const sourceVisible = visibleNodeIds.has(rewrittenSource) || clusterNodeIds.has(rewrittenSource);
+        const targetVisible = visibleNodeIds.has(rewrittenTarget) || clusterNodeIds.has(rewrittenTarget);
         if (!sourceVisible || !targetVisible) return;
-        const key = `${rewrittenSource}->${rewrittenTarget}:${getGraphLinkType(linkData)}:${getGraphItemStatus(linkData)}`;
+        const involvesCluster = clusterNodeIds.has(rewrittenSource) || clusterNodeIds.has(rewrittenTarget);
+        const key = involvesCluster
+          ? [rewrittenSource, rewrittenTarget].sort().join("<->")
+          : `${rewrittenSource}->${rewrittenTarget}:${getGraphLinkType(linkData)}:${getGraphItemStatus(linkData)}`;
         if (rewrittenLinksByKey.has(key)) return;
         rewrittenLinksByKey.set(key, {
           ...linkData,
@@ -1028,12 +1045,29 @@
     const clusterNodes = nodes.filter(isClusterNode);
     const graphClusterCount = clusterNodes.length;
     const graphCollapsedNodeCount = clusterNodes.reduce((total, nodeData) => total + Math.max(0, Number(nodeData.collapsedCount || nodeData.memberNodeIds?.length || 0)), 0);
+    const graphEdgeCount = links.length;
+    const preparedGraphModel = {
+      renderer: graphRendererType,
+      graphSnapshot,
+      graphViewConfig,
+      nodes,
+      links,
+      snapshotFilesById,
+      graphNodesById,
+      graphEdgeCount,
+      graphClusterCount,
+      graphCollapsedNodeCount,
+      isCompareGraphMode,
+      useCurrentFolderData
+    };
     activeTab.visiblePointCount = nodes.length;
+    activeTab.graphEdgeCount = graphEdgeCount;
     activeTab.selectedGraphNodeCount = 0;
     activeTab.graphClusterCount = graphClusterCount;
     activeTab.graphCollapsedNodeCount = graphCollapsedNodeCount;
     updateStatusLine({
       visiblePointCount: nodes.length,
+      graphEdgeCount,
       selectedGraphNodeCount: 0,
       graphClusterCount,
       graphCollapsedNodeCount
@@ -1119,7 +1153,11 @@
         if (cachedGraphRender) cachedGraphRender.zoomScale = currentZoomTransform.k;
         graphLayer.attr("transform", currentZoomTransform);
         updateLabelVisibility();
-        updateStatusLine({ visiblePointCount: activeTab.visiblePointCount || nodes.length, graphZoomScale: currentZoomTransform.k });
+        updateStatusLine({
+          visiblePointCount: activeTab.visiblePointCount || nodes.length,
+          graphEdgeCount: activeTab.graphEdgeCount || graphEdgeCount,
+          graphZoomScale: currentZoomTransform.k
+        });
         captureGraphLayout(activeTab, nodes, currentZoomTransform);
         scheduleGraphLayoutStorageSave();
         if (event.sourceEvent) markGraphTabAsChanged(activeTab);
@@ -1134,7 +1172,11 @@
       svg.call(zoomBehavior.transform, currentZoomTransform);
     }
     activeTab.graphZoomScale = currentZoomTransform.k;
-    updateStatusLine({ visiblePointCount: activeTab.visiblePointCount || nodes.length, graphZoomScale: currentZoomTransform.k });
+    updateStatusLine({
+      visiblePointCount: activeTab.visiblePointCount || nodes.length,
+      graphEdgeCount: activeTab.graphEdgeCount || graphEdgeCount,
+      graphZoomScale: currentZoomTransform.k
+    });
 
     const simulation = d3.forceSimulation(nodes);
     const baseLinkForce = d3.forceLink(links)
@@ -3459,6 +3501,7 @@
       activeTab.selectedGraphNodeCount = safeSelectedNodeCount;
       updateStatusLine({
         visiblePointCount: activeTab.visiblePointCount || nodes.length,
+        graphEdgeCount: activeTab.graphEdgeCount || graphEdgeCount,
         graphZoomScale: activeTab.graphZoomScale,
         selectedGraphNodeCount: safeSelectedNodeCount
       });
@@ -3493,12 +3536,14 @@
         });
       }
       const isHighlightedLink = (l) => highlight.highlightedLinks.has(l);
-      hoverLabelNodeIds = graphViewConfig.showLabels === false ? highlight.highlightedNodes : new Set();
+      hoverLabelNodeIds = highlight.highlightedNodes;
       const selectedNodeCount = nodes.reduce((count, graphNode) => count + (highlight.highlightedNodes.has(graphNode.id) ? 1 : 0), 0);
       setSelectedGraphNodeCount(selectedNodeCount);
 
       node.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
-      label.classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id));
+      label
+        .classed("dimmed", (n) => !highlight.highlightedNodes.has(n.id))
+        .classed("hover-hidden", (n) => !highlight.highlightedNodes.has(n.id));
       updateLabelVisibility();
       link
         .classed("dimmed", (l) => !isHighlightedLink(l))
@@ -3514,7 +3559,7 @@
       hoverLabelNodeIds = new Set();
       setSelectedGraphNodeCount(0);
       node.classed("dimmed", false);
-      label.classed("dimmed", false);
+      label.classed("dimmed", false).classed("hover-hidden", false);
       updateLabelVisibility();
       link.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
       arrowhead.classed("dimmed", false).classed("highlighted-direct", false).classed("highlighted-backlink", false);
@@ -3545,8 +3590,12 @@
 
     function updateLabelVisibility() {
       if (!label) return;
-      if (graphViewConfig.showLabels === false) {
+      if (hoverLabelNodeIds.size) {
         label.attr("opacity", (d) => hoverLabelNodeIds.has(d.id) ? 1 : 0);
+        return;
+      }
+      if (graphViewConfig.showLabels === false) {
+        label.attr("opacity", 0);
         return;
       }
       const threshold = graphViewConfig.textFadeThreshold;
@@ -3597,15 +3646,27 @@
     simulation.on("tick", renderGraphTick);
 
     graphRenderCache.set(activeTab.id, {
+      renderer: graphRendererType,
       signature: graphSignature,
       wrapper: graphRenderWrapper,
       simulation,
       nodes,
+      model: preparedGraphModel,
       visiblePointCount: nodes.length,
+      graphEdgeCount,
       graphClusterCount,
       graphCollapsedNodeCount,
       zoomScale: currentZoomTransform.k,
       getZoomTransform: () => currentZoomTransform,
+      destroy: () => {
+        window.removeEventListener("keydown", updateHoveredGraphHighlight);
+        window.removeEventListener("keyup", updateHoveredGraphHighlight);
+        simulation.stop();
+        graphRenderWrapper.remove();
+      },
+      suspend: () => {
+        simulation.stop();
+      },
       animate: () => {
         graphSettings.magneticEnabled = true;
         applyMagneticSetting();
@@ -3613,7 +3674,7 @@
     });
     graphPerf?.mark("render cache stored", {
       nodes: nodes.length,
-      links: links.length,
+      links: graphEdgeCount,
       clusters: graphClusterCount,
       collapsed: graphCollapsedNodeCount
     });
@@ -3624,7 +3685,7 @@
     graphPerf?.end({
       reason: "render-complete",
       nodes: nodes.length,
-      links: links.length,
+      links: graphEdgeCount,
       clusters: graphClusterCount,
       collapsed: graphCollapsedNodeCount,
       staticLargeGraph: useStaticLargeGraphLayout

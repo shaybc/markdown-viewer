@@ -1412,6 +1412,7 @@
 
   function getGraphSnapshotSignature(snapshot, graphViewConfig) {
     return JSON.stringify({
+      renderer: "d3",
       snapshot: {
         version: snapshot?.version || 0,
         folderName: snapshot?.folderName || "",
@@ -1525,8 +1526,11 @@
   function removeGraphRenderForTab(tabId) {
     if (!tabId) return;
     const entry = graphRenderCache.get(tabId);
-    if (entry?.simulation) entry.simulation.stop();
-    if (entry?.wrapper) entry.wrapper.remove();
+    if (typeof entry?.destroy === "function") entry.destroy();
+    else {
+      if (entry?.simulation) entry.simulation.stop();
+      if (entry?.wrapper) entry.wrapper.remove();
+    }
     graphRenderCache.delete(tabId);
     getGraphRenderWrappersForTab(tabId).forEach((wrapper) => wrapper.remove());
   }
@@ -1540,7 +1544,8 @@
 
   function suspendGraphRender(tabId) {
     const entry = graphRenderCache.get(tabId);
-    if (entry && entry.simulation) entry.simulation.stop();
+    if (typeof entry?.suspend === "function") entry.suspend();
+    else if (entry && entry.simulation) entry.simulation.stop();
   }
 
   function suspendActiveGraphRender() {
